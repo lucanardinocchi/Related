@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<!--
+  Home screen for Related — Strava-flavoured card sections.
+  Still throwaway: lives here until the real Expo app exists.
+  Mock data, no real state.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Related — Home</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!--
+    Maison Neue is Lineto-licensed (paid) — will Just Work once a webfont is loaded.
+    Fallback chain: Inter Tight (free, similar geometric character) → system sans.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: #e5e7eb;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: 'Maison Neue', 'Inter Tight', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .phone {
+      width: 390px;
+      height: 844px;
+      max-width: 100%;
+      max-height: calc(100vh - 48px);
+      background: white;
+      border-radius: 40px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .phone *::-webkit-scrollbar { display: none; }
+    .phone * { scrollbar-width: none; }
+  </style>
+</head>
+<body>
+
+  <div class="phone" id="phone"></div>
+
+  <script>
+    /* ---------------- Mock data ---------------- */
+
+    const openThreads = [
+      { id: 1, desc: "You owe Sam a book recommendation",        age: "3 weeks",  contacts: ["Sam"],   direction: "me" },
+      { id: 2, desc: "Send Priya the Sydney apartment listing",  age: "1 week",   contacts: ["Priya"], direction: "me" },
+      { id: 3, desc: "Mum is waiting on your trip dates",         age: "4 days",   contacts: ["Mum"],   direction: "me" },
+      { id: 4, desc: "Follow up with Tom (Jules's cousin)",       age: "2 weeks",  contacts: ["Tom"],   direction: "me" },
+      { id: 5, desc: "Reply to Sam's birthday invite",            age: "5 days",   contacts: ["Sam"],   direction: "me" },
+    ];
+
+    const upcomingEvents = [
+      { id: 1, title: "Coffee with Aiko",            when: "Tomorrow", time: "10:00",  contacts: ["Aiko"],   kind: "coffee",   isGroup: false },
+      { id: 2, title: "Dinner with college friends", when: "Saturday", time: "19:00",  contacts: ["college friends"], kind: "dinner", isGroup: true  },
+      { id: 3, title: "Sam's birthday",              when: "Saturday", time: "all day",contacts: ["Sam"],    kind: "birthday", isGroup: false },
+      { id: 4, title: "Family Zoom",                  when: "Sunday",   time: "18:00",  contacts: ["family"], kind: "video",    isGroup: true  },
+    ];
+
+    // Daily "threads closed" counts for the last 30 days (oldest first).
+    const closedPerDay = [0,1,0,2,1,0,0,3,1,1,0,2,0,0,1,2,1,0,1,0,2,1,1,3,0,2,1,0,1,2];
+
+    /* ---------------- Home ---------------- */
+
+    function renderHome() {
+      return `
+        <div class="h-full flex flex-col bg-white">
+          <header class="px-5 pt-14 pb-1">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-gray-500 font-bold">Tuesday · 7:32 pm</p>
+            <h1 class="text-[30px] font-black text-black mt-1 tracking-tight">Good to see you</h1>
+          </header>
+
+          <main class="flex-1 overflow-y-auto pb-32">
+
+            <!-- Threads closed graph card -->
+            <section class="px-5 mt-5">
+              <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <div class="flex items-baseline justify-between mb-2">
+                  <h2 class="text-[10px] uppercase tracking-[0.16em] font-bold text-gray-500">Threads closed</h2>
+                  <span class="text-[10px] uppercase tracking-[0.12em] text-gray-400 font-bold">Last 30 days</span>
+                </div>
+                <div class="flex items-end justify-between gap-4">
+                  <div>
+                    <p class="text-[44px] font-black text-black leading-none tracking-tighter">${closedPerDay.reduce((a,b)=>a+b,0)}</p>
+                    <p class="text-[11px] font-bold mt-2 uppercase tracking-[0.10em]" style="color: #FC4C02">▲ 4 vs prior 30</p>
+                  </div>
+                  <svg width="160" height="48" viewBox="0 0 160 48" class="shrink-0">
+                    ${closedPerDay.map((v, i) => {
+                      const max = Math.max(...closedPerDay, 1);
+                      const barW = 4, gap = 1.3;
+                      const x = i * (barW + gap);
+                      const barH = Math.max((v / max) * 44, 2);
+                      const y = 48 - barH;
+                      return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="1" fill="${v > 0 ? '#FC4C02' : '#E5E7EB'}"/>`;
+                    }).join('')}
+                  </svg>
+                </div>
+              </div>
+            </section>
+
+            <!-- Open threads carousel -->
+            <section class="mt-6">
+              <div class="flex items-baseline justify-between px-5 mb-3">
+                <h2 class="text-[10px] uppercase tracking-[0.16em] font-bold text-gray-500">Open threads</h2>
+                <span class="text-[10px] uppercase tracking-[0.12em] text-gray-400 font-bold">${openThreads.length} owed</span>
+              </div>
+              <div class="flex gap-3 px-5 overflow-x-auto pb-2 snap-x snap-mandatory">
+                ${openThreads.map(t => `
+                  <div class="flex-shrink-0 w-60 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 snap-start">
+                    <div class="flex items-center gap-2 mb-3">
+                      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white" style="background: #FC4C02">${t.contacts[0][0]}</div>
+                      <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">${t.age} ago</span>
+                    </div>
+                    <p class="text-[14px] text-black font-bold leading-snug">${t.desc}</p>
+                  </div>
+                `).join("")}
+              </div>
+            </section>
+
+            <!-- Talk to Claude tile -->
+            <section class="px-5 mt-6">
+              <button class="w-full text-white rounded-2xl py-5 px-5 flex items-center justify-between shadow-md active:scale-[0.99] transition-transform" style="background: #FC4C02">
+                <div class="text-left">
+                  <p class="text-[17px] font-black tracking-tight">Talk to Claude</p>
+                  <p class="text-[10px] text-white/90 mt-1 uppercase tracking-[0.14em] font-bold">Voice · always on</p>
+                </div>
+                <div class="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="2" width="6" height="13" rx="3"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  </svg>
+                </div>
+              </button>
+            </section>
+
+            <!-- Upcoming events -->
+            <section class="px-5 mt-7">
+              <h2 class="text-[10px] uppercase tracking-[0.16em] font-bold text-gray-500 mb-3">Upcoming</h2>
+              <div class="space-y-2">
+                ${upcomingEvents.map(e => `
+                  <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100 flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-black flex flex-col items-center justify-center shrink-0">
+                      <span class="text-[9px] uppercase font-bold leading-none tracking-wider text-white/70">${e.when.slice(0,3)}</span>
+                      <span class="text-[13px] font-black leading-none mt-1" style="color: #FC4C02">${e.time.startsWith("all") ? "·" : e.time.split(":")[0]}</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-[14px] font-bold text-black truncate">${e.title}${e.isGroup ? ' <span class="text-[9px] uppercase tracking-[0.14em] ml-1 font-black" style="color: #FC4C02">group</span>' : ''}</p>
+                      <p class="text-[11px] text-gray-500 mt-0.5 uppercase tracking-wider font-bold">${e.isGroup ? 'Group · ' + e.contacts[0] : e.contacts.join(", ")} · ${e.kind}</p>
+                    </div>
+                  </div>
+                `).join("")}
+              </div>
+            </section>
+          </main>
+
+          <!-- Bottom nav -->
+          <nav class="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-3 pb-7">
+            <button class="text-black text-[10px] font-black uppercase tracking-[0.10em]">Home</button>
+            <button class="text-gray-400 text-[10px] font-bold uppercase tracking-[0.10em]">Calendar</button>
+            <button class="text-gray-400 text-[10px] font-bold uppercase tracking-[0.10em]">Groups</button>
+            <button class="text-gray-400 text-[10px] font-bold uppercase tracking-[0.10em]">You</button>
+          </nav>
+        </div>
+      `;
+    }
+
+    document.getElementById("phone").innerHTML = renderHome();
+  </script>
+</body>
+</html>
