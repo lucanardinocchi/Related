@@ -4,9 +4,7 @@
 
 ### Issue tracker
 
-GitHub Issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.
-Note: no GitHub remote is configured yet — push the repo to GitHub before running
-issue-tracker tools, or the `gh` calls will fail.
+GitHub Issues at [lucanardinocchi/Related](https://github.com/lucanardinocchi/Related) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
