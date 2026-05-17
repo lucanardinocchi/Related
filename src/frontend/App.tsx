@@ -7,7 +7,8 @@ import {
   InterTight_700Bold,
   InterTight_900Black,
 } from "@expo-google-fonts/inter-tight";
-import { AuthClient } from "@related/shared";
+import { createClient } from "@supabase/supabase-js";
+import { AuthClient, RelationshipsClient } from "@related/shared";
 import { AuthGate } from "./src/AuthGate";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -19,10 +20,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-const authClient = AuthClient.fromConfig({
-  supabaseUrl,
-  supabaseAnonKey,
+// One SupabaseClient shared across the app so auth state and PostgREST
+// queries use the same JWT and storage.
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: { persistSession: false },
 });
+const authClient = new AuthClient(supabase);
+const relationshipsClient = new RelationshipsClient(supabase);
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -37,7 +41,10 @@ export default function App() {
 
   return (
     <>
-      <AuthGate authClient={authClient} />
+      <AuthGate
+        authClient={authClient}
+        relationshipsClient={relationshipsClient}
+      />
       <StatusBar style="auto" />
     </>
   );
