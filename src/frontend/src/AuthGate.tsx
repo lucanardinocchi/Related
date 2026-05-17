@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
-import type { AuthClient, Session } from "@related/shared";
-import { Home } from "./Home";
+import type {
+  AuthClient,
+  RelationshipsClient,
+  Session,
+} from "@related/shared";
+import { AuthedApp } from "./AuthedApp";
 import { SignInScreen } from "./SignInScreen";
 
 export interface AuthGateProps {
   authClient: AuthClient;
+  relationshipsClient: RelationshipsClient;
 }
 
-export function AuthGate({ authClient }: AuthGateProps) {
+export function AuthGate({ authClient, relationshipsClient }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -32,10 +37,8 @@ export function AuthGate({ authClient }: AuthGateProps) {
   }
 
   return (
-    <Home
-      openThreads={[]}
-      upcomingEvents={[]}
-      threadsClosedLast30Days={new Array(30).fill(0)}
+    <AuthedApp
+      relationshipsClient={relationshipsClient}
       onSignOut={() => {
         void authClient.signOut();
       }}
