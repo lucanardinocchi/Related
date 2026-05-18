@@ -4,6 +4,11 @@ import {
   type CalendarDensitySignal as CalendarDensity,
   type RawCalendarEvent,
 } from "../signals/calendarDensity";
+import {
+  summariseSleep,
+  type SleepSignal as SleepSignalShape,
+  type RawSleepRecord,
+} from "../signals/sleepSummary";
 
 /**
  * User Context Builder — ADR-0002. Per Pass, returns a snapshot of the four
@@ -20,10 +25,8 @@ import {
 // Re-exported from ../signals so callers have a stable path.
 export type CalendarDensitySignal = CalendarDensity;
 
-export interface SleepSignal {
-  asOf: string;
-  averageHours: number;
-}
+// Re-exported from ../signals so callers have a stable path.
+export type SleepSignal = SleepSignalShape;
 
 export interface UserContextSnapshot {
   userId: string;
@@ -65,6 +68,7 @@ export class UserContextBuilder {
     const goals = await this.loadGoals();
     const situational = await this.loadSituationalState();
     const calendarDensity = await this.loadCalendarDensity(asOf);
+    const sleep = await this.loadSleep(asOf);
 
     return {
       userId,
@@ -72,7 +76,7 @@ export class UserContextBuilder {
       transientIntent: [],
       situationalState: situational,
       goalsAndValues: goals,
-      inferredSignals: { calendarDensity, sleep: null },
+      inferredSignals: { calendarDensity, sleep },
     };
   }
 
@@ -123,5 +127,33 @@ export class UserContextBuilder {
       isAllDay: r.is_all_day,
     }));
     return summariseCalendarDensity(events, asOf);
+  }
+
+  private async loadSleep(asOf: Date): Promise<SleepSignalShape | null> {
+    if (!this.supabase) return null;
+    const cutoff = new Date(asOf);
+    cutoff.setUTCDate(cutoff.getUTCDate() - 3);
+    const { data, error } = await this.supabase
+      .from("inferred_signal_sleep")
+      .select("record_id, started_at, ended_at, duration_minutes, quality")
+      .gte("started_at", cutoff.toISOString())
+      .lte("started_at", asOf.toISOString());
+    if (error) throw error;
+    const rows = (data ?? []) as Array<{
+      record_id: string;
+      started_at: string;
+      ended_at: string;
+      duration_minutes: number;
+      quality: string | null;
+    }>;
+    if (rows.length === 0) return null;
+    const records: RawSleepRecord[] = rows.map((r) => ({
+      id: r.record_id,
+      startedAt: r.started_at,
+      endedAt: r.ended_at,
+      durationMinutes: r.duration_minutes,
+      quality: r.quality,
+    }));
+    return summariseSleep(records, asOf);
   }
 }

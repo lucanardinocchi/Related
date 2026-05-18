@@ -7,10 +7,11 @@ function makeQueryMock() {
   const order = jest.fn<Promise<Resolved<unknown>>, []>();
   const maybeSingle = jest.fn<Promise<Resolved<unknown>>, []>();
   const lt = jest.fn<Promise<Resolved<unknown>>, []>();
-  const gte = jest.fn(() => ({ lt, order }));
+  const lte = jest.fn<Promise<Resolved<unknown>>, []>();
+  const gte = jest.fn(() => ({ lt, lte, order }));
   const select = jest.fn(() => ({ order, maybeSingle, gte }));
   const from = jest.fn((_t: string) => ({ select }));
-  return { from, select, order, maybeSingle, gte, lt };
+  return { from, select, order, maybeSingle, gte, lt, lte };
 }
 
 describe("UserContextBuilder.buildUserContext — Slice 10", () => {
@@ -44,6 +45,7 @@ describe("UserContextBuilder.buildUserContext — Slice 10", () => {
       data: { content: "Just moved to Sydney", updated_at: "2026-05-19T00:00:00Z" },
       error: null,
     });
+    q.lte.mockResolvedValue({ data: [], error: null });
     q.lt.mockResolvedValue({ data: [], error: null });
     const supa = { from: q.from } as unknown as SupabaseClient;
 
@@ -63,6 +65,7 @@ describe("UserContextBuilder.buildUserContext — Slice 10", () => {
     const q = makeQueryMock();
     q.order.mockResolvedValue({ data: [], error: null });
     q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lte.mockResolvedValue({ data: [], error: null });
     q.lt.mockResolvedValue({
       data: [
         {
@@ -93,6 +96,7 @@ describe("UserContextBuilder.buildUserContext — Slice 10", () => {
     const q = makeQueryMock();
     q.order.mockResolvedValue({ data: [], error: null });
     q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lte.mockResolvedValue({ data: [], error: null });
     q.lt.mockResolvedValue({ data: [], error: null });
     const supa = { from: q.from } as unknown as SupabaseClient;
 
@@ -101,10 +105,55 @@ describe("UserContextBuilder.buildUserContext — Slice 10", () => {
     expect(snapshot.inferredSignals.calendarDensity).toBeNull();
   });
 
+  it("populates sleep signal from inferred_signal_sleep when records exist", async () => {
+    const q = makeQueryMock();
+    q.order.mockResolvedValue({ data: [], error: null });
+    q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lt.mockResolvedValue({ data: [], error: null });
+    q.lte.mockResolvedValue({
+      data: [
+        {
+          record_id: "hk-1",
+          started_at: "2026-05-18T22:00:00Z",
+          ended_at: "2026-05-19T06:00:00Z",
+          duration_minutes: 480,
+          quality: null,
+        },
+      ],
+      error: null,
+    });
+    const supa = { from: q.from } as unknown as SupabaseClient;
+
+    const builder = new UserContextBuilder({ supabase: supa });
+    const snapshot = await builder.buildUserContext(
+      "u-1",
+      new Date("2026-05-19T08:00:00Z"),
+    );
+
+    expect(snapshot.inferredSignals.sleep).toEqual(
+      expect.objectContaining({ nights: 1, averageHours: 8, bucket: "well_rested" }),
+    );
+    expect(q.from).toHaveBeenCalledWith("inferred_signal_sleep");
+  });
+
+  it("sleep is null when no records exist (graceful degradation)", async () => {
+    const q = makeQueryMock();
+    q.order.mockResolvedValue({ data: [], error: null });
+    q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lt.mockResolvedValue({ data: [], error: null });
+    q.lte.mockResolvedValue({ data: [], error: null });
+    const supa = { from: q.from } as unknown as SupabaseClient;
+
+    const builder = new UserContextBuilder({ supabase: supa });
+    const snapshot = await builder.buildUserContext("u-1", new Date());
+    expect(snapshot.inferredSignals.sleep).toBeNull();
+  });
+
   it("tolerates a User with no Goals or Situational State (empty arrays)", async () => {
     const q = makeQueryMock();
     q.order.mockResolvedValue({ data: [], error: null });
     q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lte.mockResolvedValue({ data: [], error: null });
     q.lt.mockResolvedValue({ data: [], error: null });
     const supa = { from: q.from } as unknown as SupabaseClient;
 

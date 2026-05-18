@@ -110,6 +110,18 @@ export type {
   CalendarCollectorOptions,
 } from "./signals/CalendarCollector";
 
+export { summariseSleep } from "./signals/sleepSummary";
+export type {
+  RawSleepRecord,
+  SleepSignal as SleepSignalShape,
+  SleepBucket,
+} from "./signals/sleepSummary";
+export { SleepCollector } from "./signals/SleepCollector";
+export type {
+  SleepFetcher,
+  SleepCollectorOptions,
+} from "./signals/SleepCollector";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,
