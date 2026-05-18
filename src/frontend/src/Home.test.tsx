@@ -26,7 +26,7 @@ function renderEmpty(props: Partial<React.ComponentProps<typeof Home>> = {}) {
   return render(
     <Home
       openThreads={[]}
-      upcomingEvents={[]}
+      upcomingInteractions={[]}
       closedPerDayLast60={buckets(new Array(60).fill(0))}
       onSignOut={jest.fn()}
       {...props}

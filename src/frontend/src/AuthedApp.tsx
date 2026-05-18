@@ -3,11 +3,13 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StyleSheet, Text, View } from "react-native";
 import type {
+  InteractionsClient,
   OpenThreadsClient,
   Relationship,
   RelationshipsClient,
 } from "@related/shared";
 import { AddContactScreen } from "./AddContactScreen";
+import { CalendarScreen } from "./CalendarScreen";
 import { HomeScreen } from "./HomeScreen";
 import { RelationshipDetailScreen } from "./RelationshipDetailScreen";
 import { RelationshipsListScreen } from "./RelationshipsListScreen";
@@ -15,6 +17,7 @@ import { RelationshipsListScreen } from "./RelationshipsListScreen";
 export interface AuthedAppProps {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
+  interactionsClient: InteractionsClient;
   onSignOut: () => void;
 }
 
@@ -30,9 +33,11 @@ const Stack = createNativeStackNavigator<RelationshipsStackParams>();
 function RelationshipsStack({
   relationshipsClient,
   openThreadsClient,
+  interactionsClient,
 }: {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
+  interactionsClient: InteractionsClient;
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -53,6 +58,7 @@ function RelationshipsStack({
             relationship={route.params.relationship}
             relationshipsClient={relationshipsClient}
             openThreadsClient={openThreadsClient}
+            interactionsClient={interactionsClient}
             onBack={() => navigation.goBack()}
           />
         )}
@@ -85,6 +91,7 @@ function PlaceholderTab({ name }: { name: string }) {
 export function AuthedApp({
   relationshipsClient,
   openThreadsClient,
+  interactionsClient,
   onSignOut,
 }: AuthedAppProps) {
   return (
@@ -94,6 +101,7 @@ export function AuthedApp({
           {() => (
             <HomeScreen
               openThreadsClient={openThreadsClient}
+              interactionsClient={interactionsClient}
               onSignOut={onSignOut}
             />
           )}
@@ -103,11 +111,14 @@ export function AuthedApp({
             <RelationshipsStack
               relationshipsClient={relationshipsClient}
               openThreadsClient={openThreadsClient}
+              interactionsClient={interactionsClient}
             />
           )}
         </Tab.Screen>
         <Tab.Screen name="Calendar">
-          {() => <PlaceholderTab name="Calendar" />}
+          {() => (
+            <CalendarScreen interactionsClient={interactionsClient} />
+          )}
         </Tab.Screen>
         <Tab.Screen name="You">{() => <PlaceholderTab name="You" />}</Tab.Screen>
       </Tab.Navigator>

@@ -23,3 +23,12 @@ export type {
   ClosedPerDayWindow,
   OpenThreadsClientConfig,
 } from "./open-threads/OpenThreadsClient";
+
+export { InteractionsClient } from "./interactions/InteractionsClient";
+export type {
+  Interaction,
+  InteractionStatus,
+  InteractionContact,
+  CreateInteractionInput,
+  InteractionsClientConfig,
+} from "./interactions/InteractionsClient";
