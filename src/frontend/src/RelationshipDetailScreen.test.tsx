@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type {
+  CandidateSet,
+  CandidatesClient,
   GroupRelationship,
   GroupsClient,
   Interaction,
@@ -23,6 +25,14 @@ function makeMockGroupsClient(
     listGroupRelationships: jest.fn(),
     listForContact: jest.fn().mockResolvedValue(forContact),
   } as unknown as jest.Mocked<GroupsClient>;
+}
+
+function makeMockCandidatesClient(
+  latest: CandidateSet | null = null,
+): jest.Mocked<CandidatesClient> {
+  return {
+    getLatestForRelationship: jest.fn().mockResolvedValue(latest),
+  } as unknown as jest.Mocked<CandidatesClient>;
 }
 
 function relationship(over: Partial<Relationship> = {}): Relationship {
@@ -99,6 +109,7 @@ function renderScreen(over: {
   relationshipsClient?: jest.Mocked<RelationshipsClient>;
   interactionsClient?: jest.Mocked<InteractionsClient>;
   groupsClient?: jest.Mocked<GroupsClient>;
+  candidatesClient?: jest.Mocked<CandidatesClient>;
   onBack?: jest.Mock;
   onSelectGroup?: jest.Mock;
 } = {}) {
@@ -110,6 +121,7 @@ function renderScreen(over: {
   const interactionsClient =
     over.interactionsClient ?? makeMockInteractionsClient();
   const groupsClient = over.groupsClient ?? makeMockGroupsClient();
+  const candidatesClient = over.candidatesClient ?? makeMockCandidatesClient();
   const onBack = over.onBack ?? jest.fn();
   const onSelectGroup = over.onSelectGroup ?? jest.fn();
 
@@ -120,6 +132,7 @@ function renderScreen(over: {
       relationshipsClient={relationshipsClient}
       interactionsClient={interactionsClient}
       groupsClient={groupsClient}
+      candidatesClient={candidatesClient}
       onBack={onBack}
       onSelectGroup={onSelectGroup}
     />,
@@ -130,6 +143,7 @@ function renderScreen(over: {
     relationshipsClient,
     interactionsClient,
     groupsClient,
+    candidatesClient,
     onBack,
     onSelectGroup,
   };
@@ -212,6 +226,43 @@ describe("<RelationshipDetailScreen /> — Group memberships", () => {
     renderScreen();
     await waitFor(() =>
       expect(screen.getByText(/not in any groups/i)).toBeTruthy(),
+    );
+  });
+});
+
+describe("<RelationshipDetailScreen /> — Candidate Set", () => {
+  it("renders the latest Candidate Set's actions when one exists", async () => {
+    const candidatesClient = makeMockCandidatesClient({
+      id: "cs-1",
+      relationshipId: "r-1",
+      mode: "baseline",
+      createdAt: "2026-05-19T00:00:00Z",
+      actions: [
+        {
+          id: "ca-1",
+          type: "DoNothing",
+          payload: null,
+          why: "no changes warrant a Candidate Action this Pass",
+          decisionState: "pending",
+        },
+      ],
+    });
+    renderScreen({ candidatesClient });
+
+    expect(
+      await screen.findByText(
+        /no changes warrant a Candidate Action this Pass/i,
+      ),
+    ).toBeTruthy();
+    expect(candidatesClient.getLatestForRelationship).toHaveBeenCalledWith(
+      "r-1",
+    );
+  });
+
+  it("falls back to the empty-state copy when no Pass has run yet", async () => {
+    renderScreen();
+    await waitFor(() =>
+      expect(screen.getByText(/no candidates yet/i)).toBeTruthy(),
     );
   });
 });

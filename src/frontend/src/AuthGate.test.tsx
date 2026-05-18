@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type {
   AuthClient,
+  CandidatesClient,
   GroupsClient,
   InteractionsClient,
   OpenThreadsClient,
@@ -66,6 +67,12 @@ function makeMockGroupsClient(): GroupsClient {
   } as unknown as GroupsClient;
 }
 
+function makeMockCandidatesClient(): CandidatesClient {
+  return {
+    getLatestForRelationship: jest.fn().mockResolvedValue(null),
+  } as unknown as CandidatesClient;
+}
+
 describe("<AuthGate />", () => {
   it("shows the sign-in screen when no existing session is found", async () => {
     const authClient = makeMockAuthClient();
@@ -78,6 +85,7 @@ describe("<AuthGate />", () => {
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
+        candidatesClient={makeMockCandidatesClient()}
       />,
     );
 
@@ -99,6 +107,7 @@ describe("<AuthGate />", () => {
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
+        candidatesClient={makeMockCandidatesClient()}
       />,
     );
 
@@ -121,6 +130,7 @@ describe("<AuthGate />", () => {
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
+        candidatesClient={makeMockCandidatesClient()}
       />,
     );
     fireEvent.changeText(await screen.findByPlaceholderText(/email/i), "a@b.com");
@@ -153,6 +163,7 @@ describe("<AuthGate />", () => {
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
+        candidatesClient={makeMockCandidatesClient()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
@@ -184,6 +195,7 @@ describe("<AuthGate />", () => {
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
+        candidatesClient={makeMockCandidatesClient()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();

@@ -6,6 +6,7 @@ import {
 } from "@react-navigation/native-stack";
 import { StyleSheet, Text, View } from "react-native";
 import type {
+  CandidatesClient,
   GroupRelationship,
   GroupsClient,
   InteractionsClient,
@@ -27,6 +28,7 @@ export interface AuthedAppProps {
   openThreadsClient: OpenThreadsClient;
   interactionsClient: InteractionsClient;
   groupsClient: GroupsClient;
+  candidatesClient: CandidatesClient;
   onSignOut: () => void;
 }
 
@@ -59,11 +61,13 @@ function RelationshipsStack({
   openThreadsClient,
   interactionsClient,
   groupsClient,
+  candidatesClient,
 }: {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
   interactionsClient: InteractionsClient;
   groupsClient: GroupsClient;
+  candidatesClient: CandidatesClient;
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -86,6 +90,7 @@ function RelationshipsStack({
             openThreadsClient={openThreadsClient}
             interactionsClient={interactionsClient}
             groupsClient={groupsClient}
+            candidatesClient={candidatesClient}
             onBack={() => navigation.goBack()}
             onSelectGroup={(group) => {
               // Cross-stack jump: switch the tab AND push the Group's detail
@@ -187,6 +192,7 @@ export function AuthedApp({
   openThreadsClient,
   interactionsClient,
   groupsClient,
+  candidatesClient,
   onSignOut,
 }: AuthedAppProps) {
   return (
@@ -208,6 +214,7 @@ export function AuthedApp({
               openThreadsClient={openThreadsClient}
               interactionsClient={interactionsClient}
               groupsClient={groupsClient}
+              candidatesClient={candidatesClient}
             />
           )}
         </Tab.Screen>
