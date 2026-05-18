@@ -4,6 +4,7 @@ import type {
   CandidatesClient,
   GroupsClient,
   InteractionsClient,
+  OnboardingClient,
   OpenThreadsClient,
   RelationshipsClient,
   UserContextClient,
@@ -85,6 +86,24 @@ function makeMockUserContextClient(): UserContextClient {
   } as unknown as UserContextClient;
 }
 
+function makeMockOnboardingClient(isFinished = true): OnboardingClient {
+  return {
+    // Default: pre-existing User (no row) ⇒ already past onboarding.
+    // Tests that need the OnboardingScreen pass isFinished=false.
+    getState: jest.fn().mockResolvedValue({
+      completedSteps: [],
+      finishedAt: isFinished ? new Date().toISOString() : null,
+      isFinished,
+    }),
+    startIfNeeded: jest.fn().mockResolvedValue({
+      completedSteps: [],
+      finishedAt: null,
+      isFinished: false,
+    }),
+    completeStep: jest.fn(),
+  } as unknown as OnboardingClient;
+}
+
 describe("<AuthGate />", () => {
   it("shows the sign-in screen when no existing session is found", async () => {
     const authClient = makeMockAuthClient();
@@ -99,6 +118,7 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        onboardingClient={makeMockOnboardingClient()}
       />,
     );
 
@@ -122,6 +142,7 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        onboardingClient={makeMockOnboardingClient()}
       />,
     );
 
@@ -146,6 +167,7 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        onboardingClient={makeMockOnboardingClient()}
       />,
     );
     fireEvent.changeText(await screen.findByPlaceholderText(/email/i), "a@b.com");
@@ -180,6 +202,7 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        onboardingClient={makeMockOnboardingClient()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
@@ -213,6 +236,7 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        onboardingClient={makeMockOnboardingClient()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
