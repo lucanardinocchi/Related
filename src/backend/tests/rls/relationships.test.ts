@@ -45,6 +45,28 @@ describe("Relationship RLS + polymorphic target", () => {
     expect(data).toEqual([]);
   });
 
+  test("User B cannot fetch User A's Relationship by id (Single Relationship view gate)", async () => {
+    // The Single Relationship view loads via getRelationship(id) — the same
+    // `.from("relationships").select(...).eq("id", id).single()` shape that
+    // ships in RelationshipsClient. Under RLS the row is invisible to User B,
+    // so `.single()` resolves with no row and an error rather than leaking the
+    // sibling User's bond.
+    const { data: aRel } = await adminClient
+      .from("relationships")
+      .select("id")
+      .eq("owner_id", userA.id)
+      .single();
+    if (!aRel) throw new Error("no relationship for user A");
+
+    const { data, error } = await userB.client
+      .from("relationships")
+      .select("id")
+      .eq("id", aRel.id)
+      .maybeSingle();
+    expect(data).toBeNull();
+    expect(error).toBeNull();
+  });
+
   test("Relationship rejects unsupported target_type (slice 2 = contact only)", async () => {
     const { error } = await adminClient.from("relationships").insert({
       owner_id: userA.id,

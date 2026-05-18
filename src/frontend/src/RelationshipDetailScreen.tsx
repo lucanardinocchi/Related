@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import type {
+  Interaction,
   InteractionsClient,
   OpenThread,
   OpenThreadsClient,
@@ -44,6 +45,7 @@ export function RelationshipDetailScreen({
 
   const [threads, setThreads] = useState<OpenThread[]>([]);
   const [allRelationships, setAllRelationships] = useState<Relationship[]>([]);
+  const [history, setHistory] = useState<Interaction[]>([]);
 
   const [description, setDescription] = useState("");
   const [direction, setDirection] = useState<ThreadDirection>("me_owes_them");
@@ -68,16 +70,23 @@ export function RelationshipDetailScreen({
     setThreads(next);
   }, [openThreadsClient, relationship.id]);
 
+  const reloadHistory = useCallback(async () => {
+    const next = await interactionsClient.listForContact(contact.id);
+    setHistory(next);
+  }, [interactionsClient, contact.id]);
+
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       openThreadsClient.listOpenForRelationship(relationship.id),
       relationshipsClient.listRelationships(),
+      interactionsClient.listForContact(contact.id),
     ])
-      .then(([nextThreads, rels]) => {
+      .then(([nextThreads, rels, hist]) => {
         if (cancelled) return;
         setThreads(nextThreads);
         setAllRelationships(rels);
+        setHistory(hist);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -88,7 +97,13 @@ export function RelationshipDetailScreen({
     return () => {
       cancelled = true;
     };
-  }, [openThreadsClient, relationshipsClient, relationship.id]);
+  }, [
+    openThreadsClient,
+    relationshipsClient,
+    interactionsClient,
+    relationship.id,
+    contact.id,
+  ]);
 
   async function handleClose(threadId: string) {
     try {
@@ -137,6 +152,7 @@ export function RelationshipDetailScreen({
       setInteractionKind("");
       setInteractionTime("");
       setInteractionNotes("");
+      await reloadHistory();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not log interaction.",
@@ -178,6 +194,19 @@ export function RelationshipDetailScreen({
         </View>
       ) : null}
 
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          // Slice 13 wires the voice session; inert for now.
+        }}
+        style={styles.voiceButton}
+      >
+        <Text style={styles.voiceLabel}>Talk to Claude</Text>
+      </Pressable>
+
+      <Text style={styles.sectionHeading}>Candidate set</Text>
+      <Text style={styles.empty}>No candidates yet</Text>
+
       <Text style={styles.sectionHeading}>Open threads</Text>
       {threads.length === 0 ? (
         <Text style={styles.empty}>No open threads</Text>
@@ -197,6 +226,21 @@ export function RelationshipDetailScreen({
             >
               <Text style={styles.closeLabel}>Close</Text>
             </Pressable>
+          </View>
+        ))
+      )}
+
+      <Text style={styles.sectionHeading}>Interaction history</Text>
+      {history.length === 0 ? (
+        <Text style={styles.empty}>No interactions yet</Text>
+      ) : (
+        history.map((i) => (
+          <View key={i.id} style={styles.historyRow}>
+            <Text style={styles.historyKind}>{i.kind}</Text>
+            <Text style={styles.historyTime}>{i.time}</Text>
+            {i.notes ? (
+              <Text style={styles.historyNotes}>{i.notes}</Text>
+            ) : null}
           </View>
         ))
       )}
@@ -393,6 +437,48 @@ const styles = StyleSheet.create({
     fontFamily: FONT_BOLD,
     fontWeight: "700",
     color: "#374151",
+  },
+  voiceButton: {
+    borderWidth: 2,
+    borderColor: STRAVA_ORANGE,
+    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: "flex-start",
+    marginTop: 8,
+  },
+  voiceLabel: {
+    fontSize: 12,
+    fontFamily: FONT_BOLD,
+    fontWeight: "700",
+    color: STRAVA_ORANGE,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  historyRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  historyKind: {
+    fontSize: 14,
+    fontFamily: FONT_BOLD,
+    fontWeight: "700",
+    color: "#000",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  historyTime: {
+    fontSize: 12,
+    fontFamily: FONT_REGULAR,
+    color: "#6b7280",
+    marginTop: 2,
+  },
+  historyNotes: {
+    fontSize: 13,
+    fontFamily: FONT_REGULAR,
+    color: "#374151",
+    marginTop: 4,
   },
   input: {
     borderWidth: 1,
