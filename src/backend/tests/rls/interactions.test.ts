@@ -39,7 +39,9 @@ describe("Interactions — RLS + multi-Contact semantics", () => {
     const ids = [userA.id, userB.id];
     await adminClient.from("interaction_contacts").delete().in("owner_id", ids);
     await adminClient.from("interactions").delete().in("owner_id", ids);
+    await adminClient.from("contact_groups").delete().in("owner_id", ids);
     await adminClient.from("relationships").delete().in("owner_id", ids);
+    await adminClient.from("groups").delete().in("owner_id", ids);
     await adminClient.from("contacts").delete().in("owner_id", ids);
     await teardownTestUsers([userA, userB]);
   });
@@ -217,5 +219,99 @@ describe("Interactions — RLS + multi-Contact semantics", () => {
       .select("interaction_id");
     expect(linksErr).toBeNull();
     expect(links).toEqual([]);
+  });
+
+  /**
+   * Slice 6 group-mode propagation. The brief (and ADR-0004) require that an
+   * Interaction logged in Group mode touches the Group Relationship AND each
+   * member Contact's individual Relationship — one logged Interaction
+   * updates multiple layers. A 1:1 Interaction with a member Contact does
+   * NOT update the Group Relationship.
+   */
+  test("Group-mode Interaction stores group_id and auto-links every current member", async () => {
+    const { data: jules, error: julesErr } = await adminClient
+      .from("contacts")
+      .insert({ owner_id: userA.id, name: "Jules" })
+      .select("id")
+      .single();
+    if (julesErr || !jules) throw new Error(julesErr?.message);
+
+    const { data: group, error: gErr } = await adminClient
+      .from("groups")
+      .insert({ owner_id: userA.id, name: "college friends" })
+      .select("id")
+      .single();
+    if (gErr || !group) throw new Error(gErr?.message);
+
+    await userA.client.rpc("add_group_member", {
+      p_group_id: group.id,
+      p_contact_id: aContactId,
+    });
+    await userA.client.rpc("add_group_member", {
+      p_group_id: group.id,
+      p_contact_id: jules.id,
+    });
+
+    const { data: interactionId, error: rpcErr } = await userA.client.rpc(
+      "create_interaction",
+      {
+        p_time: "2026-05-10T19:00:00Z",
+        p_kind: "dinner",
+        p_notes: "group dinner with college friends",
+        p_status: "occurred",
+        p_group_id: group.id,
+        p_contact_ids: [],
+      },
+    );
+    expect(rpcErr).toBeNull();
+    expect(typeof interactionId).toBe("string");
+
+    const { data: rows } = await userA.client
+      .from("interactions")
+      .select("id, group_id")
+      .eq("id", interactionId as string);
+    expect(rows).toEqual([{ id: interactionId, group_id: group.id }]);
+
+    const { data: links } = await userA.client
+      .from("interaction_contacts")
+      .select("contact_id")
+      .eq("interaction_id", interactionId as string);
+    const linkedContactIds = (links ?? [])
+      .map((l) => l.contact_id as string)
+      .sort();
+    expect(linkedContactIds).toEqual([aContactId, jules.id].sort());
+  });
+
+  test("1:1 Interaction with a Group member does NOT set group_id on the Interaction", async () => {
+    const { data: group } = await adminClient
+      .from("groups")
+      .insert({ owner_id: userA.id, name: "college friends" })
+      .select("id")
+      .single();
+    if (!group) throw new Error("no group");
+
+    await userA.client.rpc("add_group_member", {
+      p_group_id: group.id,
+      p_contact_id: aContactId,
+    });
+
+    // 1:1 with Sam — Sam is in the group, but the brief is explicit: this
+    // must not touch the Group Relationship. group_id stays null.
+    const { data: interactionId } = await userA.client.rpc(
+      "create_interaction",
+      {
+        p_time: "2026-05-11T09:00:00Z",
+        p_kind: "coffee",
+        p_notes: "1:1 with Sam",
+        p_status: "occurred",
+        p_contact_ids: [aContactId],
+      },
+    );
+
+    const { data: rows } = await userA.client
+      .from("interactions")
+      .select("group_id")
+      .eq("id", interactionId as string);
+    expect(rows).toEqual([{ group_id: null }]);
   });
 });

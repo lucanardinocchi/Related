@@ -8,6 +8,8 @@ import {
   View,
 } from "react-native";
 import type {
+  GroupRelationship,
+  GroupsClient,
   Interaction,
   InteractionsClient,
   OpenThread,
@@ -22,7 +24,14 @@ export interface RelationshipDetailScreenProps {
   openThreadsClient: OpenThreadsClient;
   relationshipsClient: RelationshipsClient;
   interactionsClient: InteractionsClient;
+  groupsClient: GroupsClient;
   onBack: () => void;
+  /**
+   * Called when the User taps a Group membership back-reference.
+   * AuthedApp wires this into the Groups stack so taps push the
+   * Single Group view.
+   */
+  onSelectGroup: (group: GroupRelationship) => void;
 }
 
 const STRAVA_ORANGE = "#FC4C02";
@@ -39,13 +48,18 @@ export function RelationshipDetailScreen({
   openThreadsClient,
   relationshipsClient,
   interactionsClient,
+  groupsClient,
   onBack,
+  onSelectGroup,
 }: RelationshipDetailScreenProps) {
   const { contact } = relationship;
 
   const [threads, setThreads] = useState<OpenThread[]>([]);
   const [allRelationships, setAllRelationships] = useState<Relationship[]>([]);
   const [history, setHistory] = useState<Interaction[]>([]);
+  const [groupMemberships, setGroupMemberships] = useState<GroupRelationship[]>(
+    [],
+  );
 
   const [description, setDescription] = useState("");
   const [direction, setDirection] = useState<ThreadDirection>("me_owes_them");
@@ -81,12 +95,14 @@ export function RelationshipDetailScreen({
       openThreadsClient.listOpenForRelationship(relationship.id),
       relationshipsClient.listRelationships(),
       interactionsClient.listForContact(contact.id),
+      groupsClient.listForContact(contact.id),
     ])
-      .then(([nextThreads, rels, hist]) => {
+      .then(([nextThreads, rels, hist, memberships]) => {
         if (cancelled) return;
         setThreads(nextThreads);
         setAllRelationships(rels);
         setHistory(hist);
+        setGroupMemberships(memberships);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -101,6 +117,7 @@ export function RelationshipDetailScreen({
     openThreadsClient,
     relationshipsClient,
     interactionsClient,
+    groupsClient,
     relationship.id,
     contact.id,
   ]);
@@ -193,6 +210,22 @@ export function RelationshipDetailScreen({
           <Text style={styles.channelValue}>{contact.email}</Text>
         </View>
       ) : null}
+
+      <Text style={styles.sectionHeading}>Groups</Text>
+      {groupMemberships.length === 0 ? (
+        <Text style={styles.empty}>Not in any groups</Text>
+      ) : (
+        groupMemberships.map((g) => (
+          <Pressable
+            key={g.id}
+            accessibilityRole="button"
+            onPress={() => onSelectGroup(g)}
+            style={styles.groupRow}
+          >
+            <Text style={styles.groupName}>{g.group.name}</Text>
+          </Pressable>
+        ))
+      )}
 
       <Pressable
         accessibilityRole="button"
@@ -437,6 +470,17 @@ const styles = StyleSheet.create({
     fontFamily: FONT_BOLD,
     fontWeight: "700",
     color: "#374151",
+  },
+  groupRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  groupName: {
+    fontSize: 15,
+    fontFamily: FONT_BOLD,
+    fontWeight: "700",
+    color: STRAVA_ORANGE,
   },
   voiceButton: {
     borderWidth: 2,

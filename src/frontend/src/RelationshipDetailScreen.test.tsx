@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type {
+  GroupRelationship,
+  GroupsClient,
   Interaction,
   InteractionsClient,
   OpenThread,
@@ -8,6 +10,20 @@ import type {
   RelationshipsClient,
 } from "@related/shared";
 import { RelationshipDetailScreen } from "./RelationshipDetailScreen";
+
+function makeMockGroupsClient(
+  forContact: GroupRelationship[] = [],
+): jest.Mocked<GroupsClient> {
+  return {
+    createGroup: jest.fn(),
+    addMember: jest.fn(),
+    removeMember: jest.fn(),
+    listMembers: jest.fn(),
+    listGroups: jest.fn(),
+    listGroupRelationships: jest.fn(),
+    listForContact: jest.fn().mockResolvedValue(forContact),
+  } as unknown as jest.Mocked<GroupsClient>;
+}
 
 function relationship(over: Partial<Relationship> = {}): Relationship {
   return {
@@ -82,7 +98,9 @@ function renderScreen(over: {
   openThreadsClient?: jest.Mocked<OpenThreadsClient>;
   relationshipsClient?: jest.Mocked<RelationshipsClient>;
   interactionsClient?: jest.Mocked<InteractionsClient>;
+  groupsClient?: jest.Mocked<GroupsClient>;
   onBack?: jest.Mock;
+  onSelectGroup?: jest.Mock;
 } = {}) {
   const rel = over.relationship ?? relationship();
   const openThreadsClient =
@@ -91,7 +109,9 @@ function renderScreen(over: {
     over.relationshipsClient ?? makeMockRelationshipsClient([rel]);
   const interactionsClient =
     over.interactionsClient ?? makeMockInteractionsClient();
+  const groupsClient = over.groupsClient ?? makeMockGroupsClient();
   const onBack = over.onBack ?? jest.fn();
+  const onSelectGroup = over.onSelectGroup ?? jest.fn();
 
   const utils = render(
     <RelationshipDetailScreen
@@ -99,7 +119,9 @@ function renderScreen(over: {
       openThreadsClient={openThreadsClient}
       relationshipsClient={relationshipsClient}
       interactionsClient={interactionsClient}
+      groupsClient={groupsClient}
       onBack={onBack}
+      onSelectGroup={onSelectGroup}
     />,
   );
   return {
@@ -107,7 +129,9 @@ function renderScreen(over: {
     openThreadsClient,
     relationshipsClient,
     interactionsClient,
+    groupsClient,
     onBack,
+    onSelectGroup,
   };
 }
 
@@ -153,6 +177,42 @@ describe("<RelationshipDetailScreen /> — interaction history", () => {
     await waitFor(() => {
       expect(screen.getByText(/no interactions yet/i)).toBeTruthy();
     });
+  });
+});
+
+describe("<RelationshipDetailScreen /> — Group memberships", () => {
+  it("renders Group memberships as back-references and navigates on tap", async () => {
+    const groupsClient = makeMockGroupsClient([
+      {
+        id: "r-college",
+        targetType: "group",
+        createdAt: "2026-05-18T00:00:00Z",
+        group: {
+          id: "g-college",
+          name: "college friends",
+          createdAt: "2026-05-18T00:00:00Z",
+        },
+      },
+    ]);
+    const onSelectGroup = jest.fn();
+    renderScreen({ groupsClient, onSelectGroup });
+
+    const groupRow = await screen.findByText("college friends");
+    expect(groupsClient.listForContact).toHaveBeenCalledWith("c-1");
+
+    fireEvent.press(groupRow);
+    await waitFor(() =>
+      expect(onSelectGroup).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "r-college" }),
+      ),
+    );
+  });
+
+  it("shows an empty state when the Contact has no Group memberships", async () => {
+    renderScreen();
+    await waitFor(() =>
+      expect(screen.getByText(/not in any groups/i)).toBeTruthy(),
+    );
   });
 });
 

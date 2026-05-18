@@ -67,10 +67,10 @@ describe("Relationship RLS + polymorphic target", () => {
     expect(error).toBeNull();
   });
 
-  test("Relationship rejects unsupported target_type (slice 2 = contact only)", async () => {
+  test("Relationship rejects unsupported target_type", async () => {
     const { error } = await adminClient.from("relationships").insert({
       owner_id: userA.id,
-      target_type: "group",
+      target_type: "household",
       target_contact_id: userAContactId,
     });
     expect(error).not.toBeNull();

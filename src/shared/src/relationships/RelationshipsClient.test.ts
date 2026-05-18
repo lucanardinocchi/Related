@@ -8,13 +8,15 @@ import { RelationshipsClient } from "./RelationshipsClient";
 type Resolved<T> = Promise<{ data: T; error: null } | { data: null; error: { message: string } }>;
 
 function makeQueryMock() {
-  // The full chain shape we'll need: from(table).insert(row).select().single()
-  // and from(table).select(cols).order(col).
+  // Chain shapes used by RelationshipsClient:
+  //   from(t).insert(row).select().single()                            — createContact
+  //   from(t).select(cols).eq("target_type","contact").order(col)      — listRelationships
+  //   from(t).select(cols).eq("id", id).single()                       — getRelationship
   const single = jest.fn<Resolved<unknown>, []>();
   const order = jest.fn();
   const select = jest.fn(() => ({ single, order }));
   const insert = jest.fn(() => ({ select }));
-  const eq = jest.fn(() => ({ single }));
+  const eq = jest.fn(() => ({ single, order }));
   const selectForList = jest.fn(() => ({ order, eq }));
   const from = jest.fn((_table: string) => ({
     insert,
@@ -100,6 +102,22 @@ describe("RelationshipsClient.createContact", () => {
 });
 
 describe("RelationshipsClient.listRelationships", () => {
+  it("filters to Contact-targeted Relationships server-side", async () => {
+    // Group-targeted Relationships (auto-created by the groups trigger in
+    // Slice 6) have contact=null and would crash the hydrator. The query
+    // must filter them out at the database layer.
+    const { q, rels } = withClient();
+    q.order.mockResolvedValue({ data: [], error: null });
+
+    await rels.listRelationships();
+
+    expect(q.from).toHaveBeenCalledWith("relationships");
+    expect(q.selectForList).toHaveBeenCalledWith(
+      expect.stringContaining("contact:contacts"),
+    );
+    expect(q.eq).toHaveBeenCalledWith("target_type", "contact");
+  });
+
   it("returns the signed-in User's Contact-targeted Relationships, hydrated", async () => {
     const { q, rels } = withClient();
     q.order.mockResolvedValue({
