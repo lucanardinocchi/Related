@@ -119,4 +119,23 @@ export class InteractionsClient {
     if (error) throw error;
     return ((data ?? []) as unknown as InteractionRow[]).map(toInteraction);
   }
+
+  /**
+   * Interactions involving a given Contact, most-recent-first. Drives the
+   * history section on the Single Relationship view. The PostgREST `!inner`
+   * filter on the embedded join table restricts parent interactions to those
+   * with a matching link, and the `.eq("interaction_contacts.contact_id", …)`
+   * is the conventional way to filter parent rows by an embedded column.
+   */
+  async listForContact(contactId: string): Promise<Interaction[]> {
+    const { data, error } = await this.client
+      .from("interactions")
+      .select(
+        "id, time, kind, notes, status, interaction_contacts!inner(contact_id, contacts(name))",
+      )
+      .eq("interaction_contacts.contact_id", contactId)
+      .order("time", { ascending: false });
+    if (error) throw error;
+    return ((data ?? []) as unknown as InteractionRow[]).map(toInteraction);
+  }
 }

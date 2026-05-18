@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type {
+  Interaction,
   InteractionsClient,
   OpenThread,
   OpenThreadsClient,
@@ -60,7 +61,20 @@ function makeMockInteractionsClient(): jest.Mocked<InteractionsClient> {
     markMissed: jest.fn().mockResolvedValue(undefined),
     listUpcomingPlanned: jest.fn().mockResolvedValue([]),
     listAll: jest.fn().mockResolvedValue([]),
+    listForContact: jest.fn().mockResolvedValue([]),
   } as unknown as jest.Mocked<InteractionsClient>;
+}
+
+function interaction(over: Partial<Interaction> = {}): Interaction {
+  return {
+    id: "i-1",
+    time: "2026-05-10T09:00:00Z",
+    kind: "coffee",
+    notes: null,
+    status: "occurred",
+    contacts: [{ id: "c-1", name: "Sam" }],
+    ...over,
+  };
 }
 
 function renderScreen(over: {
@@ -96,6 +110,83 @@ function renderScreen(over: {
     onBack,
   };
 }
+
+describe("<RelationshipDetailScreen /> — interaction history", () => {
+  it("loads and renders Interaction history for this Contact, most-recent-first", async () => {
+    const interactionsClient = makeMockInteractionsClient();
+    interactionsClient.listForContact.mockResolvedValue([
+      interaction({
+        id: "i-recent",
+        time: "2026-05-12T19:00:00Z",
+        kind: "dinner",
+        notes: "group dinner",
+      }),
+      interaction({
+        id: "i-older",
+        time: "2026-05-10T09:00:00Z",
+        kind: "coffee",
+        notes: null,
+      }),
+    ]);
+
+    renderScreen({ interactionsClient });
+
+    // The fetch is scoped to this Relationship's Contact, not the whole user.
+    await waitFor(() =>
+      expect(interactionsClient.listForContact).toHaveBeenCalledWith("c-1"),
+    );
+
+    // Both kinds appear; their on-screen order is most-recent-first.
+    // Note both kinds also appear in the "kind" placeholder copy, so we
+    // disambiguate by matching the notes text the placeholder doesn't share.
+    const note = await screen.findByText(/group dinner/i);
+    expect(note).toBeTruthy();
+    // Older entry: no notes, so we match its time string instead.
+    expect(screen.getByText(/2026-05-10T09:00:00Z/)).toBeTruthy();
+  });
+
+  it("shows an empty state when the Contact has no Interaction history", async () => {
+    const interactionsClient = makeMockInteractionsClient();
+    interactionsClient.listForContact.mockResolvedValue([]);
+    renderScreen({ interactionsClient });
+
+    await waitFor(() => {
+      expect(screen.getByText(/no interactions yet/i)).toBeTruthy();
+    });
+  });
+});
+
+describe("<RelationshipDetailScreen /> — voice button", () => {
+  it("renders an inert 'Talk to Claude' button scoped to this Relationship", async () => {
+    // Slice 13 will wire the voice session; for Slice 5 the button is visible
+    // but pressing it does nothing visible to the user (no crash, no
+    // navigation, no side effect). Existence + accessibility role is the
+    // contract.
+    const interactionsClient = makeMockInteractionsClient();
+    renderScreen({ interactionsClient });
+
+    const button = await screen.findByText(/talk to claude/i);
+    expect(button).toBeTruthy();
+
+    // Pressing the inert button must not blow up.
+    await act(async () => {
+      fireEvent.press(button);
+    });
+    // Nothing else happens — no Interaction logged, no Open Thread created.
+    expect(interactionsClient.createInteraction).not.toHaveBeenCalled();
+  });
+});
+
+describe("<RelationshipDetailScreen /> — candidate set placeholder", () => {
+  it("renders a labelled empty Candidate Set placeholder", async () => {
+    renderScreen();
+    // The Candidate Set is where Slice 7's DoNothing candidate will eventually
+    // appear; for now it is a labelled empty placeholder so the visual real
+    // estate exists in the layout.
+    expect(await screen.findByText(/candidate set/i)).toBeTruthy();
+    expect(screen.getByText(/no candidates yet/i)).toBeTruthy();
+  });
+});
 
 describe("<RelationshipDetailScreen /> — contact info", () => {
   it("renders the contact's name and a back button that calls onBack", () => {
@@ -281,6 +372,47 @@ describe("<RelationshipDetailScreen /> — create open thread", () => {
       status: "occurred",
       contactIds: ["c-1"],
     });
+  });
+
+  it("refreshes the Interaction history after logging a new Interaction", async () => {
+    const interactionsClient = makeMockInteractionsClient();
+    interactionsClient.listForContact
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        interaction({
+          id: "i-new",
+          time: "2026-05-15T10:00:00Z",
+          kind: "call",
+          notes: "checked in",
+        }),
+      ]);
+
+    renderScreen({ interactionsClient });
+
+    // Empty state shows on initial load.
+    await waitFor(() =>
+      expect(screen.getByText(/no interactions yet/i)).toBeTruthy(),
+    );
+
+    fireEvent.changeText(
+      await screen.findByPlaceholderText(/kind/i),
+      "call",
+    );
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/when \(iso/i),
+      "2026-05-15T10:00:00Z",
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText(/^log interaction$/i));
+    });
+
+    // After logging, the screen re-fetches; the freshly logged Interaction
+    // appears in the history without remounting the screen.
+    expect(interactionsClient.listForContact).toHaveBeenCalledTimes(2);
+    await waitFor(() =>
+      expect(screen.getByText(/checked in/i)).toBeTruthy(),
+    );
   });
 
   it("does not submit the Interaction form when kind or time is empty", async () => {
