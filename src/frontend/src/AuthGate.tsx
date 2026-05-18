@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type {
   AuthClient,
+  OpenThreadsClient,
   RelationshipsClient,
   Session,
 } from "@related/shared";
@@ -10,9 +11,14 @@ import { SignInScreen } from "./SignInScreen";
 export interface AuthGateProps {
   authClient: AuthClient;
   relationshipsClient: RelationshipsClient;
+  openThreadsClient: OpenThreadsClient;
 }
 
-export function AuthGate({ authClient, relationshipsClient }: AuthGateProps) {
+export function AuthGate({
+  authClient,
+  relationshipsClient,
+  openThreadsClient,
+}: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -39,6 +45,7 @@ export function AuthGate({ authClient, relationshipsClient }: AuthGateProps) {
   return (
     <AuthedApp
       relationshipsClient={relationshipsClient}
+      openThreadsClient={openThreadsClient}
       onSignOut={() => {
         void authClient.signOut();
       }}

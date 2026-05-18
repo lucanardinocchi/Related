@@ -1,10 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-
-export interface OpenThread {
-  id: string;
-  description: string;
-  age: string;
-}
+import type { ClosedPerDayBucket, OpenThread } from "@related/shared";
 
 export interface UpcomingEvent {
   id: string;
@@ -16,8 +11,12 @@ export interface UpcomingEvent {
 export interface HomeProps {
   openThreads: OpenThread[];
   upcomingEvents: UpcomingEvent[];
-  /** Daily count of Threads closed for the last 30 days (oldest → newest). */
-  threadsClosedLast30Days: number[];
+  /**
+   * Daily closed-thread counts for the trailing 60 days, oldest → newest.
+   * Home splits this 30/30 to compute the headline total + trend delta and
+   * renders the last-30 window as the sparkline.
+   */
+  closedPerDayLast60: ClosedPerDayBucket[];
   onSignOut: () => void;
 }
 
@@ -27,13 +26,68 @@ const FONT_MEDIUM = "InterTight_500Medium";
 const FONT_BOLD = "InterTight_700Bold";
 const FONT_BLACK = "InterTight_900Black";
 
+const MINUS = "−";
+
+function sumCounts(buckets: ClosedPerDayBucket[]): number {
+  return buckets.reduce((acc, b) => acc + b.count, 0);
+}
+
+function formatDelta(delta: number): string {
+  if (delta > 0) return `+${delta} vs prior 30 days`;
+  if (delta < 0) return `${MINUS}${Math.abs(delta)} vs prior 30 days`;
+  return `0 vs prior 30 days`;
+}
+
+function directionLabel(direction: OpenThread["direction"]): string {
+  return direction === "me_owes_them" ? "You owe" : "They owe";
+}
+
+function SparklineBar({ count, max }: { count: number; max: number }) {
+  const ratio = max === 0 ? 0 : count / max;
+  const height = 6 + ratio * 30;
+  return (
+    <View
+      style={{
+        flex: 1,
+        marginHorizontal: 1,
+        height,
+        backgroundColor: count === 0 ? "#e5e7eb" : STRAVA_ORANGE,
+        borderRadius: 2,
+      }}
+    />
+  );
+}
+
+function OpenThreadCard({
+  description,
+  direction,
+}: {
+  description: string;
+  direction: OpenThread["direction"];
+}) {
+  return (
+    <View style={styles.threadCard}>
+      <Text style={styles.threadDirection}>{directionLabel(direction)}</Text>
+      <Text style={styles.threadDescription} numberOfLines={3}>
+        {description}
+      </Text>
+    </View>
+  );
+}
+
 export function Home({
   openThreads,
   upcomingEvents,
-  threadsClosedLast30Days,
+  closedPerDayLast60,
   onSignOut,
 }: HomeProps) {
-  const total = threadsClosedLast30Days.reduce((a, b) => a + b, 0);
+  const last30 = closedPerDayLast60.slice(-30);
+  const priorEnd = Math.max(closedPerDayLast60.length - 30, 0);
+  const prior30 = closedPerDayLast60.slice(0, priorEnd);
+  const total = sumCounts(last30);
+  const prior = sumCounts(prior30);
+  const delta = total - prior;
+  const sparklineMax = last30.reduce((acc, b) => Math.max(acc, b.count), 0);
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
@@ -48,6 +102,12 @@ export function Home({
           <Text style={styles.sectionMeta}>Last 30 days</Text>
         </View>
         <Text style={styles.bigNumber}>{total}</Text>
+        <Text style={styles.trend}>{formatDelta(delta)}</Text>
+        <View style={styles.sparklineRow} testID="sparkline-bars">
+          {last30.map((b, i) => (
+            <SparklineBar key={i} count={b.count} max={sparklineMax} />
+          ))}
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -57,7 +117,22 @@ export function Home({
         </View>
         {openThreads.length === 0 ? (
           <Text style={styles.emptyState}>No open threads</Text>
-        ) : null}
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            testID="open-threads-carousel"
+            contentContainerStyle={styles.carouselContent}
+          >
+            {openThreads.map((t) => (
+              <OpenThreadCard
+                key={t.id}
+                description={t.description}
+                direction={t.direction}
+              />
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       <Pressable accessibilityRole="button" style={styles.cta}>
@@ -154,6 +229,20 @@ const styles = StyleSheet.create({
     letterSpacing: -1.5,
     lineHeight: 48,
   },
+  trend: {
+    marginTop: 6,
+    fontSize: 12,
+    fontFamily: FONT_BOLD,
+    fontWeight: "700",
+    color: "#6b7280",
+    letterSpacing: 0.4,
+  },
+  sparklineRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    height: 40,
+  },
   section: {
     marginBottom: 24,
   },
@@ -168,6 +257,33 @@ const styles = StyleSheet.create({
     fontFamily: FONT_MEDIUM,
     fontWeight: "500",
     color: "#9ca3af",
+  },
+  carouselContent: {
+    paddingRight: 12,
+  },
+  threadCard: {
+    width: 200,
+    marginRight: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 12,
+    backgroundColor: "#ffffff",
+  },
+  threadDirection: {
+    fontSize: 10,
+    fontFamily: FONT_BOLD,
+    fontWeight: "700",
+    color: STRAVA_ORANGE,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  threadDescription: {
+    fontSize: 14,
+    fontFamily: FONT_REGULAR,
+    color: "#111",
+    lineHeight: 18,
   },
   cta: {
     backgroundColor: STRAVA_ORANGE,

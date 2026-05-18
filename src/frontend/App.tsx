@@ -8,7 +8,11 @@ import {
   InterTight_900Black,
 } from "@expo-google-fonts/inter-tight";
 import { createClient } from "@supabase/supabase-js";
-import { AuthClient, RelationshipsClient } from "@related/shared";
+import {
+  AuthClient,
+  OpenThreadsClient,
+  RelationshipsClient,
+} from "@related/shared";
 import { AuthGate } from "./src/AuthGate";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -27,6 +31,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 const authClient = new AuthClient(supabase);
 const relationshipsClient = new RelationshipsClient(supabase);
+const openThreadsClient = new OpenThreadsClient(supabase);
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -44,6 +49,7 @@ export default function App() {
       <AuthGate
         authClient={authClient}
         relationshipsClient={relationshipsClient}
+        openThreadsClient={openThreadsClient}
       />
       <StatusBar style="auto" />
     </>

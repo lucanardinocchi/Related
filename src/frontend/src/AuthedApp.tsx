@@ -2,14 +2,19 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StyleSheet, Text, View } from "react-native";
-import type { Relationship, RelationshipsClient } from "@related/shared";
+import type {
+  OpenThreadsClient,
+  Relationship,
+  RelationshipsClient,
+} from "@related/shared";
 import { AddContactScreen } from "./AddContactScreen";
-import { Home } from "./Home";
+import { HomeScreen } from "./HomeScreen";
 import { RelationshipDetailScreen } from "./RelationshipDetailScreen";
 import { RelationshipsListScreen } from "./RelationshipsListScreen";
 
 export interface AuthedAppProps {
   relationshipsClient: RelationshipsClient;
+  openThreadsClient: OpenThreadsClient;
   onSignOut: () => void;
 }
 
@@ -24,8 +29,10 @@ const Stack = createNativeStackNavigator<RelationshipsStackParams>();
 
 function RelationshipsStack({
   relationshipsClient,
+  openThreadsClient,
 }: {
   relationshipsClient: RelationshipsClient;
+  openThreadsClient: OpenThreadsClient;
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -44,6 +51,8 @@ function RelationshipsStack({
         {({ navigation, route }) => (
           <RelationshipDetailScreen
             relationship={route.params.relationship}
+            relationshipsClient={relationshipsClient}
+            openThreadsClient={openThreadsClient}
             onBack={() => navigation.goBack()}
           />
         )}
@@ -73,22 +82,29 @@ function PlaceholderTab({ name }: { name: string }) {
   );
 }
 
-export function AuthedApp({ relationshipsClient, onSignOut }: AuthedAppProps) {
+export function AuthedApp({
+  relationshipsClient,
+  openThreadsClient,
+  onSignOut,
+}: AuthedAppProps) {
   return (
     <NavigationContainer>
       <Tab.Navigator screenOptions={{ headerShown: false }}>
         <Tab.Screen name="Home">
           {() => (
-            <Home
-              openThreads={[]}
-              upcomingEvents={[]}
-              threadsClosedLast30Days={new Array(30).fill(0)}
+            <HomeScreen
+              openThreadsClient={openThreadsClient}
               onSignOut={onSignOut}
             />
           )}
         </Tab.Screen>
         <Tab.Screen name="Relationships">
-          {() => <RelationshipsStack relationshipsClient={relationshipsClient} />}
+          {() => (
+            <RelationshipsStack
+              relationshipsClient={relationshipsClient}
+              openThreadsClient={openThreadsClient}
+            />
+          )}
         </Tab.Screen>
         <Tab.Screen name="Calendar">
           {() => <PlaceholderTab name="Calendar" />}
