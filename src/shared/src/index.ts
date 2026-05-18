@@ -135,6 +135,27 @@ export type {
   SleepCollectorOptions,
 } from "./signals/SleepCollector";
 
+export {
+  NotificationDispatcher,
+  isInQuietHours,
+} from "./notifications/NotificationDispatcher";
+export type {
+  QuietHoursWindow,
+  NotificationPreferences,
+  ActiveSubscription,
+  PushPayload,
+  PushSender,
+  DispatcherOptions,
+  DispatchInput,
+  DispatchResult,
+} from "./notifications/NotificationDispatcher";
+
+export { NotificationsClient } from "./notifications/NotificationsClient";
+export type {
+  NotificationPreferencesRow,
+  NotificationsClientConfig,
+} from "./notifications/NotificationsClient";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,
