@@ -69,7 +69,15 @@ export type {
   ExecuteInput,
   ExecutorOptions,
   TriggeredPassScheduler,
+  MessageComposer,
+  MessageComposerInput,
+  SendMessagePayload,
 } from "./agent/Executor";
+export { SystemLinkingComposer } from "./agent/SystemLinkingComposer";
+export type {
+  URLOpener,
+  SystemLinkingComposerOptions,
+} from "./agent/SystemLinkingComposer";
 
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
