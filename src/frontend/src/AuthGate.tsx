@@ -7,6 +7,7 @@ import type {
   OpenThreadsClient,
   RelationshipsClient,
   Session,
+  UserContextClient,
 } from "@related/shared";
 import { AuthedApp } from "./AuthedApp";
 import { SignInScreen } from "./SignInScreen";
@@ -18,6 +19,7 @@ export interface AuthGateProps {
   interactionsClient: InteractionsClient;
   groupsClient: GroupsClient;
   candidatesClient: CandidatesClient;
+  userContextClient: UserContextClient;
 }
 
 export function AuthGate({
@@ -27,6 +29,7 @@ export function AuthGate({
   interactionsClient,
   groupsClient,
   candidatesClient,
+  userContextClient,
 }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -58,6 +61,7 @@ export function AuthGate({
       interactionsClient={interactionsClient}
       groupsClient={groupsClient}
       candidatesClient={candidatesClient}
+      userContextClient={userContextClient}
       onSignOut={() => {
         void authClient.signOut();
       }}

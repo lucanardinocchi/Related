@@ -6,6 +6,7 @@ import type {
   InteractionsClient,
   OpenThreadsClient,
   RelationshipsClient,
+  UserContextClient,
 } from "@related/shared";
 import { AuthGate } from "./AuthGate";
 
@@ -73,6 +74,17 @@ function makeMockCandidatesClient(): CandidatesClient {
   } as unknown as CandidatesClient;
 }
 
+function makeMockUserContextClient(): UserContextClient {
+  return {
+    listGoals: jest.fn().mockResolvedValue([]),
+    addGoal: jest.fn(),
+    updateGoal: jest.fn(),
+    deleteGoal: jest.fn(),
+    getSituationalState: jest.fn().mockResolvedValue(null),
+    setSituationalState: jest.fn(),
+  } as unknown as UserContextClient;
+}
+
 describe("<AuthGate />", () => {
   it("shows the sign-in screen when no existing session is found", async () => {
     const authClient = makeMockAuthClient();
@@ -86,6 +98,7 @@ describe("<AuthGate />", () => {
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
+        userContextClient={makeMockUserContextClient()}
       />,
     );
 
@@ -108,6 +121,7 @@ describe("<AuthGate />", () => {
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
+        userContextClient={makeMockUserContextClient()}
       />,
     );
 
@@ -131,6 +145,7 @@ describe("<AuthGate />", () => {
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
+        userContextClient={makeMockUserContextClient()}
       />,
     );
     fireEvent.changeText(await screen.findByPlaceholderText(/email/i), "a@b.com");
@@ -164,6 +179,7 @@ describe("<AuthGate />", () => {
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
+        userContextClient={makeMockUserContextClient()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
@@ -196,6 +212,7 @@ describe("<AuthGate />", () => {
         interactionsClient={makeMockInteractionsClient()}
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
+        userContextClient={makeMockUserContextClient()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();

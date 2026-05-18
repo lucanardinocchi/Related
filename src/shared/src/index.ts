@@ -79,6 +79,25 @@ export type {
   SystemLinkingComposerOptions,
 } from "./agent/SystemLinkingComposer";
 
+export { UserContextClient } from "./user-context/UserContextClient";
+export type {
+  Goal,
+  SituationalState,
+  UserContextClientConfig,
+  OwnerIdResolver,
+} from "./user-context/UserContextClient";
+
+export {
+  tryUpdateSituationalState,
+  defaultLifeChangeDetector,
+} from "./user-context/silentWrite";
+export type {
+  LifeChangeDetector,
+  LifeChangeDetection,
+  SilentWriteInput,
+  SilentWriteResult,
+} from "./user-context/silentWrite";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,

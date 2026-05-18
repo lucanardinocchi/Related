@@ -15,6 +15,7 @@ import {
   InteractionsClient,
   OpenThreadsClient,
   RelationshipsClient,
+  UserContextClient,
 } from "@related/shared";
 import { AuthGate } from "./src/AuthGate";
 
@@ -38,6 +39,11 @@ const openThreadsClient = new OpenThreadsClient(supabase);
 const interactionsClient = new InteractionsClient(supabase);
 const groupsClient = new GroupsClient(supabase);
 const candidatesClient = new CandidatesClient(supabase);
+const userContextClient = new UserContextClient(supabase, async () => {
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) throw new Error("UserContextClient: no signed-in user");
+  return data.user.id;
+});
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -59,6 +65,7 @@ export default function App() {
         interactionsClient={interactionsClient}
         groupsClient={groupsClient}
         candidatesClient={candidatesClient}
+        userContextClient={userContextClient}
       />
       <StatusBar style="auto" />
     </>
