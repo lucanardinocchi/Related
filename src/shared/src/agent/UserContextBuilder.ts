@@ -64,16 +64,27 @@ export class UserContextBuilder {
   async buildUserContext(
     userId: string,
     asOf: Date,
+    /**
+     * Engaged-Pass live context. When `mode === 'engaged'` and `sessionId`
+     * is set, the snapshot includes non-expired Transient Intent for that
+     * session. Baseline / Triggered Passes always get an empty
+     * transientIntent array — that flavour is session-scoped by design.
+     */
+    live?: { mode?: "baseline" | "triggered" | "engaged"; sessionId?: string },
   ): Promise<UserContextSnapshot> {
     const goals = await this.loadGoals();
     const situational = await this.loadSituationalState();
     const calendarDensity = await this.loadCalendarDensity(asOf);
     const sleep = await this.loadSleep(asOf);
+    const transientIntent =
+      live?.mode === "engaged" && live.sessionId
+        ? await this.loadTransientIntent(live.sessionId, asOf)
+        : [];
 
     return {
       userId,
       asOf: asOf.toISOString(),
-      transientIntent: [],
+      transientIntent,
       situationalState: situational,
       goalsAndValues: goals,
       inferredSignals: { calendarDensity, sleep },
@@ -155,5 +166,19 @@ export class UserContextBuilder {
       quality: r.quality,
     }));
     return summariseSleep(records, asOf);
+  }
+
+  private async loadTransientIntent(
+    sessionId: string,
+    asOf: Date,
+  ): Promise<string[]> {
+    if (!this.supabase) return [];
+    const { data, error } = await this.supabase
+      .from("transient_intent")
+      .select("content")
+      .eq("session_id", sessionId)
+      .gt("expires_at", asOf.toISOString());
+    if (error) throw error;
+    return ((data ?? []) as Array<{ content: string }>).map((r) => r.content);
   }
 }

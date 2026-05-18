@@ -102,9 +102,14 @@ export class PassEngine {
       .order("open_threads(created_at)", { ascending: true })
       .limit(50);
 
+    // Engaged-Pass live context carries the voice session id so the
+    // builder can pull non-expired Transient Intent for that session.
+    // Other modes leave transientIntent empty by design.
+    const live = liveContext as { sessionId?: string } | undefined;
     const userContext = await this.userContextBuilder.buildUserContext(
       ownerId,
       new Date(),
+      { mode, sessionId: live?.sessionId },
     );
 
     const prompt: AgentPrompt = {

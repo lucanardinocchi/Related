@@ -8,10 +8,12 @@ function makeQueryMock() {
   const maybeSingle = jest.fn<Promise<Resolved<unknown>>, []>();
   const lt = jest.fn<Promise<Resolved<unknown>>, []>();
   const lte = jest.fn<Promise<Resolved<unknown>>, []>();
+  const gt = jest.fn<Promise<Resolved<unknown>>, []>();
+  const eq = jest.fn(() => ({ gt }));
   const gte = jest.fn(() => ({ lt, lte, order }));
-  const select = jest.fn(() => ({ order, maybeSingle, gte }));
+  const select = jest.fn(() => ({ order, maybeSingle, gte, eq }));
   const from = jest.fn((_t: string) => ({ select }));
-  return { from, select, order, maybeSingle, gte, lt, lte };
+  return { from, select, order, maybeSingle, gte, lt, lte, gt, eq };
 }
 
 describe("UserContextBuilder.buildUserContext — Slice 10", () => {
@@ -147,6 +149,35 @@ describe("UserContextBuilder.buildUserContext — Slice 10", () => {
     const builder = new UserContextBuilder({ supabase: supa });
     const snapshot = await builder.buildUserContext("u-1", new Date());
     expect(snapshot.inferredSignals.sleep).toBeNull();
+  });
+
+  it("includes Transient Intent only when mode='engaged' AND a sessionId is provided", async () => {
+    const q = makeQueryMock();
+    q.order.mockResolvedValue({ data: [], error: null });
+    q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lt.mockResolvedValue({ data: [], error: null });
+    q.lte.mockResolvedValue({ data: [], error: null });
+    q.gt.mockResolvedValue({
+      data: [{ content: "plan my birthday" }],
+      error: null,
+    });
+    const supa = { from: q.from } as unknown as SupabaseClient;
+    const builder = new UserContextBuilder({ supabase: supa });
+
+    const engaged = await builder.buildUserContext("u-1", new Date(), {
+      mode: "engaged",
+      sessionId: "sess-1",
+    });
+    expect(engaged.transientIntent).toEqual(["plan my birthday"]);
+    expect(q.from).toHaveBeenCalledWith("transient_intent");
+    expect(q.eq).toHaveBeenCalledWith("session_id", "sess-1");
+
+    // Baseline / Triggered Passes must not see Transient Intent even when
+    // rows exist for the User — it's session-scoped by design.
+    const baseline = await builder.buildUserContext("u-1", new Date(), {
+      mode: "baseline",
+    });
+    expect(baseline.transientIntent).toEqual([]);
   });
 
   it("tolerates a User with no Goals or Situational State (empty arrays)", async () => {
