@@ -6,9 +6,11 @@ type Resolved<T> = { data: T; error: null } | { data: null; error: { message: st
 function makeQueryMock() {
   const order = jest.fn<Promise<Resolved<unknown>>, []>();
   const maybeSingle = jest.fn<Promise<Resolved<unknown>>, []>();
-  const select = jest.fn(() => ({ order, maybeSingle }));
+  const lt = jest.fn<Promise<Resolved<unknown>>, []>();
+  const gte = jest.fn(() => ({ lt, order }));
+  const select = jest.fn(() => ({ order, maybeSingle, gte }));
   const from = jest.fn((_t: string) => ({ select }));
-  return { from, select, order, maybeSingle };
+  return { from, select, order, maybeSingle, gte, lt };
 }
 
 describe("UserContextBuilder.buildUserContext — Slice 10", () => {
@@ -42,6 +44,7 @@ describe("UserContextBuilder.buildUserContext — Slice 10", () => {
       data: { content: "Just moved to Sydney", updated_at: "2026-05-19T00:00:00Z" },
       error: null,
     });
+    q.lt.mockResolvedValue({ data: [], error: null });
     const supa = { from: q.from } as unknown as SupabaseClient;
 
     const builder = new UserContextBuilder({ supabase: supa });
@@ -56,10 +59,53 @@ describe("UserContextBuilder.buildUserContext — Slice 10", () => {
     expect(q.from).toHaveBeenCalledWith("situational_state");
   });
 
+  it("populates calendar density from inferred_signal_calendar when events exist", async () => {
+    const q = makeQueryMock();
+    q.order.mockResolvedValue({ data: [], error: null });
+    q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lt.mockResolvedValue({
+      data: [
+        {
+          event_id: "evt-1",
+          title: "Coffee",
+          start: "2026-05-19T10:00:00Z",
+          end: "2026-05-19T11:00:00Z",
+          is_all_day: false,
+        },
+      ],
+      error: null,
+    });
+    const supa = { from: q.from } as unknown as SupabaseClient;
+
+    const builder = new UserContextBuilder({ supabase: supa });
+    const snapshot = await builder.buildUserContext(
+      "u-1",
+      new Date("2026-05-19T08:00:00Z"),
+    );
+
+    expect(snapshot.inferredSignals.calendarDensity).toEqual(
+      expect.objectContaining({ density: 1, bucket: "light" }),
+    );
+    expect(q.from).toHaveBeenCalledWith("inferred_signal_calendar");
+  });
+
+  it("calendar density is null when no events are present (graceful degradation)", async () => {
+    const q = makeQueryMock();
+    q.order.mockResolvedValue({ data: [], error: null });
+    q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lt.mockResolvedValue({ data: [], error: null });
+    const supa = { from: q.from } as unknown as SupabaseClient;
+
+    const builder = new UserContextBuilder({ supabase: supa });
+    const snapshot = await builder.buildUserContext("u-1", new Date());
+    expect(snapshot.inferredSignals.calendarDensity).toBeNull();
+  });
+
   it("tolerates a User with no Goals or Situational State (empty arrays)", async () => {
     const q = makeQueryMock();
     q.order.mockResolvedValue({ data: [], error: null });
     q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lt.mockResolvedValue({ data: [], error: null });
     const supa = { from: q.from } as unknown as SupabaseClient;
 
     const builder = new UserContextBuilder({ supabase: supa });

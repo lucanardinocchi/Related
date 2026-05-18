@@ -1,4 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  summariseCalendarDensity,
+  type CalendarDensitySignal as CalendarDensity,
+  type RawCalendarEvent,
+} from "../signals/calendarDensity";
 
 /**
  * User Context Builder — ADR-0002. Per Pass, returns a snapshot of the four
@@ -12,10 +17,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *   Slice 14 — Transient Intent capture.
  */
 
-export interface CalendarDensitySignal {
-  asOf: string;
-  density: number;
-}
+// Re-exported from ../signals so callers have a stable path.
+export type CalendarDensitySignal = CalendarDensity;
 
 export interface SleepSignal {
   asOf: string;
@@ -61,6 +64,7 @@ export class UserContextBuilder {
   ): Promise<UserContextSnapshot> {
     const goals = await this.loadGoals();
     const situational = await this.loadSituationalState();
+    const calendarDensity = await this.loadCalendarDensity(asOf);
 
     return {
       userId,
@@ -68,7 +72,7 @@ export class UserContextBuilder {
       transientIntent: [],
       situationalState: situational,
       goalsAndValues: goals,
-      inferredSignals: { calendarDensity: null, sleep: null },
+      inferredSignals: { calendarDensity, sleep: null },
     };
   }
 
@@ -90,5 +94,34 @@ export class UserContextBuilder {
       .maybeSingle();
     if (error) throw error;
     return data ? [(data as SituationalStateRow).content] : [];
+  }
+
+  private async loadCalendarDensity(asOf: Date): Promise<CalendarDensity | null> {
+    if (!this.supabase) return null;
+    const windowEnd = new Date(asOf);
+    windowEnd.setUTCDate(windowEnd.getUTCDate() + 7);
+    const { data, error } = await this.supabase
+      .from("inferred_signal_calendar")
+      .select("event_id, title, start, end, is_all_day")
+      .gte("start", asOf.toISOString())
+      .lt("start", windowEnd.toISOString());
+    if (error) throw error;
+    const rows = (data ?? []) as Array<{
+      event_id: string;
+      title: string | null;
+      start: string;
+      end: string;
+      is_all_day: boolean;
+    }>;
+    // Graceful degradation: no rows ⇒ no signal (calendar unavailable).
+    if (rows.length === 0) return null;
+    const events: RawCalendarEvent[] = rows.map((r) => ({
+      id: r.event_id,
+      title: r.title ?? undefined,
+      start: r.start,
+      end: r.end,
+      isAllDay: r.is_all_day,
+    }));
+    return summariseCalendarDensity(events, asOf);
   }
 }
