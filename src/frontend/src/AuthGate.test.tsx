@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type {
   AuthClient,
+  GroupsClient,
   InteractionsClient,
   OpenThreadsClient,
   RelationshipsClient,
@@ -48,7 +49,21 @@ function makeMockInteractionsClient(): InteractionsClient {
     markMissed: jest.fn(),
     listUpcomingPlanned: jest.fn().mockResolvedValue([]),
     listAll: jest.fn().mockResolvedValue([]),
+    listForContact: jest.fn().mockResolvedValue([]),
+    listForGroup: jest.fn().mockResolvedValue([]),
   } as unknown as InteractionsClient;
+}
+
+function makeMockGroupsClient(): GroupsClient {
+  return {
+    createGroup: jest.fn(),
+    addMember: jest.fn(),
+    removeMember: jest.fn(),
+    listMembers: jest.fn().mockResolvedValue([]),
+    listGroups: jest.fn().mockResolvedValue([]),
+    listGroupRelationships: jest.fn().mockResolvedValue([]),
+    listForContact: jest.fn().mockResolvedValue([]),
+  } as unknown as GroupsClient;
 }
 
 describe("<AuthGate />", () => {
@@ -62,6 +77,7 @@ describe("<AuthGate />", () => {
         relationshipsClient={makeMockRelationshipsClient()}
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
+        groupsClient={makeMockGroupsClient()}
       />,
     );
 
@@ -82,6 +98,7 @@ describe("<AuthGate />", () => {
         relationshipsClient={makeMockRelationshipsClient()}
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
+        groupsClient={makeMockGroupsClient()}
       />,
     );
 
@@ -103,6 +120,7 @@ describe("<AuthGate />", () => {
         relationshipsClient={makeMockRelationshipsClient()}
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
+        groupsClient={makeMockGroupsClient()}
       />,
     );
     fireEvent.changeText(await screen.findByPlaceholderText(/email/i), "a@b.com");
@@ -134,6 +152,7 @@ describe("<AuthGate />", () => {
         relationshipsClient={makeMockRelationshipsClient()}
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
+        groupsClient={makeMockGroupsClient()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
@@ -164,6 +183,7 @@ describe("<AuthGate />", () => {
         relationshipsClient={makeMockRelationshipsClient()}
         openThreadsClient={makeMockOpenThreadsClient()}
         interactionsClient={makeMockInteractionsClient()}
+        groupsClient={makeMockGroupsClient()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type {
   AuthClient,
+  GroupsClient,
   InteractionsClient,
   OpenThreadsClient,
   RelationshipsClient,
@@ -14,6 +15,7 @@ export interface AuthGateProps {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
   interactionsClient: InteractionsClient;
+  groupsClient: GroupsClient;
 }
 
 export function AuthGate({
@@ -21,6 +23,7 @@ export function AuthGate({
   relationshipsClient,
   openThreadsClient,
   interactionsClient,
+  groupsClient,
 }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -50,6 +53,7 @@ export function AuthGate({
       relationshipsClient={relationshipsClient}
       openThreadsClient={openThreadsClient}
       interactionsClient={interactionsClient}
+      groupsClient={groupsClient}
       onSignOut={() => {
         void authClient.signOut();
       }}

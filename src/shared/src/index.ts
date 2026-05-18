@@ -24,6 +24,16 @@ export type {
   OpenThreadsClientConfig,
 } from "./open-threads/OpenThreadsClient";
 
+export { GroupsClient } from "./groups/GroupsClient";
+export type {
+  Group,
+  GroupMember,
+  GroupRelationship,
+  CreateGroupInput,
+  MembershipInput,
+  GroupsClientConfig,
+} from "./groups/GroupsClient";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,

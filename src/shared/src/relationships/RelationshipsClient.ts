@@ -98,9 +98,14 @@ export class RelationshipsClient {
   }
 
   async listRelationships(): Promise<Relationship[]> {
+    // Server-side filter: Slice 6's groups trigger means the relationships
+    // table also contains target_type='group' rows whose embedded contact is
+    // null. The "All Relationships" surface is Contact-only — Group-targeted
+    // rows surface via the dedicated Groups tab path.
     const { data, error } = await this.client
       .from("relationships")
       .select(RELATIONSHIP_SELECT)
+      .eq("target_type", "contact")
       .order("created_at", { ascending: false });
     if (error) throw error;
     return ((data ?? []) as unknown as RelationshipRow[]).map(toRelationship);

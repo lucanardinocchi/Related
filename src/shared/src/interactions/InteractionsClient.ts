@@ -25,6 +25,14 @@ export interface CreateInteractionInput {
   notes?: string | null;
   status: InteractionStatus;
   contactIds: string[];
+  /**
+   * Optional Group linkage. When set, the Interaction is logged in Group
+   * mode: it touches the Group Relationship AND every current member
+   * Contact's Relationship (member contact links are populated server-side
+   * at capture time). Group-mode is explicit per ADR-0004 — a 1:1 with a
+   * member Contact must leave groupId undefined.
+   */
+  groupId?: string;
 }
 
 export interface InteractionsClientConfig {
@@ -79,13 +87,21 @@ export class InteractionsClient {
   }
 
   async createInteraction(input: CreateInteractionInput): Promise<string> {
-    const { data, error } = await this.client.rpc("create_interaction", {
+    const baseArgs = {
       p_time: input.time,
       p_kind: input.kind,
       p_notes: input.notes ?? null,
       p_status: input.status,
       p_contact_ids: input.contactIds,
-    });
+    };
+    // PostgREST disambiguates the two `create_interaction` overloads by the
+    // named-parameter set: passing p_group_id selects the 6-arg group-mode
+    // signature, omitting it keeps the original 5-arg 1:1 signature.
+    const args =
+      input.groupId !== undefined
+        ? { ...baseArgs, p_group_id: input.groupId }
+        : baseArgs;
+    const { data, error } = await this.client.rpc("create_interaction", args);
     if (error) throw error;
     return data as string;
   }
@@ -127,6 +143,23 @@ export class InteractionsClient {
    * with a matching link, and the `.eq("interaction_contacts.contact_id", …)`
    * is the conventional way to filter parent rows by an embedded column.
    */
+  /**
+   * Interactions logged in Group mode for a given Group, most-recent-first.
+   * Only Group-mode Interactions (group_id set) appear here — 1:1
+   * Interactions with member Contacts are intentionally excluded per the
+   * Slice 6 brief / ADR-0004 ("Group-mode is explicit, never inferred from
+   * member overlap").
+   */
+  async listForGroup(groupId: string): Promise<Interaction[]> {
+    const { data, error } = await this.client
+      .from("interactions")
+      .select(SELECT_WITH_CONTACTS)
+      .eq("group_id", groupId)
+      .order("time", { ascending: false });
+    if (error) throw error;
+    return ((data ?? []) as unknown as InteractionRow[]).map(toInteraction);
+  }
+
   async listForContact(contactId: string): Promise<Interaction[]> {
     const { data, error } = await this.client
       .from("interactions")

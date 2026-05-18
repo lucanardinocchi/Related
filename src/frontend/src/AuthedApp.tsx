@@ -1,8 +1,13 @@
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, useNavigation } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationProp,
+} from "@react-navigation/native-stack";
 import { StyleSheet, Text, View } from "react-native";
 import type {
+  GroupRelationship,
+  GroupsClient,
   InteractionsClient,
   OpenThreadsClient,
   Relationship,
@@ -10,6 +15,9 @@ import type {
 } from "@related/shared";
 import { AddContactScreen } from "./AddContactScreen";
 import { CalendarScreen } from "./CalendarScreen";
+import { CreateGroupScreen } from "./CreateGroupScreen";
+import { GroupDetailScreen } from "./GroupDetailScreen";
+import { GroupsListScreen } from "./GroupsListScreen";
 import { HomeScreen } from "./HomeScreen";
 import { RelationshipDetailScreen } from "./RelationshipDetailScreen";
 import { RelationshipsListScreen } from "./RelationshipsListScreen";
@@ -18,6 +26,7 @@ export interface AuthedAppProps {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
   interactionsClient: InteractionsClient;
+  groupsClient: GroupsClient;
   onSignOut: () => void;
 }
 
@@ -27,17 +36,34 @@ type RelationshipsStackParams = {
   AddContact: undefined;
 };
 
-const Tab = createBottomTabNavigator();
+type GroupsStackParams = {
+  List: undefined;
+  Detail: { relationship: GroupRelationship };
+  Create: undefined;
+};
+
+type TabParams = {
+  Home: undefined;
+  Relationships: undefined;
+  Groups: undefined;
+  Calendar: undefined;
+  You: undefined;
+};
+
+const Tab = createBottomTabNavigator<TabParams>();
 const Stack = createNativeStackNavigator<RelationshipsStackParams>();
+const GroupsStackNav = createNativeStackNavigator<GroupsStackParams>();
 
 function RelationshipsStack({
   relationshipsClient,
   openThreadsClient,
   interactionsClient,
+  groupsClient,
 }: {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
   interactionsClient: InteractionsClient;
+  groupsClient: GroupsClient;
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -59,7 +85,19 @@ function RelationshipsStack({
             relationshipsClient={relationshipsClient}
             openThreadsClient={openThreadsClient}
             interactionsClient={interactionsClient}
+            groupsClient={groupsClient}
             onBack={() => navigation.goBack()}
+            onSelectGroup={(group) => {
+              // Cross-stack jump: switch the tab AND push the Group's detail
+              // view in one motion so the back chevron returns into the
+              // Groups tab rather than back to the Contact's view.
+              navigation
+                .getParent<TabNavigationProp>()
+                ?.navigate("Groups", {
+                  screen: "Detail",
+                  params: { relationship: group },
+                });
+            }}
           />
         )}
       </Stack.Screen>
@@ -79,6 +117,62 @@ function RelationshipsStack({
   );
 }
 
+type TabNavigationProp = ReturnType<
+  typeof useNavigation<NativeStackNavigationProp<TabParams>>
+>;
+
+function GroupsStack({
+  groupsClient,
+  relationshipsClient,
+  openThreadsClient,
+  interactionsClient,
+}: {
+  groupsClient: GroupsClient;
+  relationshipsClient: RelationshipsClient;
+  openThreadsClient: OpenThreadsClient;
+  interactionsClient: InteractionsClient;
+}) {
+  return (
+    <GroupsStackNav.Navigator screenOptions={{ headerShown: false }}>
+      <GroupsStackNav.Screen name="List">
+        {({ navigation }) => (
+          <GroupsListScreen
+            groupsClient={groupsClient}
+            onSelect={(relationship) =>
+              navigation.navigate("Detail", { relationship })
+            }
+            onCreateGroup={() => navigation.navigate("Create")}
+          />
+        )}
+      </GroupsStackNav.Screen>
+      <GroupsStackNav.Screen name="Detail">
+        {({ navigation, route }) => (
+          <GroupDetailScreen
+            relationship={route.params.relationship}
+            groupsClient={groupsClient}
+            openThreadsClient={openThreadsClient}
+            interactionsClient={interactionsClient}
+            onBack={() => navigation.goBack()}
+          />
+        )}
+      </GroupsStackNav.Screen>
+      <GroupsStackNav.Screen
+        name="Create"
+        options={{ presentation: "modal" }}
+      >
+        {({ navigation }) => (
+          <CreateGroupScreen
+            groupsClient={groupsClient}
+            relationshipsClient={relationshipsClient}
+            onCreated={() => navigation.navigate("List")}
+            onCancel={() => navigation.goBack()}
+          />
+        )}
+      </GroupsStackNav.Screen>
+    </GroupsStackNav.Navigator>
+  );
+}
+
 function PlaceholderTab({ name }: { name: string }) {
   return (
     <View style={styles.placeholderRoot}>
@@ -92,6 +186,7 @@ export function AuthedApp({
   relationshipsClient,
   openThreadsClient,
   interactionsClient,
+  groupsClient,
   onSignOut,
 }: AuthedAppProps) {
   return (
@@ -109,6 +204,17 @@ export function AuthedApp({
         <Tab.Screen name="Relationships">
           {() => (
             <RelationshipsStack
+              relationshipsClient={relationshipsClient}
+              openThreadsClient={openThreadsClient}
+              interactionsClient={interactionsClient}
+              groupsClient={groupsClient}
+            />
+          )}
+        </Tab.Screen>
+        <Tab.Screen name="Groups">
+          {() => (
+            <GroupsStack
+              groupsClient={groupsClient}
               relationshipsClient={relationshipsClient}
               openThreadsClient={openThreadsClient}
               interactionsClient={interactionsClient}
