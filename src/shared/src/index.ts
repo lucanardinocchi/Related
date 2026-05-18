@@ -98,6 +98,19 @@ export type {
   SilentWriteResult,
 } from "./user-context/silentWrite";
 
+export {
+  extractTransientIntent,
+  defaultIntentDetector,
+} from "./user-context/transientIntent";
+export type {
+  IntentDetector,
+  DetectedIntent,
+  IntentKind,
+  TransientIntentWriter,
+  ExtractInput as TransientIntentExtractInput,
+  ExtractResult as TransientIntentExtractResult,
+} from "./user-context/transientIntent";
+
 export { summariseCalendarDensity } from "./signals/calendarDensity";
 export type {
   RawCalendarEvent,
