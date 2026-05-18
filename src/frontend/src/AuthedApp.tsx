@@ -13,6 +13,7 @@ import type {
   OpenThreadsClient,
   Relationship,
   RelationshipsClient,
+  UserContextClient,
 } from "@related/shared";
 import { AddContactScreen } from "./AddContactScreen";
 import { CalendarScreen } from "./CalendarScreen";
@@ -22,6 +23,7 @@ import { GroupsListScreen } from "./GroupsListScreen";
 import { HomeScreen } from "./HomeScreen";
 import { RelationshipDetailScreen } from "./RelationshipDetailScreen";
 import { RelationshipsListScreen } from "./RelationshipsListScreen";
+import { YouScreen } from "./YouScreen";
 
 export interface AuthedAppProps {
   relationshipsClient: RelationshipsClient;
@@ -29,6 +31,7 @@ export interface AuthedAppProps {
   interactionsClient: InteractionsClient;
   groupsClient: GroupsClient;
   candidatesClient: CandidatesClient;
+  userContextClient: UserContextClient;
   onSignOut: () => void;
 }
 
@@ -193,6 +196,7 @@ export function AuthedApp({
   interactionsClient,
   groupsClient,
   candidatesClient,
+  userContextClient,
   onSignOut,
 }: AuthedAppProps) {
   return (
@@ -233,7 +237,9 @@ export function AuthedApp({
             <CalendarScreen interactionsClient={interactionsClient} />
           )}
         </Tab.Screen>
-        <Tab.Screen name="You">{() => <PlaceholderTab name="You" />}</Tab.Screen>
+        <Tab.Screen name="You">
+          {() => <YouScreen userContextClient={userContextClient} />}
+        </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
   );
