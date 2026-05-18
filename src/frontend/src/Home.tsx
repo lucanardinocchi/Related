@@ -1,16 +1,17 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import type { ClosedPerDayBucket, OpenThread } from "@related/shared";
-
-export interface UpcomingEvent {
-  id: string;
-  title: string;
-  when: string;
-  time: string;
-}
+import type {
+  ClosedPerDayBucket,
+  Interaction,
+  OpenThread,
+} from "@related/shared";
 
 export interface HomeProps {
   openThreads: OpenThread[];
-  upcomingEvents: UpcomingEvent[];
+  /**
+   * Planned Interactions whose `time` is now-or-later, oldest-first. Caller
+   * pre-filters and pre-sorts; Home is presentation-only.
+   */
+  upcomingInteractions: Interaction[];
   /**
    * Daily closed-thread counts for the trailing 60 days, oldest → newest.
    * Home splits this 30/30 to compute the headline total + trend delta and
@@ -18,6 +19,25 @@ export interface HomeProps {
    */
   closedPerDayLast60: ClosedPerDayBucket[];
   onSignOut: () => void;
+}
+
+function joinContactNames(interaction: Interaction): string {
+  return interaction.contacts.map((c) => c.name).join(", ");
+}
+
+function formatUpcomingWhen(iso: string): string {
+  // "Sat 23 May · 9:00 AM" — short, readable, single-line on a card.
+  const d = new Date(iso);
+  const date = d.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${date} · ${time}`;
 }
 
 const STRAVA_ORANGE = "#FC4C02";
@@ -77,7 +97,7 @@ function OpenThreadCard({
 
 export function Home({
   openThreads,
-  upcomingEvents,
+  upcomingInteractions,
   closedPerDayLast60,
   onSignOut,
 }: HomeProps) {
@@ -142,9 +162,17 @@ export function Home({
 
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Upcoming</Text>
-        {upcomingEvents.length === 0 ? (
+        {upcomingInteractions.length === 0 ? (
           <Text style={styles.emptyState}>Nothing coming up</Text>
-        ) : null}
+        ) : (
+          upcomingInteractions.map((i) => (
+            <View key={i.id} style={styles.upcomingRow}>
+              <Text style={styles.upcomingKind}>{i.kind}</Text>
+              <Text style={styles.upcomingPeople}>{joinContactNames(i)}</Text>
+              <Text style={styles.upcomingWhen}>{formatUpcomingWhen(i.time)}</Text>
+            </View>
+          ))
+        )}
       </View>
 
       <Pressable
@@ -307,6 +335,32 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     textTransform: "uppercase",
     marginTop: 4,
+  },
+  upcomingRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  upcomingKind: {
+    fontSize: 11,
+    fontFamily: FONT_BOLD,
+    fontWeight: "700",
+    color: STRAVA_ORANGE,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  upcomingPeople: {
+    fontSize: 15,
+    fontFamily: FONT_MEDIUM,
+    fontWeight: "500",
+    color: "#000",
+  },
+  upcomingWhen: {
+    marginTop: 2,
+    fontSize: 12,
+    fontFamily: FONT_REGULAR,
+    color: "#6b7280",
   },
   signOut: {
     marginTop: 16,

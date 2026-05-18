@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type {
+  InteractionsClient,
   OpenThread,
   OpenThreadsClient,
   Relationship,
@@ -53,10 +54,20 @@ function makeMockRelationshipsClient(rels: Relationship[] = []): jest.Mocked<Rel
   } as unknown as jest.Mocked<RelationshipsClient>;
 }
 
+function makeMockInteractionsClient(): jest.Mocked<InteractionsClient> {
+  return {
+    createInteraction: jest.fn().mockResolvedValue("i-new"),
+    markMissed: jest.fn().mockResolvedValue(undefined),
+    listUpcomingPlanned: jest.fn().mockResolvedValue([]),
+    listAll: jest.fn().mockResolvedValue([]),
+  } as unknown as jest.Mocked<InteractionsClient>;
+}
+
 function renderScreen(over: {
   relationship?: Relationship;
   openThreadsClient?: jest.Mocked<OpenThreadsClient>;
   relationshipsClient?: jest.Mocked<RelationshipsClient>;
+  interactionsClient?: jest.Mocked<InteractionsClient>;
   onBack?: jest.Mock;
 } = {}) {
   const rel = over.relationship ?? relationship();
@@ -64,6 +75,8 @@ function renderScreen(over: {
     over.openThreadsClient ?? makeMockOpenThreadsClient();
   const relationshipsClient =
     over.relationshipsClient ?? makeMockRelationshipsClient([rel]);
+  const interactionsClient =
+    over.interactionsClient ?? makeMockInteractionsClient();
   const onBack = over.onBack ?? jest.fn();
 
   const utils = render(
@@ -71,10 +84,17 @@ function renderScreen(over: {
       relationship={rel}
       openThreadsClient={openThreadsClient}
       relationshipsClient={relationshipsClient}
+      interactionsClient={interactionsClient}
       onBack={onBack}
     />,
   );
-  return { ...utils, openThreadsClient, relationshipsClient, onBack };
+  return {
+    ...utils,
+    openThreadsClient,
+    relationshipsClient,
+    interactionsClient,
+    onBack,
+  };
 }
 
 describe("<RelationshipDetailScreen /> — contact info", () => {
@@ -230,6 +250,49 @@ describe("<RelationshipDetailScreen /> — create open thread", () => {
       direction: "me_owes_them",
       relationshipIds: ["r-1", "r-2"],
     });
+  });
+
+  it("logs a past Interaction with this Contact via the inline form", async () => {
+    const interactionsClient = makeMockInteractionsClient();
+    renderScreen({ interactionsClient });
+
+    // Inline form mirrors the Open Thread form: kind + time + optional notes,
+    // bound to status=occurred (past) by default. Existence of the kind
+    // placeholder is the contract.
+    const kindInput = await screen.findByPlaceholderText(/kind/i);
+    fireEvent.changeText(kindInput, "coffee");
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/when \(iso/i),
+      "2026-05-10T09:00:00Z",
+    );
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/notes/i),
+      "Sam's apartment",
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText(/^log interaction$/i));
+    });
+
+    expect(interactionsClient.createInteraction).toHaveBeenCalledWith({
+      time: "2026-05-10T09:00:00Z",
+      kind: "coffee",
+      notes: "Sam's apartment",
+      status: "occurred",
+      contactIds: ["c-1"],
+    });
+  });
+
+  it("does not submit the Interaction form when kind or time is empty", async () => {
+    const interactionsClient = makeMockInteractionsClient();
+    renderScreen({ interactionsClient });
+
+    await screen.findByPlaceholderText(/kind/i);
+    await act(async () => {
+      fireEvent.press(screen.getByText(/^log interaction$/i));
+    });
+
+    expect(interactionsClient.createInteraction).not.toHaveBeenCalled();
   });
 
   it("does not submit when the description is empty", async () => {

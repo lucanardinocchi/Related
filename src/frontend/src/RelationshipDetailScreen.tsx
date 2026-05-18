@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import type {
+  InteractionsClient,
   OpenThread,
   OpenThreadsClient,
   Relationship,
@@ -19,6 +20,7 @@ export interface RelationshipDetailScreenProps {
   relationship: Relationship;
   openThreadsClient: OpenThreadsClient;
   relationshipsClient: RelationshipsClient;
+  interactionsClient: InteractionsClient;
   onBack: () => void;
 }
 
@@ -35,6 +37,7 @@ export function RelationshipDetailScreen({
   relationship,
   openThreadsClient,
   relationshipsClient,
+  interactionsClient,
   onBack,
 }: RelationshipDetailScreenProps) {
   const { contact } = relationship;
@@ -47,6 +50,16 @@ export function RelationshipDetailScreen({
   const [extraRelationshipIds, setExtraRelationshipIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Inline log-Interaction form: kind + ISO time + optional notes, bound to
+  // status="occurred" (logging a past Interaction). Scheduling a planned
+  // Interaction goes through the Calendar tab in a later slice; this screen
+  // is the "stub action in the Single Relationship view" called out by the
+  // Slice 4 issue.
+  const [interactionKind, setInteractionKind] = useState("");
+  const [interactionTime, setInteractionTime] = useState("");
+  const [interactionNotes, setInteractionNotes] = useState("");
+  const [logging, setLogging] = useState(false);
 
   const reloadThreads = useCallback(async () => {
     const next = await openThreadsClient.listOpenForRelationship(
@@ -108,6 +121,31 @@ export function RelationshipDetailScreen({
     }
   }
 
+  async function handleLogInteraction() {
+    if (logging) return;
+    if (!interactionKind.trim() || !interactionTime.trim()) return;
+    setLogging(true);
+    setError(null);
+    try {
+      await interactionsClient.createInteraction({
+        time: interactionTime.trim(),
+        kind: interactionKind.trim(),
+        notes: interactionNotes.trim() ? interactionNotes.trim() : null,
+        status: "occurred",
+        contactIds: [contact.id],
+      });
+      setInteractionKind("");
+      setInteractionTime("");
+      setInteractionNotes("");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not log interaction.",
+      );
+    } finally {
+      setLogging(false);
+    }
+  }
+
   function toggleExtra(id: string) {
     setExtraRelationshipIds((curr) =>
       curr.includes(id) ? curr.filter((x) => x !== id) : [...curr, id],
@@ -162,6 +200,38 @@ export function RelationshipDetailScreen({
           </View>
         ))
       )}
+
+      <Text style={styles.sectionHeading}>New interaction</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Kind (coffee, call, dinner…)"
+        placeholderTextColor="#9ca3af"
+        value={interactionKind}
+        onChangeText={setInteractionKind}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="When (ISO 8601)"
+        placeholderTextColor="#9ca3af"
+        value={interactionTime}
+        onChangeText={setInteractionTime}
+        autoCapitalize="none"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Notes (optional)"
+        placeholderTextColor="#9ca3af"
+        value={interactionNotes}
+        onChangeText={setInteractionNotes}
+      />
+      <Pressable
+        accessibilityRole="button"
+        onPress={handleLogInteraction}
+        disabled={logging}
+        style={[styles.submit, logging && styles.submitDisabled]}
+      >
+        <Text style={styles.submitLabel}>Log interaction</Text>
+      </Pressable>
 
       <Text style={styles.sectionHeading}>New thread</Text>
       <TextInput

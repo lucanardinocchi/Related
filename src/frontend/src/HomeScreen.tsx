@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type {
   ClosedPerDayBucket,
+  Interaction,
+  InteractionsClient,
   OpenThread,
   OpenThreadsClient,
 } from "@related/shared";
@@ -8,6 +10,7 @@ import { Home } from "./Home";
 
 export interface HomeScreenProps {
   openThreadsClient: OpenThreadsClient;
+  interactionsClient: InteractionsClient;
   onSignOut: () => void;
 }
 
@@ -27,9 +30,14 @@ function buildClosedPerDayWindow(): { from: string; to: string } {
   return { from: isoDate(from), to: isoDate(today) };
 }
 
-export function HomeScreen({ openThreadsClient, onSignOut }: HomeScreenProps) {
+export function HomeScreen({
+  openThreadsClient,
+  interactionsClient,
+  onSignOut,
+}: HomeScreenProps) {
   const [openThreads, setOpenThreads] = useState<OpenThread[]>([]);
   const [closedPerDay, setClosedPerDay] = useState<ClosedPerDayBucket[]>([]);
+  const [upcoming, setUpcoming] = useState<Interaction[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,15 +57,21 @@ export function HomeScreen({ openThreadsClient, onSignOut }: HomeScreenProps) {
         if (!cancelled) setClosedPerDay(buckets);
       })
       .catch(() => {});
+    interactionsClient
+      .listUpcomingPlanned()
+      .then((next) => {
+        if (!cancelled) setUpcoming(next);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [openThreadsClient]);
+  }, [openThreadsClient, interactionsClient]);
 
   return (
     <Home
       openThreads={openThreads}
-      upcomingEvents={[]}
+      upcomingInteractions={upcoming}
       closedPerDayLast60={closedPerDay}
       onSignOut={onSignOut}
     />

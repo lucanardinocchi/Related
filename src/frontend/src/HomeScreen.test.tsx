@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react-native";
 import type {
   ClosedPerDayBucket,
+  Interaction,
+  InteractionsClient,
   OpenThread,
   OpenThreadsClient,
 } from "@related/shared";
@@ -8,6 +10,9 @@ import { HomeScreen } from "./HomeScreen";
 
 type MockedOpenThreadsClient = {
   [K in keyof OpenThreadsClient]: jest.Mock;
+};
+type MockedInteractionsClient = {
+  [K in keyof InteractionsClient]: jest.Mock;
 };
 
 function makeMock(): MockedOpenThreadsClient {
@@ -17,6 +22,15 @@ function makeMock(): MockedOpenThreadsClient {
     listOpenForUser: jest.fn(),
     listOpenForRelationship: jest.fn(),
     closedPerDay: jest.fn(),
+  };
+}
+
+function makeInteractionsMock(): MockedInteractionsClient {
+  return {
+    createInteraction: jest.fn().mockResolvedValue(""),
+    markMissed: jest.fn().mockResolvedValue(undefined),
+    listUpcomingPlanned: jest.fn().mockResolvedValue([]),
+    listAll: jest.fn().mockResolvedValue([]),
   };
 }
 
@@ -49,6 +63,9 @@ describe("<HomeScreen />", () => {
     render(
       <HomeScreen
         openThreadsClient={client as unknown as OpenThreadsClient}
+        interactionsClient={
+          makeInteractionsMock() as unknown as InteractionsClient
+        }
         onSignOut={jest.fn()}
       />,
     );
@@ -68,6 +85,45 @@ describe("<HomeScreen />", () => {
     );
   });
 
+  it("loads upcoming planned Interactions and renders them under Upcoming", async () => {
+    const ot = makeMock();
+    ot.listOpenForUser.mockResolvedValue([]);
+    ot.closedPerDay.mockResolvedValue(zeroBuckets(60));
+
+    const interactions = makeInteractionsMock();
+    const upcoming: Interaction[] = [
+      {
+        id: "i-1",
+        time: "2026-05-20T13:30:00Z",
+        kind: "coffee",
+        notes: null,
+        status: "planned",
+        contacts: [{ id: "c-1", name: "Sam" }],
+      },
+    ];
+    interactions.listUpcomingPlanned.mockResolvedValue(upcoming);
+
+    render(
+      <HomeScreen
+        openThreadsClient={ot as unknown as OpenThreadsClient}
+        interactionsClient={interactions as unknown as InteractionsClient}
+        onSignOut={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      // The Upcoming section surfaces the kind (Interaction's defining label)
+      // and the linked Contact's name. Exact formatting belongs to <Home />;
+      // here we assert these two strings made it through.
+      expect(screen.getByText(/coffee/i)).toBeTruthy();
+      expect(screen.getByText(/Sam/)).toBeTruthy();
+    });
+
+    // No "Nothing coming up" empty state once at least one upcoming exists.
+    expect(screen.queryByText(/nothing coming up/i)).toBeNull();
+    expect(interactions.listUpcomingPlanned).toHaveBeenCalled();
+  });
+
   it("requests a 60-day window ending today (UTC)", async () => {
     const client = makeMock();
     client.listOpenForUser.mockResolvedValue([]);
@@ -79,6 +135,9 @@ describe("<HomeScreen />", () => {
     render(
       <HomeScreen
         openThreadsClient={client as unknown as OpenThreadsClient}
+        interactionsClient={
+          makeInteractionsMock() as unknown as InteractionsClient
+        }
         onSignOut={jest.fn()}
       />,
     );
