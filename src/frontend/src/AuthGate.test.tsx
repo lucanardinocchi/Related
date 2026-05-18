@@ -1,5 +1,9 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
-import type { AuthClient, RelationshipsClient } from "@related/shared";
+import type {
+  AuthClient,
+  OpenThreadsClient,
+  RelationshipsClient,
+} from "@related/shared";
 import { AuthGate } from "./AuthGate";
 
 type MockedAuthClient = {
@@ -27,12 +31,28 @@ function makeMockRelationshipsClient(): RelationshipsClient {
   } as unknown as RelationshipsClient;
 }
 
+function makeMockOpenThreadsClient(): OpenThreadsClient {
+  return {
+    createOpenThread: jest.fn(),
+    closeOpenThread: jest.fn(),
+    listOpenForUser: jest.fn().mockResolvedValue([]),
+    listOpenForRelationship: jest.fn().mockResolvedValue([]),
+    closedPerDay: jest.fn().mockResolvedValue([]),
+  } as unknown as OpenThreadsClient;
+}
+
 describe("<AuthGate />", () => {
   it("shows the sign-in screen when no existing session is found", async () => {
     const authClient = makeMockAuthClient();
     authClient.getSession.mockResolvedValue(null);
 
-    render(<AuthGate authClient={authClient as unknown as AuthClient} relationshipsClient={makeMockRelationshipsClient()} />);
+    render(
+      <AuthGate
+        authClient={authClient as unknown as AuthClient}
+        relationshipsClient={makeMockRelationshipsClient()}
+        openThreadsClient={makeMockOpenThreadsClient()}
+      />,
+    );
 
     expect(await screen.findByPlaceholderText(/email/i)).toBeTruthy();
     expect(screen.queryByText(/^threads closed$/i)).toBeNull();
@@ -45,7 +65,13 @@ describe("<AuthGate />", () => {
       user: { id: "u", email: "a@b.com" },
     });
 
-    render(<AuthGate authClient={authClient as unknown as AuthClient} relationshipsClient={makeMockRelationshipsClient()} />);
+    render(
+      <AuthGate
+        authClient={authClient as unknown as AuthClient}
+        relationshipsClient={makeMockRelationshipsClient()}
+        openThreadsClient={makeMockOpenThreadsClient()}
+      />,
+    );
 
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
     expect(screen.queryByPlaceholderText(/email/i)).toBeNull();
@@ -59,7 +85,13 @@ describe("<AuthGate />", () => {
       user: { id: "u", email: "a@b.com" },
     });
 
-    render(<AuthGate authClient={authClient as unknown as AuthClient} relationshipsClient={makeMockRelationshipsClient()} />);
+    render(
+      <AuthGate
+        authClient={authClient as unknown as AuthClient}
+        relationshipsClient={makeMockRelationshipsClient()}
+        openThreadsClient={makeMockOpenThreadsClient()}
+      />,
+    );
     fireEvent.changeText(await screen.findByPlaceholderText(/email/i), "a@b.com");
     fireEvent.changeText(screen.getByPlaceholderText(/password/i), "secret");
     fireEvent.press(screen.getByText(/sign in/i));
@@ -83,7 +115,13 @@ describe("<AuthGate />", () => {
       capturedCallback!(null);
     });
 
-    render(<AuthGate authClient={authClient as unknown as AuthClient} relationshipsClient={makeMockRelationshipsClient()} />);
+    render(
+      <AuthGate
+        authClient={authClient as unknown as AuthClient}
+        relationshipsClient={makeMockRelationshipsClient()}
+        openThreadsClient={makeMockOpenThreadsClient()}
+      />,
+    );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
 
     await act(async () => {
@@ -106,7 +144,13 @@ describe("<AuthGate />", () => {
       return () => {};
     });
 
-    render(<AuthGate authClient={authClient as unknown as AuthClient} relationshipsClient={makeMockRelationshipsClient()} />);
+    render(
+      <AuthGate
+        authClient={authClient as unknown as AuthClient}
+        relationshipsClient={makeMockRelationshipsClient()}
+        openThreadsClient={makeMockOpenThreadsClient()}
+      />,
+    );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
 
     // Simulate sign-out coming from Supabase via the auth-state listener.
