@@ -13,6 +13,7 @@ import {
   CandidatesClient,
   GroupsClient,
   InteractionsClient,
+  OnboardingClient,
   OpenThreadsClient,
   RelationshipsClient,
   UserContextClient,
@@ -39,11 +40,13 @@ const openThreadsClient = new OpenThreadsClient(supabase);
 const interactionsClient = new InteractionsClient(supabase);
 const groupsClient = new GroupsClient(supabase);
 const candidatesClient = new CandidatesClient(supabase);
-const userContextClient = new UserContextClient(supabase, async () => {
+const resolveOwnerId = async () => {
   const { data } = await supabase.auth.getUser();
-  if (!data.user) throw new Error("UserContextClient: no signed-in user");
+  if (!data.user) throw new Error("No signed-in user");
   return data.user.id;
-});
+};
+const userContextClient = new UserContextClient(supabase, resolveOwnerId);
+const onboardingClient = new OnboardingClient(supabase, resolveOwnerId);
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -66,6 +69,7 @@ export default function App() {
         groupsClient={groupsClient}
         candidatesClient={candidatesClient}
         userContextClient={userContextClient}
+        onboardingClient={onboardingClient}
       />
       <StatusBar style="auto" />
     </>

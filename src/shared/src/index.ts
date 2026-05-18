@@ -156,6 +156,16 @@ export type {
   NotificationsClientConfig,
 } from "./notifications/NotificationsClient";
 
+export {
+  OnboardingClient,
+  ONBOARDING_STEPS,
+} from "./onboarding/OnboardingClient";
+export type {
+  OnboardingStep,
+  OnboardingState,
+  OnboardingClientConfig,
+} from "./onboarding/OnboardingClient";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,
