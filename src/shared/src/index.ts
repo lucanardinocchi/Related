@@ -98,6 +98,18 @@ export type {
   SilentWriteResult,
 } from "./user-context/silentWrite";
 
+export { summariseCalendarDensity } from "./signals/calendarDensity";
+export type {
+  RawCalendarEvent,
+  CalendarDensitySignal as CalendarDensitySignalShape,
+  CalendarDensityBucket,
+} from "./signals/calendarDensity";
+export { CalendarCollector } from "./signals/CalendarCollector";
+export type {
+  CalendarFetcher,
+  CalendarCollectorOptions,
+} from "./signals/CalendarCollector";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,
