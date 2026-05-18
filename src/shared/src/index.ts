@@ -34,6 +34,43 @@ export type {
   GroupsClientConfig,
 } from "./groups/GroupsClient";
 
+export { CandidatesClient } from "./candidates/CandidatesClient";
+export type {
+  CandidateSet,
+  CandidateAction,
+  DecisionState,
+  PassMode,
+  CandidatesClientConfig,
+} from "./candidates/CandidatesClient";
+
+export {
+  PassEngine,
+  DoNothingAgent,
+} from "./agent/PassEngine";
+export type {
+  AgentCaller,
+  AgentPrompt,
+  CandidateActionInput,
+  CandidateSet as EngineCandidateSet,
+  PassEngineOptions,
+  RunPassInput,
+} from "./agent/PassEngine";
+export { UserContextBuilder } from "./agent/UserContextBuilder";
+export type {
+  UserContextSnapshot,
+  CalendarDensitySignal,
+  SleepSignal,
+} from "./agent/UserContextBuilder";
+export { Executor } from "./agent/Executor";
+export type {
+  PendingCandidateAction,
+  UserEdits,
+  EffectResult,
+  ExecuteInput,
+  ExecutorOptions,
+  TriggeredPassScheduler,
+} from "./agent/Executor";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,

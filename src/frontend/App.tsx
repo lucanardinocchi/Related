@@ -10,6 +10,7 @@ import {
 import { createClient } from "@supabase/supabase-js";
 import {
   AuthClient,
+  CandidatesClient,
   GroupsClient,
   InteractionsClient,
   OpenThreadsClient,
@@ -36,6 +37,7 @@ const relationshipsClient = new RelationshipsClient(supabase);
 const openThreadsClient = new OpenThreadsClient(supabase);
 const interactionsClient = new InteractionsClient(supabase);
 const groupsClient = new GroupsClient(supabase);
+const candidatesClient = new CandidatesClient(supabase);
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -56,6 +58,7 @@ export default function App() {
         openThreadsClient={openThreadsClient}
         interactionsClient={interactionsClient}
         groupsClient={groupsClient}
+        candidatesClient={candidatesClient}
       />
       <StatusBar style="auto" />
     </>

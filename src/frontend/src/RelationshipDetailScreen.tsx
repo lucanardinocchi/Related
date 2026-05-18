@@ -8,6 +8,8 @@ import {
   View,
 } from "react-native";
 import type {
+  CandidateSet,
+  CandidatesClient,
   GroupRelationship,
   GroupsClient,
   Interaction,
@@ -25,6 +27,7 @@ export interface RelationshipDetailScreenProps {
   relationshipsClient: RelationshipsClient;
   interactionsClient: InteractionsClient;
   groupsClient: GroupsClient;
+  candidatesClient: CandidatesClient;
   onBack: () => void;
   /**
    * Called when the User taps a Group membership back-reference.
@@ -49,6 +52,7 @@ export function RelationshipDetailScreen({
   relationshipsClient,
   interactionsClient,
   groupsClient,
+  candidatesClient,
   onBack,
   onSelectGroup,
 }: RelationshipDetailScreenProps) {
@@ -60,6 +64,7 @@ export function RelationshipDetailScreen({
   const [groupMemberships, setGroupMemberships] = useState<GroupRelationship[]>(
     [],
   );
+  const [candidateSet, setCandidateSet] = useState<CandidateSet | null>(null);
 
   const [description, setDescription] = useState("");
   const [direction, setDirection] = useState<ThreadDirection>("me_owes_them");
@@ -96,13 +101,15 @@ export function RelationshipDetailScreen({
       relationshipsClient.listRelationships(),
       interactionsClient.listForContact(contact.id),
       groupsClient.listForContact(contact.id),
+      candidatesClient.getLatestForRelationship(relationship.id),
     ])
-      .then(([nextThreads, rels, hist, memberships]) => {
+      .then(([nextThreads, rels, hist, memberships, candidates]) => {
         if (cancelled) return;
         setThreads(nextThreads);
         setAllRelationships(rels);
         setHistory(hist);
         setGroupMemberships(memberships);
+        setCandidateSet(candidates);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -118,6 +125,7 @@ export function RelationshipDetailScreen({
     relationshipsClient,
     interactionsClient,
     groupsClient,
+    candidatesClient,
     relationship.id,
     contact.id,
   ]);
@@ -238,7 +246,16 @@ export function RelationshipDetailScreen({
       </Pressable>
 
       <Text style={styles.sectionHeading}>Candidate set</Text>
-      <Text style={styles.empty}>No candidates yet</Text>
+      {candidateSet === null || candidateSet.actions.length === 0 ? (
+        <Text style={styles.empty}>No candidates yet</Text>
+      ) : (
+        candidateSet.actions.map((a) => (
+          <View key={a.id} style={styles.candidateRow}>
+            <Text style={styles.candidateType}>{a.type}</Text>
+            {a.why ? <Text style={styles.candidateWhy}>{a.why}</Text> : null}
+          </View>
+        ))
+      )}
 
       <Text style={styles.sectionHeading}>Open threads</Text>
       {threads.length === 0 ? (
@@ -470,6 +487,23 @@ const styles = StyleSheet.create({
     fontFamily: FONT_BOLD,
     fontWeight: "700",
     color: "#374151",
+  },
+  candidateRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  candidateType: {
+    fontSize: 14,
+    fontFamily: FONT_BOLD,
+    fontWeight: "700",
+    color: "#000",
+  },
+  candidateWhy: {
+    marginTop: 2,
+    fontSize: 12,
+    fontFamily: FONT_REGULAR,
+    color: "#6b7280",
   },
   groupRow: {
     paddingVertical: 10,
