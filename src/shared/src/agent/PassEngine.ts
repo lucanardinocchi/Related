@@ -3,6 +3,7 @@ import {
   UserContextBuilder,
   type UserContextSnapshot,
 } from "./UserContextBuilder";
+import type { NotificationDispatcher } from "../notifications/NotificationDispatcher";
 
 export type PassMode = "baseline" | "triggered" | "engaged";
 
@@ -58,6 +59,13 @@ export interface PassEngineOptions {
   supabase: SupabaseClient;
   agent: AgentCaller;
   userContextBuilder?: UserContextBuilder;
+  /**
+   * Slice 15 trigger. When set, the engine calls dispatcher.maybeDispatch
+   * after persisting a baseline/triggered Pass that produced at least one
+   * non-DoNothing candidate. Engaged Passes never notify — the User is in
+   * the agent UI already.
+   */
+  dispatcher?: NotificationDispatcher;
 }
 
 export interface RunPassInput {
@@ -80,11 +88,13 @@ export class PassEngine {
   private readonly supabase: SupabaseClient;
   private readonly agent: AgentCaller;
   private readonly userContextBuilder: UserContextBuilder;
+  private readonly dispatcher: NotificationDispatcher | null;
 
   constructor(opts: PassEngineOptions) {
     this.supabase = opts.supabase;
     this.agent = opts.agent;
     this.userContextBuilder = opts.userContextBuilder ?? new UserContextBuilder();
+    this.dispatcher = opts.dispatcher ?? null;
   }
 
   async runPass(input: RunPassInput): Promise<CandidateSet> {
@@ -192,6 +202,34 @@ export class PassEngine {
           })),
         );
       if (actErr) throw actErr;
+    }
+
+    // Slice 15 notification trigger. Skip engaged-mode Passes — the User
+    // is already in the agent UI. Skip when the only candidate is DoNothing
+    // — nothing fresh to notify about. The dispatcher itself enforces
+    // quiet hours and the salience threshold; here we just compute a
+    // heuristic salience and synthesise a title.
+    if (this.dispatcher && mode !== "engaged") {
+      const concrete = actions.filter((a) => a.type !== "DoNothing");
+      if (concrete.length > 0) {
+        const contactName = (
+          relationship as { contact?: { name?: string } | null }
+        )?.contact?.name;
+        const firstWithWhy = concrete.find((a) => a.why);
+        const salience = firstWithWhy ? 1.0 : 0.6;
+        await this.dispatcher.maybeDispatch({
+          ownerId,
+          relationshipId,
+          candidateActionId: persistedSet.id,
+          salience,
+          title: `Fresh thinking${contactName ? ` for ${contactName}` : ""}`,
+          body:
+            concrete.length === 1
+              ? `1 new option to review`
+              : `${concrete.length} new options to review`,
+          now: new Date(),
+        });
+      }
     }
 
     return {

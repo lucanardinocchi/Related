@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PassEngine, type AgentCaller, type PassMode } from "./PassEngine";
+import type { NotificationDispatcher } from "../notifications/NotificationDispatcher";
 
 type Resolved<T> = { data: T; error: null } | { data: null; error: { message: string } };
 
@@ -132,6 +133,69 @@ describe("PassEngine.runPass", () => {
         }),
       }),
     );
+  });
+
+  it("calls dispatcher.maybeDispatch for baseline mode when a non-DoNothing candidate is produced", async () => {
+    const dispatcher = {
+      maybeDispatch: jest.fn().mockResolvedValue({ kind: "skipped_disabled" }),
+    } as unknown as NotificationDispatcher;
+    const q = makeQueryMock();
+    const supa = { from: q.from } as unknown as SupabaseClient;
+    const propose = jest.fn().mockResolvedValue([
+      {
+        type: "ScheduleInteraction",
+        payload: { time: "2026-05-22T17:00:00Z", kind: "coffee" },
+        why: "open thread aging",
+      },
+      { type: "DoNothing", payload: {} },
+    ]);
+    const engine = new PassEngine({ supabase: supa, agent: { propose }, dispatcher });
+    primeReads(q);
+
+    await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
+
+    expect(dispatcher.maybeDispatch).toHaveBeenCalledTimes(1);
+    expect(dispatcher.maybeDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerId: "u-1",
+        relationshipId: "r-1",
+        salience: expect.any(Number),
+        title: expect.stringContaining("Sam"),
+      }),
+    );
+  });
+
+  it("does NOT call dispatcher for engaged mode (User is already in the agent UI)", async () => {
+    const dispatcher = {
+      maybeDispatch: jest.fn().mockResolvedValue({ kind: "sent", count: 1 }),
+    } as unknown as NotificationDispatcher;
+    const q = makeQueryMock();
+    const supa = { from: q.from } as unknown as SupabaseClient;
+    const propose = jest.fn().mockResolvedValue([
+      { type: "ScheduleInteraction", payload: {}, why: "x" },
+      { type: "DoNothing", payload: {} },
+    ]);
+    const engine = new PassEngine({ supabase: supa, agent: { propose }, dispatcher });
+    primeReads(q);
+
+    await engine.runPass({ relationshipId: "r-1", mode: "engaged" });
+
+    expect(dispatcher.maybeDispatch).not.toHaveBeenCalled();
+  });
+
+  it("does NOT call dispatcher when the only candidate is DoNothing (nothing to notify about)", async () => {
+    const dispatcher = {
+      maybeDispatch: jest.fn().mockResolvedValue({ kind: "sent", count: 1 }),
+    } as unknown as NotificationDispatcher;
+    const q = makeQueryMock();
+    const supa = { from: q.from } as unknown as SupabaseClient;
+    const propose = jest.fn().mockResolvedValue([{ type: "DoNothing", payload: {} }]);
+    const engine = new PassEngine({ supabase: supa, agent: { propose }, dispatcher });
+    primeReads(q);
+
+    await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
+
+    expect(dispatcher.maybeDispatch).not.toHaveBeenCalled();
   });
 
   it("loads the previous Candidate Set's actions + decisions so the agent sees what the User picked, declined, edited, or ignored", async () => {
