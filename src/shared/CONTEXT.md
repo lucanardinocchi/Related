@@ -5,8 +5,18 @@ Cross-cutting domain language for Related. These terms are the same in frontend,
 ## Language
 
 **User**:
-The account holder. The single person whose perspective the app is built around.
+The account holder. The single person whose perspective the app is built around. Per **ADR-0006**, Related is a multi-tenant SaaS — many Users exist concurrently in the same system, but each User's view of the world is single-User-shaped. RLS isolates per-User data; no cross-User Relationships, Groups, or Interactions exist in v1.
 _Avoid_: Owner, account.
+
+**Tenant** (system-level only):
+Implementation term for "one User's isolated data slice". Used in system docs and RLS / Edge Function code, not in product copy. A Tenant maps 1:1 to a User; every row in every table carries `owner_id` which the RLS policies gate on. Edge Functions iterate tenants when running daily collectors; UI code never names this — to the User everything is "my data."
+_Avoid_: Org, workspace, customer (these imply multi-User-within-Tenant, which Related does not have).
+
+**Integration**:
+A per-User OAuth-bound external account the agent reads from (Google Calendar) or a per-User platform-permissioned signal source (iOS HealthKit). Stored in `user_provider_tokens` (OAuth) or granted via on-device permission flow (HealthKit). Connected during **Onboarding**; revocable. Each Integration is the User's own — there is no shared Integration across Users.
+
+**Onboarding**:
+The first-run flow that brings a new User from sign-up to fully configured. v1 steps: (1) Supabase Auth sign-up, (2) **Connect Google Calendar** (OAuth — Calendar density signal), (3) **Grant HealthKit access** (iOS only — Sleep signal), (4) add the first few Contacts. State tracked in `onboarding_state`. Steps 2 and 3 are skippable but degrade the agent's signal coverage.
 
 **Contact**:
 A person the User knows. Identified by name and one or more channels (phone, email, etc.). A Contact is **not** a user of the app — they are a referenced person, not an account.
