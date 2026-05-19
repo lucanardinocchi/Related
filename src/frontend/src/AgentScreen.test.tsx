@@ -6,8 +6,11 @@ import {
 } from "@testing-library/react-native";
 import type {
   AgentService,
+  AgentTurnResult,
   EffectResult,
   Relationship,
+  SessionHandle,
+  VoiceSessionManager,
 } from "@related/shared";
 import { AgentScreen } from "./AgentScreen";
 
@@ -479,5 +482,207 @@ describe("<AgentScreen />", () => {
     expect(
       await screen.findByText(/^Intent: plan my birthday$/),
     ).toBeTruthy();
+  });
+});
+
+/**
+ * Voice toggle test scaffolding. The AgentScreen receives an optional
+ * `voiceSessionManager` so the test can inject a fake. The fake records
+ * what was called and lets the test trigger the agent-response callback
+ * + resolve the turn whenever the test wants.
+ */
+function makeFakeVoiceManager(): {
+  manager: VoiceSessionManager;
+  startSession: jest.Mock;
+  fakeHandle: SessionHandle & {
+    /** Resolve the pending onUserTurn from inside the test. */
+    resolveTurn: (result: AgentTurnResult) => void;
+    /** Reject the pending onUserTurn (e.g. InterruptedError). */
+    rejectTurn: (err: Error) => void;
+    /** What the screen registered as its agent response callback. */
+    agentCallback: (chunk: Uint8Array) => void;
+  };
+} {
+  let resolveTurn!: (r: AgentTurnResult) => void;
+  let rejectTurn!: (e: Error) => void;
+  const turnPromise = new Promise<AgentTurnResult>((res, rej) => {
+    resolveTurn = res;
+    rejectTurn = rej;
+  });
+  let agentCallback: (chunk: Uint8Array) => void = () => {};
+  const interrupt = jest.fn();
+  const close = jest.fn();
+  const handle = {
+    sessionId: "vs-test",
+    relationshipId: "r-1",
+    onUserTurn: jest.fn().mockReturnValue(turnPromise),
+    onAgentResponse: (cb: (chunk: Uint8Array) => void) => {
+      agentCallback = cb;
+    },
+    interrupt,
+    close,
+    resolveTurn,
+    rejectTurn,
+    get agentCallback(): (chunk: Uint8Array) => void {
+      return agentCallback;
+    },
+  } as unknown as SessionHandle & {
+    resolveTurn: (r: AgentTurnResult) => void;
+    rejectTurn: (e: Error) => void;
+    agentCallback: (chunk: Uint8Array) => void;
+  };
+  const startSession = jest.fn().mockReturnValue(handle);
+  const manager = { startSession } as unknown as VoiceSessionManager;
+  return { manager, startSession, fakeHandle: handle };
+}
+
+describe("<AgentScreen /> voice toggle", () => {
+  it("renders a Mic button next to Send when a voiceSessionManager is provided", () => {
+    const service = makeService();
+    const { manager } = makeFakeVoiceManager();
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship()}
+        agentService={service as unknown as AgentService}
+        voiceSessionManager={manager}
+        onBack={jest.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/start voice/i)).toBeTruthy();
+  });
+
+  it("does NOT render a Mic button when no voiceSessionManager is provided (text-only mode)", () => {
+    const service = makeService();
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship()}
+        agentService={service as unknown as AgentService}
+        onBack={jest.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText(/start voice/i)).toBeNull();
+  });
+
+  it("tap Mic → startSession is invoked with the focused Relationship and a turn is started", async () => {
+    const service = makeService();
+    const { manager, startSession, fakeHandle } = makeFakeVoiceManager();
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship()}
+        agentService={service as unknown as AgentService}
+        voiceSessionManager={manager}
+        onBack={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText(/start voice/i));
+
+    await waitFor(() => {
+      expect(startSession).toHaveBeenCalledWith({ relationshipId: "r-1" });
+    });
+    await waitFor(() => {
+      expect((fakeHandle.onUserTurn as jest.Mock)).toHaveBeenCalled();
+    });
+    // After tap, mic label flips to indicate active state.
+    expect(screen.getByLabelText(/stop voice/i)).toBeTruthy();
+  });
+
+  it("when the voice turn resolves, the Candidate Set is rendered just like text mode", async () => {
+    const service = makeService();
+    const { manager, fakeHandle } = makeFakeVoiceManager();
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship()}
+        agentService={service as unknown as AgentService}
+        voiceSessionManager={manager}
+        onBack={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText(/start voice/i));
+    await waitFor(() =>
+      expect((fakeHandle.onUserTurn as jest.Mock)).toHaveBeenCalled(),
+    );
+
+    fakeHandle.resolveTurn({
+      text: "Suggest coffee with Sam",
+      candidateSet: {
+        id: "cs-voice",
+        ownerId: "u-1",
+        relationshipId: "r-1",
+        mode: "engaged",
+        createdAt: "2026-05-19T00:00:00Z",
+        actions: [
+          {
+            id: "ca-1",
+            type: "ScheduleInteraction",
+            payload: {
+              time: "2026-05-22T17:00:00Z",
+              kind: "coffee",
+              contactIds: ["c-1"],
+            },
+            why: "live voice intent",
+            decisionState: "pending",
+          },
+          {
+            id: "ca-2",
+            type: "DoNothing",
+            payload: {},
+            why: null,
+            decisionState: "pending",
+          },
+        ],
+      },
+    });
+
+    expect(await screen.findByText("ScheduleInteraction")).toBeTruthy();
+    expect(screen.getByText("live voice intent")).toBeTruthy();
+  });
+
+  it("tapping Mic a second time during the turn fires interrupt() (barge-in)", async () => {
+    const service = makeService();
+    const { manager, fakeHandle } = makeFakeVoiceManager();
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship()}
+        agentService={service as unknown as AgentService}
+        voiceSessionManager={manager}
+        onBack={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText(/start voice/i));
+    await waitFor(() =>
+      expect((fakeHandle.onUserTurn as jest.Mock)).toHaveBeenCalled(),
+    );
+
+    fireEvent.press(screen.getByLabelText(/stop voice/i));
+    expect(fakeHandle.interrupt).toHaveBeenCalled();
+  });
+
+  it("after interrupt the mic returns to idle state and is tappable again", async () => {
+    const service = makeService();
+    const { manager, fakeHandle } = makeFakeVoiceManager();
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship()}
+        agentService={service as unknown as AgentService}
+        voiceSessionManager={manager}
+        onBack={jest.fn()}
+      />,
+    );
+    fireEvent.press(screen.getByLabelText(/start voice/i));
+    await waitFor(() =>
+      expect((fakeHandle.onUserTurn as jest.Mock)).toHaveBeenCalled(),
+    );
+
+    fireEvent.press(screen.getByLabelText(/stop voice/i));
+    const interruptError = new Error("voice session turn interrupted");
+    interruptError.name = "InterruptedError";
+    fakeHandle.rejectTurn(interruptError);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/start voice/i)).toBeTruthy();
+    });
   });
 });

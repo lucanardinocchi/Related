@@ -254,3 +254,7 @@ export { FakeSTTAdapter } from "./voice/FakeSTTAdapter";
 export type { FakeSTTAdapterOptions } from "./voice/FakeSTTAdapter";
 export { FakeTTSAdapter } from "./voice/FakeTTSAdapter";
 export type { FakeTTSAdapterOptions } from "./voice/FakeTTSAdapter";
+export { OpenAIWhisperSTTAdapter } from "./voice/OpenAIWhisperSTTAdapter";
+export type { OpenAIWhisperSTTAdapterOptions } from "./voice/OpenAIWhisperSTTAdapter";
+export { ElevenLabsTTSAdapter } from "./voice/ElevenLabsTTSAdapter";
+export type { ElevenLabsTTSAdapterOptions } from "./voice/ElevenLabsTTSAdapter";

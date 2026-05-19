@@ -13,15 +13,18 @@ import {
   AgentService,
   AuthClient,
   CandidatesClient,
+  ElevenLabsTTSAdapter,
   GroupsClient,
   InteractionsClient,
   OnboardingClient,
+  OpenAIWhisperSTTAdapter,
   OpenThreadsClient,
   PlatformSleepFetcher,
   RelationshipsClient,
   SystemLinkingComposer,
   UserContextClient,
   UserProviderTokensClient,
+  VoiceSessionManager,
 } from "@related/shared";
 import { Platform } from "react-native";
 import { AuthGate } from "./src/AuthGate";
@@ -76,6 +79,17 @@ const messageComposer = new SystemLinkingComposer({
 });
 const agentService = new AgentService({ supabase, messageComposer });
 
+// Voice pipeline: real STT/TTS adapters proxy through Edge Functions so
+// API keys never reach the client bundle (ADR-0006). On native the
+// recorder is a no-op for now — see the header comment in AgentScreen.
+const sttAdapter = new OpenAIWhisperSTTAdapter({ supabase });
+const ttsAdapter = new ElevenLabsTTSAdapter({ supabase });
+const voiceSessionManager = new VoiceSessionManager({
+  sttAdapter,
+  ttsAdapter,
+  agentService,
+});
+
 // Where Supabase sends the User back after OAuth consent.
 // Web: same origin (Vercel URL or localhost during dev).
 // Native: a custom URL scheme — set up alongside the iOS native build.
@@ -129,6 +143,7 @@ export default function App() {
         userContextClient={userContextClient}
         onboardingClient={onboardingClient}
         agentService={agentService}
+        voiceSessionManager={voiceSessionManager}
         userProviderTokensClient={userProviderTokensClient}
         oauthRedirectTo={oauthRedirectTo}
         navigate={navigate}

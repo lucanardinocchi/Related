@@ -15,6 +15,7 @@ import type {
   Relationship,
   RelationshipsClient,
   UserContextClient,
+  VoiceSessionManager,
 } from "@related/shared";
 import { AddContactScreen } from "./AddContactScreen";
 import { AgentScreen } from "./AgentScreen";
@@ -35,6 +36,8 @@ export interface AuthedAppProps {
   candidatesClient: CandidatesClient;
   userContextClient: UserContextClient;
   agentService: AgentService;
+  /** Optional voice pipeline — surfaces the Mic toggle in AgentScreen. */
+  voiceSessionManager?: VoiceSessionManager;
   onSignOut: () => void;
 }
 
@@ -70,6 +73,7 @@ function RelationshipsStack({
   groupsClient,
   candidatesClient,
   agentService,
+  voiceSessionManager,
 }: {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
@@ -77,6 +81,7 @@ function RelationshipsStack({
   groupsClient: GroupsClient;
   candidatesClient: CandidatesClient;
   agentService: AgentService;
+  voiceSessionManager?: VoiceSessionManager;
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -135,6 +140,7 @@ function RelationshipsStack({
           <AgentScreen
             relationship={route.params.relationship}
             agentService={agentService}
+            voiceSessionManager={voiceSessionManager}
             onBack={() => navigation.goBack()}
           />
         )}
@@ -216,6 +222,7 @@ export function AuthedApp({
   candidatesClient,
   userContextClient,
   agentService,
+  voiceSessionManager,
   onSignOut,
 }: AuthedAppProps) {
   return (
@@ -251,6 +258,7 @@ export function AuthedApp({
               groupsClient={groupsClient}
               candidatesClient={candidatesClient}
               agentService={agentService}
+              voiceSessionManager={voiceSessionManager}
             />
           )}
         </Tab.Screen>
