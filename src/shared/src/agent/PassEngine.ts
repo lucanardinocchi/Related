@@ -21,11 +21,27 @@ export interface CandidateSet {
   actions: CandidateActionInput[];
 }
 
+export type DecisionState = "pending" | "picked" | "declined" | "ignored";
+
+export interface PreviousCandidateAction {
+  id: string;
+  type: string;
+  payload: unknown;
+  why: string | null;
+  decisionState: DecisionState;
+}
+
+export interface PreviousCandidateSet {
+  id: string;
+  mode: PassMode;
+  actions: PreviousCandidateAction[];
+}
+
 export interface AgentPrompt {
   mode: PassMode;
   relationship: unknown;
   openThreads: unknown[];
-  previousCandidateSet: { id: string; mode: PassMode } | null;
+  previousCandidateSet: PreviousCandidateSet | null;
   userContext: UserContextSnapshot;
   liveContext?: unknown;
 }
@@ -92,8 +108,35 @@ export class PassEngine {
       .eq("relationship_id", relationshipId)
       .order("created_at", { ascending: false })
       .limit(1);
-    const previousCandidateSet =
+    const previousSetRow =
       ((previousSetRows ?? []) as { id: string; mode: PassMode }[])[0] ?? null;
+
+    let previousCandidateSet: PreviousCandidateSet | null = null;
+    if (previousSetRow) {
+      const { data: actionRows, error: actionsErr } = await this.supabase
+        .from("candidate_actions")
+        .select("id, type, payload, why, decision_state")
+        .eq("candidate_set_id", previousSetRow.id);
+      if (actionsErr) throw actionsErr;
+      const rows = (actionRows ?? []) as Array<{
+        id: string;
+        type: string;
+        payload: unknown;
+        why: string | null;
+        decision_state: DecisionState;
+      }>;
+      previousCandidateSet = {
+        id: previousSetRow.id,
+        mode: previousSetRow.mode,
+        actions: rows.map((r) => ({
+          id: r.id,
+          type: r.type,
+          payload: r.payload,
+          why: r.why,
+          decisionState: r.decision_state,
+        })),
+      };
+    }
 
     const { data: openThreads } = await this.supabase
       .from("open_thread_relationships")

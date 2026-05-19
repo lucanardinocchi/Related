@@ -59,6 +59,36 @@ export interface SendMessagePayload extends MessageComposerInput {
   contactIds: string[];
 }
 
+export interface ScheduleInteractionPayload {
+  time: string;
+  kind: string;
+  notes?: string;
+  contactIds: string[];
+}
+
+export interface LogInteractionPayload {
+  time: string;
+  kind: string;
+  notes?: string;
+  contactIds: string[];
+}
+
+export interface OpenThreadPayload {
+  description: string;
+  direction: "me_owes_them" | "they_owe_me";
+  /** Defaults to the candidate's parent Relationship; can be expanded to span multiple. */
+  relationshipIds?: string[];
+}
+
+export interface CloseThreadPayload {
+  openThreadId: string;
+}
+
+export interface UpdateRoleOrCadencePayload {
+  role?: string;
+  cadence?: string;
+}
+
 export interface ExecutorOptions {
   supabase: SupabaseClient;
   scheduleTriggeredPass: TriggeredPassScheduler;
@@ -97,11 +127,168 @@ export class Executor {
         return this.executeDoNothing(action, userEdits);
       case "SendMessage":
         return this.executeSendMessage(action, userEdits);
+      case "ScheduleInteraction":
+        return this.executeCreateInteraction(action, userEdits, "planned");
+      case "LogInteraction":
+        return this.executeCreateInteraction(action, userEdits, "occurred");
+      case "OpenThread":
+        return this.executeOpenThread(action, userEdits);
+      case "CloseThread":
+        return this.executeCloseThread(action, userEdits);
+      case "UpdateRoleOrCadence":
+        return this.executeUpdateRoleOrCadence(action, userEdits);
       default:
         throw new Error(
           `Executor: action type '${action.type}' not implemented in this slice`,
         );
     }
+  }
+
+  private async executeCloseThread(
+    action: PendingCandidateAction,
+    userEdits: UserEdits | undefined,
+  ): Promise<EffectResult> {
+    const merged = {
+      ...(action.payload as CloseThreadPayload),
+      ...((userEdits?.payload as Partial<CloseThreadPayload>) ?? {}),
+    } as CloseThreadPayload;
+
+    const { error: closeErr } = await this.supabase
+      .from("open_threads")
+      .update({ closed_at: new Date().toISOString() })
+      .eq("id", merged.openThreadId)
+      .select()
+      .single();
+    if (closeErr) throw closeErr;
+
+    await this.recordDecision(action.id, "picked", {
+      payload: merged,
+      why: userEdits?.why,
+    });
+    const relationshipId = await this.relationshipIdForSet(action.candidateSetId);
+    await this.scheduleTriggeredPass({
+      relationshipId,
+      reason: "candidate_decision",
+    });
+    return { kind: "picked", actionId: action.id };
+  }
+
+  private async executeUpdateRoleOrCadence(
+    action: PendingCandidateAction,
+    userEdits: UserEdits | undefined,
+  ): Promise<EffectResult> {
+    const merged = {
+      ...(action.payload as UpdateRoleOrCadencePayload),
+      ...((userEdits?.payload as Partial<UpdateRoleOrCadencePayload>) ?? {}),
+    } as UpdateRoleOrCadencePayload;
+
+    const update: Record<string, unknown> = {};
+    if (merged.role !== undefined) update.role = merged.role;
+    if (merged.cadence !== undefined) update.cadence = merged.cadence;
+
+    const relationshipId = await this.relationshipIdForSet(action.candidateSetId);
+    const { error: updErr } = await this.supabase
+      .from("relationships")
+      .update(update)
+      .eq("id", relationshipId)
+      .select()
+      .single();
+    if (updErr) throw updErr;
+
+    await this.recordDecision(action.id, "picked", {
+      payload: merged,
+      why: userEdits?.why,
+    });
+    await this.scheduleTriggeredPass({
+      relationshipId,
+      reason: "candidate_decision",
+    });
+    return { kind: "picked", actionId: action.id };
+  }
+
+  private async executeOpenThread(
+    action: PendingCandidateAction,
+    userEdits: UserEdits | undefined,
+  ): Promise<EffectResult> {
+    const merged = {
+      ...(action.payload as OpenThreadPayload),
+      ...((userEdits?.payload as Partial<OpenThreadPayload>) ?? {}),
+    } as OpenThreadPayload;
+
+    // The agent's payload omits relationshipIds when the Open Thread is
+    // scoped to the parent Relationship (the common case). Resolve it
+    // upfront so the RPC has what it needs.
+    const relationshipId = await this.relationshipIdForSet(action.candidateSetId);
+    const relationshipIds =
+      merged.relationshipIds && merged.relationshipIds.length > 0
+        ? merged.relationshipIds
+        : [relationshipId];
+
+    const { error: rpcErr } = await (
+      this.supabase as unknown as {
+        rpc: (
+          fn: string,
+          args: unknown,
+        ) => Promise<{ data: unknown; error: { message: string } | null }>;
+      }
+    ).rpc("create_open_thread", {
+      p_description: merged.description,
+      p_direction: merged.direction,
+      p_relationship_ids: relationshipIds,
+    });
+    if (rpcErr) throw rpcErr;
+
+    await this.recordDecision(action.id, "picked", {
+      payload: merged,
+      why: userEdits?.why,
+    });
+    await this.scheduleTriggeredPass({
+      relationshipId,
+      reason: "candidate_decision",
+    });
+    return { kind: "picked", actionId: action.id };
+  }
+
+  private async executeCreateInteraction(
+    action: PendingCandidateAction,
+    userEdits: UserEdits | undefined,
+    status: "planned" | "occurred",
+  ): Promise<EffectResult> {
+    const merged = {
+      ...(action.payload as ScheduleInteractionPayload | LogInteractionPayload),
+      ...((userEdits?.payload as Partial<ScheduleInteractionPayload>) ?? {}),
+    } as ScheduleInteractionPayload | LogInteractionPayload;
+
+    const { data: interactionId, error: rpcErr } = await (
+      this.supabase as unknown as {
+        rpc: (
+          fn: string,
+          args: unknown,
+        ) => Promise<{ data: unknown; error: { message: string } | null }>;
+      }
+    ).rpc("create_interaction", {
+      p_time: merged.time,
+      p_kind: merged.kind,
+      p_notes: merged.notes ?? null,
+      p_status: status,
+      p_contact_ids: merged.contactIds,
+    });
+    if (rpcErr) throw rpcErr;
+
+    await this.recordDecision(action.id, "picked", {
+      payload: merged,
+      why: userEdits?.why,
+    });
+    const relationshipId = await this.relationshipIdForSet(action.candidateSetId);
+    await this.scheduleTriggeredPass({
+      relationshipId,
+      reason: "candidate_decision",
+    });
+    return {
+      kind: "picked",
+      actionId: action.id,
+      effects: { interactionId: (interactionId as string) ?? undefined },
+    };
   }
 
   private async executeDoNothing(

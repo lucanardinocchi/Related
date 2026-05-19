@@ -54,7 +54,15 @@ export type {
   CandidateSet as EngineCandidateSet,
   PassEngineOptions,
   RunPassInput,
+  PreviousCandidateSet,
+  PreviousCandidateAction,
+  DecisionState as EngineDecisionState,
 } from "./agent/PassEngine";
+export { ClaudeAgent } from "./agent/ClaudeAgent";
+export type {
+  AnthropicMessagesClient,
+  ClaudeAgentOptions,
+} from "./agent/ClaudeAgent";
 export { UserContextBuilder } from "./agent/UserContextBuilder";
 export type {
   UserContextSnapshot,
@@ -72,6 +80,11 @@ export type {
   MessageComposer,
   MessageComposerInput,
   SendMessagePayload,
+  ScheduleInteractionPayload,
+  LogInteractionPayload,
+  OpenThreadPayload,
+  CloseThreadPayload,
+  UpdateRoleOrCadencePayload,
 } from "./agent/Executor";
 export { SystemLinkingComposer } from "./agent/SystemLinkingComposer";
 export type {
