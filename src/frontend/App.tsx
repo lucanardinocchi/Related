@@ -1,3 +1,4 @@
+import { Linking } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import {
   useFonts,
@@ -17,6 +18,7 @@ import {
   OnboardingClient,
   OpenThreadsClient,
   RelationshipsClient,
+  SystemLinkingComposer,
   UserContextClient,
 } from "@related/shared";
 import { AuthGate } from "./src/AuthGate";
@@ -48,7 +50,10 @@ const resolveOwnerId = async () => {
 };
 const userContextClient = new UserContextClient(supabase, resolveOwnerId);
 const onboardingClient = new OnboardingClient(supabase, resolveOwnerId);
-const agentService = new AgentService({ supabase });
+const messageComposer = new SystemLinkingComposer({
+  openURL: (url) => Linking.openURL(url),
+});
+const agentService = new AgentService({ supabase, messageComposer });
 
 export default function App() {
   const [fontsLoaded] = useFonts({

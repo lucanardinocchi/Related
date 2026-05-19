@@ -11,7 +11,7 @@ import type {
 } from "@related/shared";
 import { AgentScreen } from "./AgentScreen";
 
-function fixtureRelationship(): Relationship {
+function fixtureRelationship(over: Partial<Relationship["contact"]> = {}): Relationship {
   return {
     id: "r-1",
     contact: {
@@ -19,6 +19,7 @@ function fixtureRelationship(): Relationship {
       name: "Sam",
       phone: null,
       email: null,
+      ...over,
     },
   } as Relationship;
 }
@@ -215,6 +216,120 @@ describe("<AgentScreen />", () => {
     });
     await waitFor(() => {
       expect(screen.getByText(/^Declined$/i)).toBeTruthy();
+    });
+  });
+
+  it("SendMessage Accept: resolves recipient `to` from the focused Contact's phone (text channel)", async () => {
+    const service = makeService();
+    service.runEngagedTurn.mockResolvedValue({
+      id: "cs-new",
+      ownerId: "u-1",
+      relationshipId: "r-1",
+      mode: "engaged",
+      createdAt: "2026-05-19T00:00:00Z",
+      actions: [
+        {
+          id: "ca-sm",
+          type: "SendMessage",
+          payload: {
+            channel: "text",
+            contactIds: ["c-1"],
+            body: "Hey Sam",
+            // The agent omits `to` — it doesn't know phone numbers. The
+            // AgentScreen fills it in from the focused Relationship's
+            // Contact at Accept time.
+          },
+          why: null,
+          decisionState: "pending",
+        },
+      ],
+    });
+    service.executeAction.mockResolvedValue({
+      kind: "picked",
+      actionId: "ca-sm",
+    });
+
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship({ phone: "+61400000000" })}
+        agentService={service as unknown as AgentService}
+        onBack={jest.fn()}
+      />,
+    );
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/say something to Claude/i),
+      "hi",
+    );
+    fireEvent.press(screen.getByText(/^Send$/));
+    await screen.findByText("SendMessage");
+    fireEvent.press(screen.getByText(/^Accept$/));
+
+    await waitFor(() => {
+      expect(service.executeAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userEdits: expect.objectContaining({
+            payload: expect.objectContaining({
+              to: ["+61400000000"],
+            }),
+          }),
+        }),
+      );
+    });
+  });
+
+  it("SendMessage Accept: resolves recipient `to` from the focused Contact's email (email channel)", async () => {
+    const service = makeService();
+    service.runEngagedTurn.mockResolvedValue({
+      id: "cs-new",
+      ownerId: "u-1",
+      relationshipId: "r-1",
+      mode: "engaged",
+      createdAt: "2026-05-19T00:00:00Z",
+      actions: [
+        {
+          id: "ca-sm",
+          type: "SendMessage",
+          payload: {
+            channel: "email",
+            contactIds: ["c-1"],
+            subject: "Coffee?",
+            body: "free this week?",
+          },
+          why: null,
+          decisionState: "pending",
+        },
+      ],
+    });
+    service.executeAction.mockResolvedValue({
+      kind: "picked",
+      actionId: "ca-sm",
+    });
+
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship({ email: "sam@example.com" })}
+        agentService={service as unknown as AgentService}
+        onBack={jest.fn()}
+      />,
+    );
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/say something to Claude/i),
+      "hi",
+    );
+    fireEvent.press(screen.getByText(/^Send$/));
+    await screen.findByText("SendMessage");
+    fireEvent.press(screen.getByText(/^Accept$/));
+
+    await waitFor(() => {
+      expect(service.executeAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userEdits: expect.objectContaining({
+            payload: expect.objectContaining({
+              to: ["sam@example.com"],
+            }),
+          }),
+        }),
+      );
     });
   });
 
