@@ -147,6 +147,12 @@ export function YouScreen({ userContextClient }: YouScreenProps) {
         <Text style={styles.meta}>Last updated {situational.updatedAt}</Text>
       ) : null}
 
+      <Text style={styles.sectionLabel}>Inferred signals</Text>
+      <Text style={styles.sectionHint}>
+        Sleep signal: iOS only in v1. The agent reads sleep via HealthKit;
+        Android and web Users won't see this signal influence Passes yet.
+      </Text>
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </ScrollView>
   );

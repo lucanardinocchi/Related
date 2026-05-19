@@ -155,6 +155,17 @@ export type {
   SleepFetcher,
   SleepCollectorOptions,
 } from "./signals/SleepCollector";
+export { PlatformSleepFetcher } from "./signals/PlatformSleepFetcher";
+export type {
+  SleepPlatform,
+  PlatformSleepFetcherOptions,
+} from "./signals/PlatformSleepFetcher";
+export { FakeSleepFetcher } from "./signals/FakeSleepFetcher";
+export { runDailySleepCollection } from "./signals/runDailySleepCollection";
+export type {
+  RunDailySleepCollectionInput,
+  RunDailySleepCollectionResult,
+} from "./signals/runDailySleepCollection";
 
 export {
   NotificationDispatcher,
