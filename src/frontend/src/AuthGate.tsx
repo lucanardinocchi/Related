@@ -11,6 +11,7 @@ import type {
   Session,
   UserContextClient,
   UserProviderTokensClient,
+  VoiceSessionManager,
 } from "@related/shared";
 import { AuthedApp } from "./AuthedApp";
 import { OnboardingScreen } from "./OnboardingScreen";
@@ -26,6 +27,11 @@ export interface AuthGateProps {
   userContextClient: UserContextClient;
   onboardingClient: OnboardingClient;
   agentService: AgentService;
+  /**
+   * Optional. When provided, threads through into AgentScreen so the
+   * Mic toggle renders. Omitted in tests that don't exercise voice.
+   */
+  voiceSessionManager?: VoiceSessionManager;
   userProviderTokensClient: UserProviderTokensClient;
   /** URL Supabase Auth redirects back to after OAuth; web: window.location.origin. */
   oauthRedirectTo: string;
@@ -49,6 +55,7 @@ export function AuthGate({
   userContextClient,
   onboardingClient,
   agentService,
+  voiceSessionManager,
   userProviderTokensClient,
   oauthRedirectTo,
   navigate,
@@ -124,6 +131,7 @@ export function AuthGate({
       candidatesClient={candidatesClient}
       userContextClient={userContextClient}
       agentService={agentService}
+      voiceSessionManager={voiceSessionManager}
       onSignOut={() => {
         void authClient.signOut();
       }}
