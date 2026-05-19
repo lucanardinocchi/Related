@@ -1,0 +1,16 @@
+{
+  "name": "related-healthkit",
+  "version": "0.0.1",
+  "description": "Native iOS HealthKit bridge for Related — read-only sleep-analysis samples.",
+  "main": "index.ts",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": "Related",
+  "homepage": "https://github.com/lucanardinocchi/Related",
+  "expoModule": {
+    "platforms": ["ios"],
+    "ios": {
+      "modules": ["HealthKitModule"]
+    }
+  }
+}

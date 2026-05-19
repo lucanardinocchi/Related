@@ -27,6 +27,17 @@ export interface OnboardingScreenProps {
    * Native: opens an in-app browser. Tests pass a jest.fn.
    */
   navigate: (url: string) => void;
+  /**
+   * Triggers the iOS HealthKit permission prompt and resolves with the
+   * grant result. Provided only on iOS — the shared lib stays
+   * platform-agnostic; the frontend wires the native bridge in at
+   * bootstrap. When undefined (web / Android), the HealthKit step
+   * falls back to the Skip path with an "iOS only in v1" note.
+   *
+   * Denial is non-blocking: the User still advances past the step,
+   * just with a degraded Sleep signal.
+   */
+  requestHealthKit?: () => Promise<{ granted: boolean }>;
   onFinished: () => void;
 }
 
@@ -64,8 +75,6 @@ const STEP_CONTENT: Record<OnboardingStep, StepContent> = {
       "Optional: let Related read your recent sleep from HealthKit. It uses it to flag low-energy windows so suggested plans match your capacity. Reads only.",
     ctaPrimary: "Connect HealthKit",
     ctaSkip: "Skip",
-    deferredNote:
-      "HealthKit is iOS-only and ships with the native build. Skip for now.",
   },
   notifications: {
     title: "Notifications",
@@ -104,6 +113,7 @@ export function OnboardingScreen({
   userProviderTokensClient,
   oauthRedirectTo,
   navigate,
+  requestHealthKit,
   onFinished,
 }: OnboardingScreenProps) {
   const [state, setState] = useState<OnboardingState | null>(null);
@@ -199,6 +209,36 @@ export function OnboardingScreen({
     }
   }
 
+  async function connectHealthKit() {
+    if (!state || working || !requestHealthKit) return;
+    setWorking(true);
+    try {
+      // Denial is non-blocking — we advance the step either way. The
+      // grant result feeds future "Sleep signal: off" UI but doesn't
+      // gate onboarding completion.
+      await requestHealthKit();
+      const next = await onboardingClient.completeStep("healthkit");
+      setState(next);
+      if (next.isFinished) onFinished();
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  // The HealthKit step's "iOS only in v1" note is shown only when no
+  // request fn is provided — i.e. on web / Android. When the iOS native
+  // bridge is wired in, we surface the real Grant flow instead.
+  const showHealthKitWebFallbackNote =
+    currentStep === "healthkit" && !requestHealthKit;
+
+  function onPrimaryPress() {
+    if (currentStep === "calendar") return connectCalendar();
+    if (currentStep === "healthkit" && requestHealthKit) {
+      return connectHealthKit();
+    }
+    return advance();
+  }
+
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <Text style={styles.stepNumber}>
@@ -210,10 +250,13 @@ export function OnboardingScreen({
       {content.deferredNote ? (
         <Text style={styles.deferredNote}>{content.deferredNote}</Text>
       ) : null}
+      {showHealthKitWebFallbackNote ? (
+        <Text style={styles.deferredNote}>iOS only in v1.</Text>
+      ) : null}
 
       <Pressable
         accessibilityRole="button"
-        onPress={currentStep === "calendar" ? connectCalendar : advance}
+        onPress={onPrimaryPress}
         disabled={working}
         style={[styles.primary, working && styles.primaryDisabled]}
       >

@@ -31,6 +31,12 @@ export interface AuthGateProps {
   oauthRedirectTo: string;
   /** Open a URL — `(url) => { window.location.href = url; }` on web. */
   navigate: (url: string) => void;
+  /**
+   * iOS HealthKit permission request. Supplied by App.tsx only on iOS
+   * — undefined on web/Android (the Onboarding HealthKit step falls
+   * back to the Skip path with an "iOS only in v1" note).
+   */
+  requestHealthKit?: () => Promise<{ granted: boolean }>;
 }
 
 export function AuthGate({
@@ -46,6 +52,7 @@ export function AuthGate({
   userProviderTokensClient,
   oauthRedirectTo,
   navigate,
+  requestHealthKit,
 }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -102,6 +109,7 @@ export function AuthGate({
         userProviderTokensClient={userProviderTokensClient}
         oauthRedirectTo={oauthRedirectTo}
         navigate={navigate}
+        requestHealthKit={requestHealthKit}
         onFinished={() => setOnboardingFinished(true)}
       />
     );

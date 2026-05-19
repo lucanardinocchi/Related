@@ -23,6 +23,23 @@ export interface PlatformSleepFetcherOptions {
 }
 
 export class PlatformSleepFetcher {
+  /**
+   * Module-level slot for the iOS HealthKit adapter. The shared library
+   * is Expo-free by policy — it can't `require` a native module — so
+   * the frontend installs the real bridge here at bootstrap on
+   * `Platform.OS === 'ios'`. On every other platform the slot stays
+   * null and `fetchIos` returns an empty array.
+   *
+   * Static / module state is acceptable here because there is exactly
+   * one HealthKit bridge per process, identical to how
+   * `Linking.openURL` or other native singletons work.
+   */
+  private static iosHealthKitAdapter: SleepFetcher | null = null;
+
+  static setIosHealthKitAdapter(adapter: SleepFetcher | null): void {
+    PlatformSleepFetcher.iosHealthKitAdapter = adapter;
+  }
+
   private readonly platform: SleepPlatform;
 
   constructor(opts: PlatformSleepFetcherOptions) {
@@ -51,14 +68,14 @@ export class PlatformSleepFetcher {
   }
 
   /**
-   * iOS integration point. Today this returns an empty array — the
-   * real HealthKit query (HKCategoryTypeIdentifierSleepAnalysis) is
-   * blocked on a native module Luca has to add via an Expo config
-   * plugin on a Mac with Xcode. When that lands, swap the body of
-   * this method for the bridged call. The rest of the pipeline
-   * (collector, cron, builder) needs no change.
+   * iOS integration point. Delegates to the installed HealthKit
+   * adapter when present (frontend wires the native bridge in at
+   * bootstrap), or returns [] when no adapter is installed (e.g.
+   * shared-lib unit tests, Edge Functions running server-side).
    */
-  private async fetchIos(_asOf: Date): Promise<RawSleepRecord[]> {
-    return [];
+  private async fetchIos(asOf: Date): Promise<RawSleepRecord[]> {
+    const adapter = PlatformSleepFetcher.iosHealthKitAdapter;
+    if (!adapter) return [];
+    return adapter(asOf);
   }
 }
