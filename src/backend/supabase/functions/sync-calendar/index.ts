@@ -1,33 +1,32 @@
-// Daily Calendar density collector — Edge Function shell. Triggered by
-// pg_cron at 10 AM UTC (per-User-local time is a deferred refinement).
+// Daily Calendar density collector — Edge Function.
 //
-// Today it uses an inlined FakeCalendarFetcher: the daily loop exists,
-// the DB shape exists, and the agent prompts pull from
-// `inferred_signal_calendar` — but the *source* of the events is fake
-// until Google Calendar OAuth (or iOS EventKit) is provisioned. When
-// that lands, replace `fetchCalendarEvents` below with the OAuth-backed
-// fetcher; the rest of the loop (collector, cron, summary, RLS) is
-// unchanged.
+// Per ADR-0006, this iterates over every User who has a row in
+// `user_provider_tokens` for provider='google', pulls their next 7 days
+// of Calendar events from Google's API using their stored access token,
+// refreshes the token on 401 (writing the new token back), and upserts
+// the events into `inferred_signal_calendar` keyed on (owner_id, event_id).
+//
+// Triggered by pg_cron at 10 AM UTC (per-User-local time is a deferred
+// refinement). Can also be POSTed manually with `{ ownerId, asOf? }` to
+// sync a single User on demand.
+//
+// The Google fetcher logic is duplicated from
+// `src/shared/src/integrations/google/GoogleCalendarFetcher.ts` because
+// `@related/shared` isn't on npm and Deno's NPM specifiers can't cross
+// the workspace boundary cleanly. The contract is the same — change
+// must be mirrored.
 //
 // Deploy:
-//   supabase functions deploy sync-calendar
-//   # Later, when OAuth lands:
-//   supabase secrets set CALENDAR_PROVIDER=google
 //   supabase secrets set GOOGLE_OAUTH_CLIENT_ID=...
 //   supabase secrets set GOOGLE_OAUTH_CLIENT_SECRET=...
-//
-// Request body (optional): { asOf?: ISO string, ownerId?: string }.
-// When called from pg_cron the body is empty and the function iterates
-// over every owner with a calendar connected (today: every authenticated
-// User, since no row tracks the OAuth state yet — a TODO for the OAuth
-// PR).
+//   supabase functions deploy sync-calendar
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
 
 interface RawCalendarEvent {
   id: string;
-  title?: string | null;
+  title: string | null;
   start: string;
   end: string;
   isAllDay: boolean;
@@ -39,105 +38,214 @@ interface SyncRequest {
 }
 
 interface CalendarCollectionSummary {
+  ownerId: string;
   eventsWritten: number;
   windowEnd: string;
-  ownerId: string;
+  status: "ok" | "no_token" | "needs_reconsent" | "error";
+  error?: string;
 }
 
-const WINDOW_DAYS = 7;
+const CALENDAR_WINDOW_DAYS = 7;
+const CALENDAR_EVENTS_URL =
+  "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-/**
- * Placeholder source. Replace with a Google Calendar OAuth fetcher
- * (or EventKit on iOS) once credentials are provisioned. The shape of
- * the return value is fixed by the `inferred_signal_calendar` schema.
- */
-function fetchCalendarEvents(_ownerId: string, asOf: Date): Promise<RawCalendarEvent[]> {
-  console.warn(
-    "[sync-calendar] FAKE FETCHER — replace with Google OAuth fetcher",
-  );
-  const day = 24 * 60 * 60 * 1000;
-  const hour = 60 * 60 * 1000;
-  const base = asOf.getTime();
-  const iso = (offsetMs: number) => new Date(base + offsetMs).toISOString();
+interface GoogleEventTime {
+  dateTime?: string;
+  date?: string;
+}
+interface GoogleEvent {
+  id: string;
+  summary?: string;
+  start?: GoogleEventTime;
+  end?: GoogleEventTime;
+}
 
-  return Promise.resolve([
-    {
-      id: "demo-standup",
-      title: "Team standup",
-      start: iso(1 * day + 9 * hour),
-      end: iso(1 * day + 9.5 * hour),
-      isAllDay: false,
+function buildEventsUrl(asOf: Date): string {
+  const timeMax = new Date(asOf);
+  timeMax.setUTCDate(timeMax.getUTCDate() + CALENDAR_WINDOW_DAYS);
+  const params = new URLSearchParams({
+    timeMin: asOf.toISOString(),
+    timeMax: timeMax.toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "100",
+  });
+  return `${CALENDAR_EVENTS_URL}?${params.toString()}`;
+}
+
+function mapEvent(e: GoogleEvent): RawCalendarEvent | null {
+  if (!e.start || !e.end) return null;
+  const isAllDay = Boolean(e.start.date && !e.start.dateTime);
+  const start = e.start.dateTime ?? e.start.date;
+  const end = e.end.dateTime ?? e.end.date;
+  if (!start || !end) return null;
+  return {
+    id: e.id,
+    title: e.summary ?? null,
+    start,
+    end,
+    isAllDay,
+  };
+}
+
+async function refreshAccessToken(
+  refreshToken: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<{ accessToken: string; expiresInSeconds: number }> {
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+  const response = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  if (!response.ok) {
+    throw new Error(`Google token refresh failed (${response.status})`);
+  }
+  const data = await response.json();
+  if (!data.access_token) {
+    throw new Error("Google token refresh returned no access_token");
+  }
+  return {
+    accessToken: data.access_token,
+    expiresInSeconds: data.expires_in ?? 3600,
+  };
+}
+
+async function fetchEvents(
+  accessToken: string,
+  asOf: Date,
+): Promise<Response> {
+  return fetch(buildEventsUrl(asOf), {
+    method: "GET",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      accept: "application/json",
     },
-    {
-      id: "demo-coffee",
-      title: "Coffee with Sam",
-      start: iso(2 * day + 15 * hour),
-      end: iso(2 * day + 16 * hour),
-      isAllDay: false,
-    },
-    {
-      id: "demo-focus",
-      title: "Deep work block",
-      start: iso(3 * day + 9 * hour),
-      end: iso(3 * day + 12 * hour),
-      isAllDay: false,
-    },
-  ]);
+  });
 }
 
 async function collectForOwner(
   supabase: any,
-  ownerId: string,
+  tokenRow: {
+    owner_id: string;
+    access_token: string;
+    refresh_token: string | null;
+  },
   asOf: Date,
+  clientId: string,
+  clientSecret: string,
 ): Promise<CalendarCollectionSummary> {
-  const events = await fetchCalendarEvents(ownerId, asOf);
+  const windowEnd = new Date(asOf);
+  windowEnd.setUTCDate(windowEnd.getUTCDate() + CALENDAR_WINDOW_DAYS);
+  const baseSummary = {
+    ownerId: tokenRow.owner_id,
+    windowEnd: windowEnd.toISOString(),
+    eventsWritten: 0,
+  };
+
+  let accessToken = tokenRow.access_token;
+  let response = await fetchEvents(accessToken, asOf);
+
+  if (response.status === 401) {
+    if (!tokenRow.refresh_token) {
+      return { ...baseSummary, status: "needs_reconsent" };
+    }
+    try {
+      const refresh = await refreshAccessToken(
+        tokenRow.refresh_token,
+        clientId,
+        clientSecret,
+      );
+      accessToken = refresh.accessToken;
+      // Persist the new token back. Empty refresh_token? Keep the old one.
+      const newExpires = new Date(
+        Date.now() + refresh.expiresInSeconds * 1000,
+      ).toISOString();
+      await supabase
+        .from("user_provider_tokens")
+        .update({ access_token: accessToken, expires_at: newExpires })
+        .eq("owner_id", tokenRow.owner_id)
+        .eq("provider", "google");
+      response = await fetchEvents(accessToken, asOf);
+    } catch (err) {
+      return {
+        ...baseSummary,
+        status: "needs_reconsent",
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  if (!response.ok) {
+    return {
+      ...baseSummary,
+      status: "error",
+      error: `Google Calendar API ${response.status}`,
+    };
+  }
+
+  const data = await response.json();
+  const events = ((data.items ?? []) as GoogleEvent[])
+    .map(mapEvent)
+    .filter((e): e is RawCalendarEvent => e !== null);
 
   if (events.length > 0) {
     const rows = events.map((e) => ({
-      owner_id: ownerId,
+      owner_id: tokenRow.owner_id,
       event_id: e.id,
-      title: e.title ?? null,
+      title: e.title,
       start: e.start,
       end: e.end,
       is_all_day: e.isAllDay,
     }));
-    const { error } = await supabase
+    const { error: upErr } = await supabase
       .from("inferred_signal_calendar")
       .upsert(rows, { onConflict: "owner_id,event_id" });
-    if (error) throw error;
+    if (upErr) {
+      return {
+        ...baseSummary,
+        status: "error",
+        error: `upsert: ${upErr.message ?? String(upErr)}`,
+      };
+    }
   }
 
-  const keepList = events.map((e) => e.id).join(",");
-  const { error: delErr } = await supabase
-    .from("inferred_signal_calendar")
-    .delete()
-    .eq("owner_id", ownerId)
-    .not("event_id", "in", `(${keepList})`);
-  if (delErr) throw delErr;
+  // GC: remove rows for this owner not in the fetched set.
+  if (events.length > 0) {
+    const keepList = events.map((e) => e.id).join(",");
+    await supabase
+      .from("inferred_signal_calendar")
+      .delete()
+      .eq("owner_id", tokenRow.owner_id)
+      .not("event_id", "in", `(${keepList})`);
+  } else {
+    await supabase
+      .from("inferred_signal_calendar")
+      .delete()
+      .eq("owner_id", tokenRow.owner_id);
+  }
 
-  const windowEnd = new Date(asOf);
-  windowEnd.setUTCDate(windowEnd.getUTCDate() + WINDOW_DAYS);
-
-  return {
-    ownerId,
-    eventsWritten: events.length,
-    windowEnd: windowEnd.toISOString(),
-  };
+  return { ...baseSummary, eventsWritten: events.length, status: "ok" };
 }
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const CALENDAR_PROVIDER = Deno.env.get("CALENDAR_PROVIDER") ?? "fake";
+const CLIENT_ID = Deno.env.get("GOOGLE_OAUTH_CLIENT_ID");
+const CLIENT_SECRET = Deno.env.get("GOOGLE_OAUTH_CLIENT_SECRET");
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-  console.warn(
-    "[sync-calendar] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing — function will fail on invocation",
-  );
+  console.warn("[sync-calendar] SUPABASE_URL / SERVICE_ROLE_KEY missing");
 }
-
-if (CALENDAR_PROVIDER !== "fake") {
+if (!CLIENT_ID || !CLIENT_SECRET) {
   console.warn(
-    `[sync-calendar] CALENDAR_PROVIDER=${CALENDAR_PROVIDER} but no OAuth fetcher is wired yet — falling back to fake`,
+    "[sync-calendar] GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET missing — refresh-on-401 will fail",
   );
 }
 
@@ -171,36 +279,43 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL ?? "", SERVICE_ROLE_KEY ?? "");
 
   try {
-    const summaries: CalendarCollectionSummary[] = [];
-
+    let tokens: Array<{
+      owner_id: string;
+      access_token: string;
+      refresh_token: string | null;
+    }>;
     if (body.ownerId) {
-      summaries.push(await collectForOwner(supabase, body.ownerId, asOf));
+      const { data, error } = await supabase
+        .from("user_provider_tokens")
+        .select("owner_id, access_token, refresh_token")
+        .eq("provider", "google")
+        .eq("owner_id", body.ownerId);
+      if (error) throw error;
+      tokens = (data ?? []) as typeof tokens;
     } else {
-      // Iterate over every authenticated User. When the OAuth state
-      // table lands ("calendars connected per User"), filter to only
-      // Users who've actually connected a calendar.
-      const { data: users, error } = await supabase
-        .from("auth.users")
-        .select("id");
-      if (error) {
-        // auth.users isn't always queryable via PostgREST; fall back to a
-        // best-effort RPC. If neither path is wired, surface a clear error.
-        return new Response(
-          JSON.stringify({
-            error:
-              "no ownerId provided and auth.users isn't reachable from this function — pass body.ownerId or wire a list_calendar_users RPC",
-            providerHint: CALENDAR_PROVIDER,
-          }),
-          { status: 500, headers: { "content-type": "application/json" } },
-        );
-      }
-      for (const u of users ?? []) {
-        summaries.push(await collectForOwner(supabase, u.id as string, asOf));
-      }
+      const { data, error } = await supabase
+        .from("user_provider_tokens")
+        .select("owner_id, access_token, refresh_token")
+        .eq("provider", "google");
+      if (error) throw error;
+      tokens = (data ?? []) as typeof tokens;
+    }
+
+    const summaries: CalendarCollectionSummary[] = [];
+    for (const t of tokens) {
+      summaries.push(
+        await collectForOwner(
+          supabase,
+          t,
+          asOf,
+          CLIENT_ID ?? "",
+          CLIENT_SECRET ?? "",
+        ),
+      );
     }
 
     return new Response(
-      JSON.stringify({ provider: CALENDAR_PROVIDER, summaries }),
+      JSON.stringify({ provider: "google", summaries }),
       { headers: { "content-type": "application/json" } },
     );
   } catch (err) {

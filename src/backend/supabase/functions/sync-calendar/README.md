@@ -1,56 +1,35 @@
 # sync-calendar
 
-Daily Edge Function that pulls each User's 7-day forward calendar window
-and writes it to `inferred_signal_calendar`. Invoked by `pg_cron` at
-10 AM UTC (see `20260519000010_calendar_daily_cron.sql`) and also
-callable on demand (future "Sync now" button in the You/settings screen).
+Daily Edge Function that pulls each User's 7-day forward calendar window from Google Calendar and writes it to `inferred_signal_calendar`. Invoked by `pg_cron` at 10 AM UTC (see `20260519000011_calendar_daily_cron.sql`) and also callable on demand with `{ ownerId }` for a single-User sync (e.g. from a future "Sync now" button).
 
-## Today: fake fetcher
-
-The function ships with an inlined fake event source so the daily loop
-exists end-to-end before Google Calendar OAuth is provisioned. Every
-invocation logs:
-
-```
-[sync-calendar] FAKE FETCHER — replace with Google OAuth fetcher
-```
-
-This is intentional. It's how we audit when the swap finally happens.
+Per ADR-0006, the function iterates over every User who has a row in `user_provider_tokens` for `provider='google'`. Users without a Google integration are skipped silently.
 
 ## Deploy
 
 ```sh
+supabase secrets set GOOGLE_OAUTH_CLIENT_ID=...
+supabase secrets set GOOGLE_OAUTH_CLIENT_SECRET=...
 supabase functions deploy sync-calendar
 ```
 
-The function reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from
-the Edge Runtime env (auto-injected by Supabase). It also reads
-`CALENDAR_PROVIDER` (defaults to `"fake"`) which today is informational —
-when the OAuth swap lands, this gates which fetcher implementation is
-used.
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by the Edge Runtime.
 
-## Future OAuth swap
+The `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` are the **same Google Cloud OAuth client** you configured in Supabase Auth → Providers → Google during Slice B. They're needed here because Supabase Auth gives us the refresh token but doesn't refresh on our behalf for non-auth API calls.
 
-When Google Calendar OAuth is provisioned, replace
-`fetchCalendarEvents()` in `index.ts` with a function that:
+## Token-refresh behaviour
 
-1. Reads the User's stored OAuth refresh token from a (yet-to-be-created)
-   `user_calendar_connections` table.
-2. Exchanges it for an access token.
-3. Calls `GET /calendar/v3/calendars/primary/events` with
-   `timeMin=asOf&timeMax=asOf+7d&singleEvents=true`.
-4. Maps the response to `RawCalendarEvent[]`.
+On a 401 from the Calendar API, the function:
 
-The rest of the function (collector logic, summary shape, error
-handling, cron wiring) does NOT need to change.
+1. Reads the User's `refresh_token` from `user_provider_tokens`
+2. Calls `POST oauth2.googleapis.com/token` with `grant_type=refresh_token`
+3. Updates `user_provider_tokens.access_token` + `expires_at` with the new token
+4. Retries the Calendar call once
 
-Optional: set `CALENDAR_PROVIDER=google` to make the warning log go
-silent once the real fetcher is wired.
+If the refresh fails (revoked, expired refresh token, etc.) the function returns `{ status: "needs_reconsent" }` in that User's summary so the caller (future UI) can prompt re-consent.
 
 ## Request body
 
-Both fields are optional. When called from `pg_cron` the body is empty
-and the function iterates over every authenticated User.
+Both fields are optional. When called from `pg_cron` the body is empty and the function syncs every connected User.
 
 ```json
 { "asOf": "2026-05-19T10:00:00Z", "ownerId": "uuid-or-omit" }
@@ -60,19 +39,14 @@ and the function iterates over every authenticated User.
 
 ```json
 {
-  "provider": "fake",
+  "provider": "google",
   "summaries": [
-    { "ownerId": "...", "eventsWritten": 3, "windowEnd": "..." }
+    { "ownerId": "...", "eventsWritten": 12, "windowEnd": "...", "status": "ok" },
+    { "ownerId": "...", "eventsWritten": 0, "status": "needs_reconsent" }
   ]
 }
 ```
 
-## Why the function inlines the collector logic
+## Why the function inlines the fetcher logic
 
-The shared `@related/shared` package houses the canonical
-`runDailyCalendarCollection` driver. Edge Functions can import shared
-TypeScript via Deno's NPM specifiers, but `@related/shared` isn't on npm
-yet — so this function mirrors the collector's persistence logic
-locally, same trade-off as `engaged-pass/index.ts`. The two
-implementations are kept in sync by hand; if the
-`inferred_signal_calendar` schema changes, change both.
+The canonical Google Calendar fetcher lives at `src/shared/src/integrations/google/GoogleCalendarFetcher.ts` and is unit-tested there. Edge Functions could import it via Deno's NPM specifiers if `@related/shared` were on npm — it isn't, so this function mirrors the fetcher locally. Same trade-off as `engaged-pass/index.ts`. The two implementations are kept in sync by hand; if the Google response mapping changes, change both.
