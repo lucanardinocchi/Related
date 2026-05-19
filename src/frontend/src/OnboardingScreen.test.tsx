@@ -7,6 +7,11 @@ import type {
 } from "@related/shared";
 import { OnboardingScreen } from "./OnboardingScreen";
 
+// react-native's jest preset reports Platform.OS = 'ios' by default.
+// Tests that don't care about the HealthKit branch deliberately
+// `requestHealthKit={undefined}` to take the Skip path (mirrors web /
+// Android in production).
+
 function makeAuthMock(): jest.Mocked<AuthClient> {
   return {
     linkGoogleCalendar: jest.fn(),
@@ -200,6 +205,98 @@ describe("<OnboardingScreen />", () => {
     // Calendar step auto-completes; UI advances to HealthKit.
     await waitFor(() => {
       expect(client.completeStep).toHaveBeenCalledWith("calendar");
+    });
+  });
+
+  it("HealthKit step: when `requestHealthKit` is undefined (web/Android), shows Skip with 'iOS only in v1' note", async () => {
+    const client = makeMock({
+      completedSteps: ["welcome", "calendar"],
+      finishedAt: null,
+      isFinished: false,
+    });
+
+    render(
+      <OnboardingScreen
+        onboardingClient={client}
+        authClient={makeAuthMock()}
+        userProviderTokensClient={makeTokensMock()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
+        onFinished={jest.fn()}
+      />,
+    );
+
+    await screen.findByText("HealthKit (iOS)");
+    // Hint that this is platform-degraded.
+    expect(screen.getByText(/iOS only in v1/i)).toBeTruthy();
+    // Skip button advances the step.
+    fireEvent.press(screen.getByText("Skip"));
+    await waitFor(() => {
+      expect(client.completeStep).toHaveBeenCalledWith("healthkit");
+    });
+  });
+
+  it("HealthKit step: when `requestHealthKit` is provided (iOS), tapping Connect calls the request and advances on grant", async () => {
+    const client = makeMock({
+      completedSteps: ["welcome", "calendar"],
+      finishedAt: null,
+      isFinished: false,
+    });
+    const requestHealthKit = jest.fn().mockResolvedValue({ granted: true });
+
+    render(
+      <OnboardingScreen
+        onboardingClient={client}
+        authClient={makeAuthMock()}
+        userProviderTokensClient={makeTokensMock()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
+        onFinished={jest.fn()}
+        requestHealthKit={requestHealthKit}
+      />,
+    );
+
+    await screen.findByText("HealthKit (iOS)");
+    // No deferred / web-fallback note when the request is available.
+    expect(screen.queryByText(/iOS only in v1/i)).toBeNull();
+    fireEvent.press(screen.getByText("Connect HealthKit"));
+
+    await waitFor(() => {
+      expect(requestHealthKit).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(client.completeStep).toHaveBeenCalledWith("healthkit");
+    });
+  });
+
+  it("HealthKit step: on iOS denial, still advances the step (degraded but non-blocking)", async () => {
+    const client = makeMock({
+      completedSteps: ["welcome", "calendar"],
+      finishedAt: null,
+      isFinished: false,
+    });
+    const requestHealthKit = jest.fn().mockResolvedValue({ granted: false });
+
+    render(
+      <OnboardingScreen
+        onboardingClient={client}
+        authClient={makeAuthMock()}
+        userProviderTokensClient={makeTokensMock()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
+        onFinished={jest.fn()}
+        requestHealthKit={requestHealthKit}
+      />,
+    );
+
+    await screen.findByText("HealthKit (iOS)");
+    fireEvent.press(screen.getByText("Connect HealthKit"));
+
+    await waitFor(() => {
+      expect(requestHealthKit).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(client.completeStep).toHaveBeenCalledWith("healthkit");
     });
   });
 

@@ -17,6 +17,7 @@ import {
   InteractionsClient,
   OnboardingClient,
   OpenThreadsClient,
+  PlatformSleepFetcher,
   RelationshipsClient,
   SystemLinkingComposer,
   UserContextClient,
@@ -24,6 +25,10 @@ import {
 } from "@related/shared";
 import { Platform } from "react-native";
 import { AuthGate } from "./src/AuthGate";
+import {
+  iosHealthKitSleepAdapter,
+  requestPermissionAsync as requestHealthKitPermission,
+} from "./modules/healthkit";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -87,6 +92,20 @@ const navigate = (url: string) => {
   }
 };
 
+// Install the iOS HealthKit bridge into the shared library's
+// PlatformSleepFetcher slot. The shared lib is Expo-free by policy —
+// the frontend owns the native-module wiring. On web/Android the slot
+// stays null and PlatformSleepFetcher.fetch returns []; this mirrors
+// the Slice B pattern of Platform.OS === 'web' gating.
+if (Platform.OS === "ios") {
+  PlatformSleepFetcher.setIosHealthKitAdapter(iosHealthKitSleepAdapter);
+}
+
+// Onboarding HealthKit grant prompt. Undefined on non-iOS so the
+// Onboarding step falls back to Skip + "iOS only in v1".
+const requestHealthKit =
+  Platform.OS === "ios" ? () => requestHealthKitPermission() : undefined;
+
 export default function App() {
   const [fontsLoaded] = useFonts({
     InterTight_400Regular,
@@ -113,6 +132,7 @@ export default function App() {
         userProviderTokensClient={userProviderTokensClient}
         oauthRedirectTo={oauthRedirectTo}
         navigate={navigate}
+        requestHealthKit={requestHealthKit}
       />
       <StatusBar style="auto" />
     </>
