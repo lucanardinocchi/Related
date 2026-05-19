@@ -16,6 +16,13 @@ import {
   type CandidateSet,
 } from "./PassEngine";
 import { UserContextBuilder } from "./UserContextBuilder";
+import {
+  defaultIntentDetector,
+  extractTransientIntent,
+  type ExtractResult as IntentExtractResult,
+  type IntentDetector,
+  type TransientIntentWriter,
+} from "../user-context/transientIntent";
 
 export interface AgentServiceOptions {
   supabase: SupabaseClient;
@@ -38,6 +45,14 @@ export interface AgentServiceOptions {
    * the decision and the next user-initiated Pass picks up the new state.
    */
   scheduleTriggeredPass?: TriggeredPassScheduler;
+  /**
+   * Detector for Transient Intent capture. Defaults to the rule-based
+   * `defaultIntentDetector`. Slice 13/14 will swap in an LLM-tool extractor
+   * behind the same interface.
+   */
+  intentDetector?: IntentDetector;
+  /** How long captured intent stays salient. Default: 30 minutes. */
+  intentExpiresInMs?: number;
 }
 
 export interface RunEngagedTurnInput {
@@ -46,16 +61,29 @@ export interface RunEngagedTurnInput {
   sessionId: string;
 }
 
+export interface CaptureIntentInput {
+  userTurn: string;
+  sessionId: string;
+  relationshipId?: string;
+}
+
 /**
  * Convenience wrapper around PassEngine + ClaudeAgent (via Edge Function) +
  * Executor. The frontend AgentScreen calls into here for both halves of the
  * loop: run a Pass (server-side LLM call), then execute the user's pick.
  */
 export class AgentService {
+  private readonly supabase: SupabaseClient;
   private readonly engine: PassEngine;
   private readonly executor: Executor;
+  private readonly intentDetector: IntentDetector;
+  private readonly intentExpiresInMs: number;
 
   constructor(opts: AgentServiceOptions) {
+    this.supabase = opts.supabase;
+    this.intentDetector = opts.intentDetector ?? defaultIntentDetector;
+    this.intentExpiresInMs = opts.intentExpiresInMs ?? 30 * 60_000;
+
     const agent =
       opts.agent ??
       new EdgeFunctionAgentCaller({
@@ -85,6 +113,39 @@ export class AgentService {
         sessionId: input.sessionId,
         userTurn: input.userTurn,
       },
+    });
+  }
+
+  /**
+   * Captures Transient Intent from a User turn. Called by AgentScreen
+   * before runEngagedTurn so the just-written intent is included in the
+   * UserContext snapshot for the same Pass.
+   *
+   * The detector runs locally (rule-based) — no Edge Function call. The
+   * extracted intent is written to `transient_intent` with an expiry so
+   * it decays naturally if the session ends.
+   */
+  async captureIntentForTurn(
+    input: CaptureIntentInput,
+  ): Promise<IntentExtractResult> {
+    const write: TransientIntentWriter = async (record) => {
+      const { error } = await this.supabase.from("transient_intent").insert({
+        session_id: record.sessionId,
+        relationship_id: record.relationshipId ?? null,
+        content: record.content,
+        expires_at: record.expiresAt,
+      });
+      if (error) throw error;
+    };
+
+    return extractTransientIntent({
+      utterance: input.userTurn,
+      sessionId: input.sessionId,
+      relationshipId: input.relationshipId,
+      expiresInMs: this.intentExpiresInMs,
+      now: new Date(),
+      write,
+      detect: this.intentDetector,
     });
   }
 

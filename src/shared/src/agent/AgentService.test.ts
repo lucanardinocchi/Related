@@ -100,3 +100,27 @@ describe("AgentService.runEngagedTurn", () => {
     expect(result.actions[0].type).toBe("ScheduleInteraction");
   });
 });
+
+describe("AgentService.captureIntentForTurn", () => {
+  it("extracts a wants_to intent from the User turn and reports it captured", async () => {
+    const { service } = withService({ proposed: [] });
+    const result = await service.captureIntentForTurn({
+      userTurn: "I want to plan my birthday next weekend",
+      sessionId: "sess-1",
+      relationshipId: "r-1",
+    });
+    expect(result.captured).toBe(true);
+    expect(result.content).toMatch(/plan my birthday/i);
+    expect(result.kind).toBe("wants_to");
+  });
+
+  it("returns captured=false when the turn has no detectable intent", async () => {
+    const { service } = withService({ proposed: [] });
+    const result = await service.captureIntentForTurn({
+      userTurn: "hey",
+      sessionId: "sess-1",
+      relationshipId: "r-1",
+    });
+    expect(result.captured).toBe(false);
+  });
+});

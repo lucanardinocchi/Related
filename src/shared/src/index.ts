@@ -69,6 +69,7 @@ export { AgentService } from "./agent/AgentService";
 export type {
   AgentServiceOptions,
   RunEngagedTurnInput,
+  CaptureIntentInput,
 } from "./agent/AgentService";
 export { UserContextBuilder } from "./agent/UserContextBuilder";
 export type {
