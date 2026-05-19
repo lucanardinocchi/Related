@@ -213,3 +213,24 @@ export type {
   CreateInteractionInput,
   InteractionsClientConfig,
 } from "./interactions/InteractionsClient";
+
+export {
+  VoiceSessionManager,
+  InterruptedError as VoiceSessionInterruptedError,
+} from "./voice/VoiceSessionManager";
+export type {
+  SessionHandle,
+  AgentTurnResult,
+  VoiceSessionManagerOptions,
+  StartSessionInput,
+} from "./voice/VoiceSessionManager";
+export type {
+  STTAdapter,
+  STTEvent,
+  STTTranscribeInput,
+} from "./voice/STTAdapter";
+export type { TTSAdapter, TTSSynthesizeInput } from "./voice/TTSAdapter";
+export { FakeSTTAdapter } from "./voice/FakeSTTAdapter";
+export type { FakeSTTAdapterOptions } from "./voice/FakeSTTAdapter";
+export { FakeTTSAdapter } from "./voice/FakeTTSAdapter";
+export type { FakeTTSAdapterOptions } from "./voice/FakeTTSAdapter";
