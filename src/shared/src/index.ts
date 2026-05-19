@@ -205,6 +205,15 @@ export type {
   OnboardingClientConfig,
 } from "./onboarding/OnboardingClient";
 
+export { UserProviderTokensClient } from "./integrations/UserProviderTokensClient";
+export type {
+  ProviderName,
+  UserProviderToken,
+  UpsertUserProviderTokenInput,
+} from "./integrations/UserProviderTokensClient";
+
+export type { SessionWithProviderTokens } from "./auth/AuthClient";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,

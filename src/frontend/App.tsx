@@ -20,7 +20,9 @@ import {
   RelationshipsClient,
   SystemLinkingComposer,
   UserContextClient,
+  UserProviderTokensClient,
 } from "@related/shared";
+import { Platform } from "react-native";
 import { AuthGate } from "./src/AuthGate";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -34,8 +36,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 // One SupabaseClient shared across the app so auth state and PostgREST
 // queries use the same JWT and storage.
+//
+// `persistSession: true` is required for the OAuth-redirect-back flow
+// (ADR-0006): the User leaves the app for Google consent and returns;
+// without persistence the in-memory session is lost. On web the default
+// storage (localStorage) handles this. On native a future slice wires
+// `expo-secure-store` or AsyncStorage.
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { persistSession: false },
+  auth: {
+    persistSession: true,
+    detectSessionInUrl: true,
+    autoRefreshToken: true,
+  },
 });
 const authClient = new AuthClient(supabase);
 const relationshipsClient = new RelationshipsClient(supabase);
@@ -50,10 +62,30 @@ const resolveOwnerId = async () => {
 };
 const userContextClient = new UserContextClient(supabase, resolveOwnerId);
 const onboardingClient = new OnboardingClient(supabase, resolveOwnerId);
+const userProviderTokensClient = new UserProviderTokensClient(
+  supabase,
+  resolveOwnerId,
+);
 const messageComposer = new SystemLinkingComposer({
   openURL: (url) => Linking.openURL(url),
 });
 const agentService = new AgentService({ supabase, messageComposer });
+
+// Where Supabase sends the User back after OAuth consent.
+// Web: same origin (Vercel URL or localhost during dev).
+// Native: a custom URL scheme — set up alongside the iOS native build.
+const oauthRedirectTo =
+  Platform.OS === "web" && typeof window !== "undefined"
+    ? window.location.origin
+    : "related://oauth-callback";
+
+const navigate = (url: string) => {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    window.location.href = url;
+  } else {
+    void Linking.openURL(url);
+  }
+};
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -78,6 +110,9 @@ export default function App() {
         userContextClient={userContextClient}
         onboardingClient={onboardingClient}
         agentService={agentService}
+        userProviderTokensClient={userProviderTokensClient}
+        oauthRedirectTo={oauthRedirectTo}
+        navigate={navigate}
       />
       <StatusBar style="auto" />
     </>

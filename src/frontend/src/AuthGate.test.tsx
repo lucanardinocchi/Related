@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type {
+  AgentService,
   AuthClient,
   CandidatesClient,
   GroupsClient,
@@ -8,6 +9,7 @@ import type {
   OpenThreadsClient,
   RelationshipsClient,
   UserContextClient,
+  UserProviderTokensClient,
 } from "@related/shared";
 import { AuthGate } from "./AuthGate";
 
@@ -22,7 +24,24 @@ function makeMockAuthClient(): MockedAuthClient {
     signOut: jest.fn(),
     getSession: jest.fn(),
     onAuthStateChange: jest.fn(() => () => {}),
+    linkGoogleCalendar: jest.fn(),
+    getSessionWithProviderTokens: jest.fn().mockResolvedValue(null),
   };
+}
+
+function makeMockAgentService(): AgentService {
+  return {
+    runEngagedTurn: jest.fn(),
+    executeAction: jest.fn(),
+    captureIntentForTurn: jest.fn().mockResolvedValue({ captured: false }),
+  } as unknown as AgentService;
+}
+
+function makeMockUserProviderTokensClient(): UserProviderTokensClient {
+  return {
+    upsert: jest.fn().mockResolvedValue(undefined),
+    getForProvider: jest.fn().mockResolvedValue(null),
+  } as unknown as UserProviderTokensClient;
 }
 
 function makeMockRelationshipsClient(): RelationshipsClient {
@@ -119,6 +138,10 @@ describe("<AuthGate />", () => {
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
+        agentService={makeMockAgentService()}
+        userProviderTokensClient={makeMockUserProviderTokensClient()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
       />,
     );
 
@@ -143,6 +166,10 @@ describe("<AuthGate />", () => {
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
+        agentService={makeMockAgentService()}
+        userProviderTokensClient={makeMockUserProviderTokensClient()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
       />,
     );
 
@@ -168,6 +195,10 @@ describe("<AuthGate />", () => {
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
+        agentService={makeMockAgentService()}
+        userProviderTokensClient={makeMockUserProviderTokensClient()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
       />,
     );
     fireEvent.changeText(await screen.findByPlaceholderText(/email/i), "a@b.com");
@@ -203,6 +234,10 @@ describe("<AuthGate />", () => {
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
+        agentService={makeMockAgentService()}
+        userProviderTokensClient={makeMockUserProviderTokensClient()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
@@ -237,6 +272,10 @@ describe("<AuthGate />", () => {
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
+        agentService={makeMockAgentService()}
+        userProviderTokensClient={makeMockUserProviderTokensClient()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
       />,
     );
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();

@@ -10,6 +10,7 @@ import type {
   RelationshipsClient,
   Session,
   UserContextClient,
+  UserProviderTokensClient,
 } from "@related/shared";
 import { AuthedApp } from "./AuthedApp";
 import { OnboardingScreen } from "./OnboardingScreen";
@@ -25,6 +26,11 @@ export interface AuthGateProps {
   userContextClient: UserContextClient;
   onboardingClient: OnboardingClient;
   agentService: AgentService;
+  userProviderTokensClient: UserProviderTokensClient;
+  /** URL Supabase Auth redirects back to after OAuth; web: window.location.origin. */
+  oauthRedirectTo: string;
+  /** Open a URL — `(url) => { window.location.href = url; }` on web. */
+  navigate: (url: string) => void;
 }
 
 export function AuthGate({
@@ -37,6 +43,9 @@ export function AuthGate({
   userContextClient,
   onboardingClient,
   agentService,
+  userProviderTokensClient,
+  oauthRedirectTo,
+  navigate,
 }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -89,6 +98,10 @@ export function AuthGate({
     return (
       <OnboardingScreen
         onboardingClient={onboardingClient}
+        authClient={authClient}
+        userProviderTokensClient={userProviderTokensClient}
+        oauthRedirectTo={oauthRedirectTo}
+        navigate={navigate}
         onFinished={() => setOnboardingFinished(true)}
       />
     );

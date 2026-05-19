@@ -13,6 +13,8 @@ function makeMockAuthClient(): MockedAuthClient {
     signOut: jest.fn(),
     getSession: jest.fn(),
     onAuthStateChange: jest.fn(),
+    linkGoogleCalendar: jest.fn(),
+    getSessionWithProviderTokens: jest.fn(),
   };
 }
 

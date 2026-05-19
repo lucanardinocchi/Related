@@ -2,12 +2,31 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
   OnboardingClient,
+  type AuthClient,
   type OnboardingState,
   type OnboardingStep,
+  type UserProviderTokensClient,
 } from "@related/shared";
 
 export interface OnboardingScreenProps {
   onboardingClient: OnboardingClient;
+  /**
+   * Used by the calendar step to kick off Google OAuth (linkIdentity)
+   * and to read provider tokens off the post-OAuth session.
+   */
+  authClient: AuthClient;
+  /** Persists the captured provider tokens (ADR-0006). */
+  userProviderTokensClient: UserProviderTokensClient;
+  /**
+   * URL Supabase Auth should send the User back to after Google consent.
+   * Typically `window.location.origin` on web; a deep-link scheme on native.
+   */
+  oauthRedirectTo: string;
+  /**
+   * Navigate-to-URL impl. Web: `(url) => { window.location.href = url; }`.
+   * Native: opens an in-app browser. Tests pass a jest.fn.
+   */
+  navigate: (url: string) => void;
   onFinished: () => void;
 }
 
@@ -38,8 +57,6 @@ const STEP_CONTENT: Record<OnboardingStep, StepContent> = {
       "Connect your calendar so Related can read your week's density. It uses it to gauge when you have capacity for catch-ups. Reads only; never writes.",
     ctaPrimary: "Connect calendar",
     ctaSkip: "Skip",
-    deferredNote:
-      "Calendar OAuth lands with the Google Cloud credentials. Skip for now — the agent reads `calendar: unavailable` and proceeds.",
   },
   healthkit: {
     title: "HealthKit (iOS)",
@@ -83,6 +100,10 @@ const STEP_CONTENT: Record<OnboardingStep, StepContent> = {
 
 export function OnboardingScreen({
   onboardingClient,
+  authClient,
+  userProviderTokensClient,
+  oauthRedirectTo,
+  navigate,
   onFinished,
 }: OnboardingScreenProps) {
   const [state, setState] = useState<OnboardingState | null>(null);
@@ -90,13 +111,54 @@ export function OnboardingScreen({
 
   useEffect(() => {
     let cancelled = false;
-    onboardingClient.startIfNeeded().then((s) => {
-      if (!cancelled) setState(s);
-    });
+    (async () => {
+      const initial = await onboardingClient.startIfNeeded();
+      if (cancelled) return;
+
+      // Post-OAuth-return capture: if the current session carries a fresh
+      // provider_token AND the calendar step is still pending, persist
+      // the token and auto-advance the step. Idempotent if already
+      // captured — `provider_token` is only on the session immediately
+      // after the OAuth callback.
+      try {
+        const session = await authClient.getSessionWithProviderTokens();
+        if (
+          session?.providerToken &&
+          !initial.completedSteps.includes("calendar")
+        ) {
+          await userProviderTokensClient.upsert({
+            provider: "google",
+            accessToken: session.providerToken,
+            refreshToken: session.providerRefreshToken,
+            scopes: "https://www.googleapis.com/auth/calendar.readonly",
+            expiresAt:
+              session.expiresAt !== null
+                ? new Date(session.expiresAt * 1000).toISOString()
+                : null,
+          });
+          const advanced = await onboardingClient.completeStep("calendar");
+          if (!cancelled) {
+            setState(advanced);
+            if (advanced.isFinished) onFinished();
+            return;
+          }
+        }
+      } catch {
+        // Token capture is best-effort — fall through to normal render.
+        // The User can re-tap Connect calendar to retry.
+      }
+
+      if (!cancelled) setState(initial);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [onboardingClient]);
+  }, [
+    onboardingClient,
+    authClient,
+    userProviderTokensClient,
+    onFinished,
+  ]);
 
   if (!state) return null;
 
@@ -123,6 +185,20 @@ export function OnboardingScreen({
     }
   }
 
+  async function connectCalendar() {
+    if (working) return;
+    setWorking(true);
+    try {
+      const { url } = await authClient.linkGoogleCalendar(oauthRedirectTo);
+      navigate(url);
+      // The page navigates away — the captureProviderTokens effect on
+      // remount picks up the token and advances the step. Leave
+      // `working` true to keep the button disabled until navigation.
+    } catch {
+      setWorking(false);
+    }
+  }
+
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <Text style={styles.stepNumber}>
@@ -137,7 +213,7 @@ export function OnboardingScreen({
 
       <Pressable
         accessibilityRole="button"
-        onPress={advance}
+        onPress={currentStep === "calendar" ? connectCalendar : advance}
         disabled={working}
         style={[styles.primary, working && styles.primaryDisabled]}
       >
