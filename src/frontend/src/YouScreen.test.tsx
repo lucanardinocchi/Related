@@ -120,3 +120,15 @@ describe("<YouScreen /> — Situational State", () => {
     ).toBeTruthy();
   });
 });
+
+describe("<YouScreen /> — Sleep signal platform hint", () => {
+  it("renders a 'Sleep signal: iOS only in v1' hint so Android/web Users know why", () => {
+    const client = makeMock();
+    render(
+      <YouScreen
+        userContextClient={client as unknown as UserContextClient}
+      />,
+    );
+    expect(screen.getByText(/sleep signal: iOS only in v1/i)).toBeTruthy();
+  });
+});
