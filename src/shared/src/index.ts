@@ -143,6 +143,13 @@ export type {
   CalendarFetcher,
   CalendarCollectorOptions,
 } from "./signals/CalendarCollector";
+export { FakeCalendarFetcher } from "./signals/FakeCalendarFetcher";
+export { runDailyCalendarCollection } from "./signals/runDailyCalendarCollection";
+export type {
+  CalendarFetcherLike,
+  RunDailyCalendarCollectionOptions,
+  CalendarCollectionSummary,
+} from "./signals/runDailyCalendarCollection";
 
 export { summariseSleep } from "./signals/sleepSummary";
 export type {
