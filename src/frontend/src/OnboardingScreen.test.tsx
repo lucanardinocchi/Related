@@ -1,6 +1,32 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
-import type { OnboardingClient, OnboardingState } from "@related/shared";
+import type {
+  AuthClient,
+  OnboardingClient,
+  OnboardingState,
+  UserProviderTokensClient,
+} from "@related/shared";
 import { OnboardingScreen } from "./OnboardingScreen";
+
+function makeAuthMock(): jest.Mocked<AuthClient> {
+  return {
+    linkGoogleCalendar: jest.fn(),
+    getSessionWithProviderTokens: jest
+      .fn()
+      .mockResolvedValue({
+        accessToken: "ses",
+        providerToken: null,
+        providerRefreshToken: null,
+        expiresAt: null,
+      }),
+  } as unknown as jest.Mocked<AuthClient>;
+}
+
+function makeTokensMock(): jest.Mocked<UserProviderTokensClient> {
+  return {
+    upsert: jest.fn().mockResolvedValue(undefined),
+    getForProvider: jest.fn().mockResolvedValue(null),
+  } as unknown as jest.Mocked<UserProviderTokensClient>;
+}
 
 function makeMock(initial: OnboardingState): jest.Mocked<OnboardingClient> {
   let state = initial;
@@ -32,6 +58,10 @@ describe("<OnboardingScreen />", () => {
     render(
       <OnboardingScreen
         onboardingClient={client}
+        authClient={makeAuthMock()}
+        userProviderTokensClient={makeTokensMock()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
         onFinished={onFinished}
       />,
     );
@@ -77,10 +107,127 @@ describe("<OnboardingScreen />", () => {
       finishedAt: null,
       isFinished: false,
     });
-    render(<OnboardingScreen onboardingClient={client} onFinished={jest.fn()} />);
+    render(
+      <OnboardingScreen
+        onboardingClient={client}
+        authClient={makeAuthMock()}
+        userProviderTokensClient={makeTokensMock()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
+        onFinished={jest.fn()}
+      />,
+    );
 
     // Should land on HealthKit (3rd step) — not Welcome.
     await screen.findByText("HealthKit (iOS)");
     expect(screen.queryByText(/welcome to related/i)).toBeNull();
+  });
+
+  it("Calendar step: tapping 'Connect calendar' fetches the OAuth URL and navigates to it", async () => {
+    const client = makeMock({
+      completedSteps: ["welcome"],
+      finishedAt: null,
+      isFinished: false,
+    });
+    const authClient = makeAuthMock();
+    authClient.linkGoogleCalendar.mockResolvedValue({
+      url: "https://accounts.google.com/o/oauth2/auth?…",
+    });
+    const navigate = jest.fn();
+
+    render(
+      <OnboardingScreen
+        onboardingClient={client}
+        authClient={authClient}
+        userProviderTokensClient={makeTokensMock()}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={navigate}
+        onFinished={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(/calendar permission/i);
+    fireEvent.press(screen.getByText("Connect calendar"));
+
+    await waitFor(() => {
+      expect(authClient.linkGoogleCalendar).toHaveBeenCalledWith(
+        "https://app.example/onboarding",
+      );
+    });
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(
+        "https://accounts.google.com/o/oauth2/auth?…",
+      );
+    });
+  });
+
+  it("On mount: if the session has a fresh provider_token (post-OAuth return), persists it and advances the calendar step", async () => {
+    const client = makeMock({
+      completedSteps: ["welcome"],
+      finishedAt: null,
+      isFinished: false,
+    });
+    const authClient = makeAuthMock();
+    authClient.getSessionWithProviderTokens.mockResolvedValue({
+      accessToken: "ses-1",
+      providerToken: "ptkn-1",
+      providerRefreshToken: "prtk-1",
+      expiresAt: 1747641600,
+    });
+    const tokens = makeTokensMock();
+
+    render(
+      <OnboardingScreen
+        onboardingClient={client}
+        authClient={authClient}
+        userProviderTokensClient={tokens}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
+        onFinished={jest.fn()}
+      />,
+    );
+
+    // Token is persisted with the Google provider name + scopes.
+    await waitFor(() => {
+      expect(tokens.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: "google",
+          accessToken: "ptkn-1",
+          refreshToken: "prtk-1",
+        }),
+      );
+    });
+    // Calendar step auto-completes; UI advances to HealthKit.
+    await waitFor(() => {
+      expect(client.completeStep).toHaveBeenCalledWith("calendar");
+    });
+  });
+
+  it("On mount: if the session has no provider_token (fresh email sign-in), does NOT auto-advance the calendar step", async () => {
+    const client = makeMock({
+      completedSteps: ["welcome"],
+      finishedAt: null,
+      isFinished: false,
+    });
+    const authClient = makeAuthMock();
+    // default mock returns providerToken: null already
+    const tokens = makeTokensMock();
+
+    render(
+      <OnboardingScreen
+        onboardingClient={client}
+        authClient={authClient}
+        userProviderTokensClient={tokens}
+        oauthRedirectTo="https://app.example/onboarding"
+        navigate={jest.fn()}
+        onFinished={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(/calendar permission/i);
+    // No upsert because no token to write.
+    expect(tokens.upsert).not.toHaveBeenCalled();
+    // No completeStep('calendar') because we waited for the User.
+    expect(client.completeStep).not.toHaveBeenCalled();
   });
 });

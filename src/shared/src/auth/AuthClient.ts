@@ -20,6 +20,20 @@ export interface Session {
   user: AuthUser;
 }
 
+/**
+ * Session shape that exposes OAuth provider tokens — only populated
+ * immediately after returning from an OAuth callback (linkIdentity or
+ * signInWithOAuth). Supabase Auth doesn't persist these; OnboardingScreen
+ * captures them on return and stores them in user_provider_tokens.
+ */
+export interface SessionWithProviderTokens {
+  accessToken: string;
+  providerToken: string | null;
+  providerRefreshToken: string | null;
+  /** Seconds since epoch (Supabase shape). */
+  expiresAt: number | null;
+}
+
 export type Unsubscribe = () => void;
 
 function toSession(sbSession: SbSession, sbUser: SbUser): Session {
@@ -83,6 +97,60 @@ export class AuthClient {
     if (error) throw error;
     if (!data.session || !data.session.user) return null;
     return toSession(data.session, data.session.user);
+  }
+
+  /**
+   * Per ADR-0006: links a Google identity to the currently signed-in User
+   * with the Calendar read-only scope, forcing offline access + consent
+   * prompt so Supabase Auth gets a refresh token back. Returns the
+   * Google OAuth URL — the caller is responsible for navigating to it
+   * (web: `window.location.href = url`; native: in-app browser).
+   *
+   * After the callback returns, `getSessionWithProviderTokens()` will
+   * return the new access_token + refresh_token, which OnboardingScreen
+   * then persists via UserProviderTokensClient.
+   */
+  async linkGoogleCalendar(redirectTo: string): Promise<{ url: string }> {
+    const { data, error } = await this.client.auth.linkIdentity({
+      provider: "google",
+      options: {
+        scopes: "https://www.googleapis.com/auth/calendar.readonly",
+        redirectTo,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+    if (error) throw error;
+    if (!data?.url) {
+      throw new Error("linkIdentity returned no OAuth URL");
+    }
+    return { url: data.url };
+  }
+
+  /**
+   * Exposes OAuth provider tokens off the current session. These are only
+   * populated immediately after returning from an OAuth callback — once
+   * read and persisted, subsequent calls return providerToken=null.
+   */
+  async getSessionWithProviderTokens(): Promise<SessionWithProviderTokens | null> {
+    const { data, error } = await this.client.auth.getSession();
+    if (error) throw error;
+    const session = data?.session as
+      | (SbSession & {
+          provider_token?: string | null;
+          provider_refresh_token?: string | null;
+        })
+      | null
+      | undefined;
+    if (!session) return null;
+    return {
+      accessToken: session.access_token,
+      providerToken: session.provider_token ?? null,
+      providerRefreshToken: session.provider_refresh_token ?? null,
+      expiresAt: session.expires_at ?? null,
+    };
   }
 
   onAuthStateChange(cb: (s: Session | null) => void): Unsubscribe {

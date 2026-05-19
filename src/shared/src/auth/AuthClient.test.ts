@@ -9,6 +9,7 @@ type MockSupabase = {
     signOut: jest.Mock;
     getSession: jest.Mock;
     onAuthStateChange: jest.Mock;
+    linkIdentity: jest.Mock;
   };
 };
 
@@ -20,6 +21,7 @@ function makeMockSupabase(): MockSupabase {
       signOut: jest.fn(),
       getSession: jest.fn(),
       onAuthStateChange: jest.fn(),
+      linkIdentity: jest.fn(),
     },
   };
 }
@@ -193,5 +195,85 @@ describe("AuthClient.onAuthStateChange", () => {
     captured!("SIGNED_OUT", null);
 
     expect(callback).toHaveBeenCalledWith(null);
+  });
+});
+
+describe("AuthClient.linkGoogleCalendar", () => {
+  it("calls Supabase linkIdentity with the calendar.readonly scope, offline access_type, and forced consent prompt", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.linkIdentity.mockResolvedValue({
+      data: { url: "https://accounts.google.com/o/oauth2/auth?...&provider=google" },
+      error: null,
+    });
+
+    const { url } = await authClient.linkGoogleCalendar(
+      "https://app.example/onboarding-return",
+    );
+
+    expect(mock.auth.linkIdentity).toHaveBeenCalledWith({
+      provider: "google",
+      options: expect.objectContaining({
+        scopes: "https://www.googleapis.com/auth/calendar.readonly",
+        redirectTo: "https://app.example/onboarding-return",
+        queryParams: expect.objectContaining({
+          access_type: "offline",
+          prompt: "consent",
+        }),
+      }),
+    });
+    expect(url).toMatch(/accounts\.google\.com/);
+  });
+});
+
+describe("AuthClient.getSessionWithProviderTokens", () => {
+  it("returns provider_token and refresh_token alongside the access token when the session has them", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.getSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "ses-1",
+          provider_token: "ptkn-1",
+          provider_refresh_token: "prtk-1",
+          expires_at: 1747641600,
+          user: { id: "u-1", email: "luca@example.com" },
+        },
+      },
+      error: null,
+    });
+
+    const got = await authClient.getSessionWithProviderTokens();
+    expect(got).toEqual({
+      accessToken: "ses-1",
+      providerToken: "ptkn-1",
+      providerRefreshToken: "prtk-1",
+      expiresAt: 1747641600,
+    });
+  });
+
+  it("returns null when there is no session", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+    const got = await authClient.getSessionWithProviderTokens();
+    expect(got).toBeNull();
+  });
+
+  it("returns null provider tokens when the session has none (post-email-signin, pre-OAuth)", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.getSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "ses-1",
+          user: { id: "u-1", email: "luca@example.com" },
+        },
+      },
+      error: null,
+    });
+    const got = await authClient.getSessionWithProviderTokens();
+    expect(got).toEqual({
+      accessToken: "ses-1",
+      providerToken: null,
+      providerRefreshToken: null,
+      expiresAt: null,
+    });
   });
 });
