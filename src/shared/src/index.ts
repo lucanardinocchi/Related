@@ -212,6 +212,17 @@ export type {
   UpsertUserProviderTokenInput,
 } from "./integrations/UserProviderTokensClient";
 
+export {
+  fetchGoogleCalendarEvents,
+  refreshGoogleAccessToken,
+} from "./integrations/google/GoogleCalendarFetcher";
+export type {
+  FetchGoogleCalendarEventsInput,
+  FetchGoogleCalendarEventsResult,
+  RefreshGoogleAccessTokenInput,
+  RefreshGoogleAccessTokenResult,
+} from "./integrations/google/GoogleCalendarFetcher";
+
 export type { SessionWithProviderTokens } from "./auth/AuthClient";
 
 export { InteractionsClient } from "./interactions/InteractionsClient";
