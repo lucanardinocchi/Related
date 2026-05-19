@@ -9,6 +9,7 @@ import {
 } from "@expo-google-fonts/inter-tight";
 import { createClient } from "@supabase/supabase-js";
 import {
+  AgentService,
   AuthClient,
   CandidatesClient,
   GroupsClient,
@@ -47,6 +48,7 @@ const resolveOwnerId = async () => {
 };
 const userContextClient = new UserContextClient(supabase, resolveOwnerId);
 const onboardingClient = new OnboardingClient(supabase, resolveOwnerId);
+const agentService = new AgentService({ supabase });
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -70,6 +72,7 @@ export default function App() {
         candidatesClient={candidatesClient}
         userContextClient={userContextClient}
         onboardingClient={onboardingClient}
+        agentService={agentService}
       />
       <StatusBar style="auto" />
     </>

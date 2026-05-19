@@ -63,6 +63,13 @@ export type {
   AnthropicMessagesClient,
   ClaudeAgentOptions,
 } from "./agent/ClaudeAgent";
+export { EdgeFunctionAgentCaller } from "./agent/EdgeFunctionAgentCaller";
+export type { EdgeFunctionAgentCallerOptions } from "./agent/EdgeFunctionAgentCaller";
+export { AgentService } from "./agent/AgentService";
+export type {
+  AgentServiceOptions,
+  RunEngagedTurnInput,
+} from "./agent/AgentService";
 export { UserContextBuilder } from "./agent/UserContextBuilder";
 export type {
   UserContextSnapshot,

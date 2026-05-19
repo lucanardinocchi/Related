@@ -19,6 +19,13 @@ export interface HomeProps {
    */
   closedPerDayLast60: ClosedPerDayBucket[];
   onSignOut: () => void;
+  /**
+   * Tapping the Talk-to-Claude tile fires this. HomeScreen renders a
+   * Relationship picker; the chosen Relationship is then pushed into the
+   * AgentScreen via cross-tab navigation. Optional so existing tests that
+   * don't care about this can omit it.
+   */
+  onTalkToClaude?: () => void;
 }
 
 function joinContactNames(interaction: Interaction): string {
@@ -100,6 +107,7 @@ export function Home({
   upcomingInteractions,
   closedPerDayLast60,
   onSignOut,
+  onTalkToClaude,
 }: HomeProps) {
   const last30 = closedPerDayLast60.slice(-30);
   const priorEnd = Math.max(closedPerDayLast60.length - 30, 0);
@@ -155,7 +163,11 @@ export function Home({
         )}
       </View>
 
-      <Pressable accessibilityRole="button" style={styles.cta}>
+      <Pressable
+        accessibilityRole="button"
+        style={styles.cta}
+        onPress={onTalkToClaude}
+      >
         <Text style={styles.ctaPrimary}>Talk to Claude</Text>
         <Text style={styles.ctaSecondary}>Voice · always on</Text>
       </Pressable>

@@ -6,6 +6,7 @@ import {
 } from "@react-navigation/native-stack";
 import { StyleSheet, Text, View } from "react-native";
 import type {
+  AgentService,
   CandidatesClient,
   GroupRelationship,
   GroupsClient,
@@ -16,6 +17,7 @@ import type {
   UserContextClient,
 } from "@related/shared";
 import { AddContactScreen } from "./AddContactScreen";
+import { AgentScreen } from "./AgentScreen";
 import { CalendarScreen } from "./CalendarScreen";
 import { CreateGroupScreen } from "./CreateGroupScreen";
 import { GroupDetailScreen } from "./GroupDetailScreen";
@@ -32,6 +34,7 @@ export interface AuthedAppProps {
   groupsClient: GroupsClient;
   candidatesClient: CandidatesClient;
   userContextClient: UserContextClient;
+  agentService: AgentService;
   onSignOut: () => void;
 }
 
@@ -39,6 +42,7 @@ type RelationshipsStackParams = {
   List: undefined;
   Detail: { relationship: Relationship };
   AddContact: undefined;
+  Agent: { relationship: Relationship };
 };
 
 type GroupsStackParams = {
@@ -65,12 +69,14 @@ function RelationshipsStack({
   interactionsClient,
   groupsClient,
   candidatesClient,
+  agentService,
 }: {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
   interactionsClient: InteractionsClient;
   groupsClient: GroupsClient;
   candidatesClient: CandidatesClient;
+  agentService: AgentService;
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -106,6 +112,9 @@ function RelationshipsStack({
                   params: { relationship: group },
                 });
             }}
+            onTalkToClaude={(relationship) =>
+              navigation.navigate("Agent", { relationship })
+            }
           />
         )}
       </Stack.Screen>
@@ -118,6 +127,15 @@ function RelationshipsStack({
             relationshipsClient={relationshipsClient}
             onCreated={() => navigation.navigate("List")}
             onCancel={() => navigation.goBack()}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="Agent">
+        {({ navigation, route }) => (
+          <AgentScreen
+            relationship={route.params.relationship}
+            agentService={agentService}
+            onBack={() => navigation.goBack()}
           />
         )}
       </Stack.Screen>
@@ -197,16 +215,29 @@ export function AuthedApp({
   groupsClient,
   candidatesClient,
   userContextClient,
+  agentService,
   onSignOut,
 }: AuthedAppProps) {
   return (
     <NavigationContainer>
       <Tab.Navigator screenOptions={{ headerShown: false }}>
         <Tab.Screen name="Home">
-          {() => (
+          {({ navigation }) => (
             <HomeScreen
               openThreadsClient={openThreadsClient}
               interactionsClient={interactionsClient}
+              relationshipsClient={relationshipsClient}
+              onTalkToClaude={(relationship) => {
+                // Cross-tab nav into the Relationships stack's Agent screen,
+                // so the Back chevron returns into Relationships (not Home).
+                // Matches the onSelectGroup cross-stack pattern.
+                navigation
+                  .getParent<TabNavigationProp>()
+                  ?.navigate("Relationships", {
+                    screen: "Agent",
+                    params: { relationship },
+                  });
+              }}
               onSignOut={onSignOut}
             />
           )}
@@ -219,6 +250,7 @@ export function AuthedApp({
               interactionsClient={interactionsClient}
               groupsClient={groupsClient}
               candidatesClient={candidatesClient}
+              agentService={agentService}
             />
           )}
         </Tab.Screen>

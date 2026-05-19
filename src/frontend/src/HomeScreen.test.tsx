@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type {
   ClosedPerDayBucket,
   Interaction,
   InteractionsClient,
   OpenThread,
   OpenThreadsClient,
+  Relationship,
+  RelationshipsClient,
 } from "@related/shared";
 import { HomeScreen } from "./HomeScreen";
 
@@ -14,6 +16,19 @@ type MockedOpenThreadsClient = {
 type MockedInteractionsClient = {
   [K in keyof InteractionsClient]: jest.Mock;
 };
+type MockedRelationshipsClient = {
+  [K in keyof RelationshipsClient]: jest.Mock;
+};
+
+function makeRelationshipsMock(
+  list: Relationship[] = [],
+): MockedRelationshipsClient {
+  return {
+    createContact: jest.fn(),
+    listRelationships: jest.fn().mockResolvedValue(list),
+    getRelationship: jest.fn(),
+  } as unknown as MockedRelationshipsClient;
+}
 
 function makeMock(): MockedOpenThreadsClient {
   return {
@@ -66,6 +81,10 @@ describe("<HomeScreen />", () => {
         interactionsClient={
           makeInteractionsMock() as unknown as InteractionsClient
         }
+        relationshipsClient={
+          makeRelationshipsMock() as unknown as RelationshipsClient
+        }
+        onTalkToClaude={jest.fn()}
         onSignOut={jest.fn()}
       />,
     );
@@ -107,6 +126,10 @@ describe("<HomeScreen />", () => {
       <HomeScreen
         openThreadsClient={ot as unknown as OpenThreadsClient}
         interactionsClient={interactions as unknown as InteractionsClient}
+        relationshipsClient={
+          makeRelationshipsMock() as unknown as RelationshipsClient
+        }
+        onTalkToClaude={jest.fn()}
         onSignOut={jest.fn()}
       />,
     );
@@ -138,6 +161,10 @@ describe("<HomeScreen />", () => {
         interactionsClient={
           makeInteractionsMock() as unknown as InteractionsClient
         }
+        relationshipsClient={
+          makeRelationshipsMock() as unknown as RelationshipsClient
+        }
+        onTalkToClaude={jest.fn()}
         onSignOut={jest.fn()}
       />,
     );
@@ -150,5 +177,45 @@ describe("<HomeScreen />", () => {
     });
 
     (Date.now as jest.Mock).mockRestore();
+  });
+
+  it("Talk to Claude tile opens a Relationship picker; picking one fires onTalkToClaude(relationship)", async () => {
+    const ot = makeMock();
+    ot.listOpenForUser.mockResolvedValue([]);
+    ot.closedPerDay.mockResolvedValue(zeroBuckets(60));
+
+    const relationships: Relationship[] = [
+      {
+        id: "r-1",
+        contact: { id: "c-1", name: "Sam", phone: null, email: null },
+      } as Relationship,
+      {
+        id: "r-2",
+        contact: { id: "c-2", name: "Priya", phone: null, email: null },
+      } as Relationship,
+    ];
+    const rels = makeRelationshipsMock(relationships);
+    const onTalkToClaude = jest.fn();
+
+    render(
+      <HomeScreen
+        openThreadsClient={ot as unknown as OpenThreadsClient}
+        interactionsClient={
+          makeInteractionsMock() as unknown as InteractionsClient
+        }
+        relationshipsClient={rels as unknown as RelationshipsClient}
+        onTalkToClaude={onTalkToClaude}
+        onSignOut={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByText(/^Talk to Claude$/));
+    // Picker lists relationships by Contact name.
+    const priyaRow = await screen.findByText("Priya");
+    fireEvent.press(priyaRow);
+
+    expect(onTalkToClaude).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "r-2" }),
+    );
   });
 });

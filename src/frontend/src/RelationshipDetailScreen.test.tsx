@@ -112,6 +112,7 @@ function renderScreen(over: {
   candidatesClient?: jest.Mocked<CandidatesClient>;
   onBack?: jest.Mock;
   onSelectGroup?: jest.Mock;
+  onTalkToClaude?: jest.Mock;
 } = {}) {
   const rel = over.relationship ?? relationship();
   const openThreadsClient =
@@ -124,6 +125,7 @@ function renderScreen(over: {
   const candidatesClient = over.candidatesClient ?? makeMockCandidatesClient();
   const onBack = over.onBack ?? jest.fn();
   const onSelectGroup = over.onSelectGroup ?? jest.fn();
+  const onTalkToClaude = over.onTalkToClaude ?? jest.fn();
 
   const utils = render(
     <RelationshipDetailScreen
@@ -135,6 +137,7 @@ function renderScreen(over: {
       candidatesClient={candidatesClient}
       onBack={onBack}
       onSelectGroup={onSelectGroup}
+      onTalkToClaude={onTalkToClaude}
     />,
   );
   return {
@@ -146,6 +149,7 @@ function renderScreen(over: {
     candidatesClient,
     onBack,
     onSelectGroup,
+    onTalkToClaude,
   };
 }
 
@@ -267,24 +271,18 @@ describe("<RelationshipDetailScreen /> — Candidate Set", () => {
   });
 });
 
-describe("<RelationshipDetailScreen /> — voice button", () => {
-  it("renders an inert 'Talk to Claude' button scoped to this Relationship", async () => {
-    // Slice 13 will wire the voice session; for Slice 5 the button is visible
-    // but pressing it does nothing visible to the user (no crash, no
-    // navigation, no side effect). Existence + accessibility role is the
-    // contract.
-    const interactionsClient = makeMockInteractionsClient();
-    renderScreen({ interactionsClient });
+describe("<RelationshipDetailScreen /> — Talk to Claude entry", () => {
+  it("tapping 'Talk to Claude' fires onTalkToClaude with this Relationship (push to AgentScreen)", async () => {
+    const onTalkToClaude = jest.fn();
+    renderScreen({ onTalkToClaude });
 
     const button = await screen.findByText(/talk to claude/i);
-    expect(button).toBeTruthy();
-
-    // Pressing the inert button must not blow up.
     await act(async () => {
       fireEvent.press(button);
     });
-    // Nothing else happens — no Interaction logged, no Open Thread created.
-    expect(interactionsClient.createInteraction).not.toHaveBeenCalled();
+    expect(onTalkToClaude).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "r-1" }),
+    );
   });
 });
 

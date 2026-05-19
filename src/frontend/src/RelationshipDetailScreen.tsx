@@ -35,6 +35,12 @@ export interface RelationshipDetailScreenProps {
    * Single Group view.
    */
   onSelectGroup: (group: GroupRelationship) => void;
+  /**
+   * Called when the User taps 'Talk to Claude'. AuthedApp pushes the
+   * AgentScreen for this Relationship. Voice mode lands in Slice 13;
+   * for now the AgentScreen takes a text turn per send.
+   */
+  onTalkToClaude: (relationship: Relationship) => void;
 }
 
 const STRAVA_ORANGE = "#FC4C02";
@@ -55,6 +61,7 @@ export function RelationshipDetailScreen({
   candidatesClient,
   onBack,
   onSelectGroup,
+  onTalkToClaude,
 }: RelationshipDetailScreenProps) {
   const { contact } = relationship;
 
@@ -237,9 +244,7 @@ export function RelationshipDetailScreen({
 
       <Pressable
         accessibilityRole="button"
-        onPress={() => {
-          // Slice 13 wires the voice session; inert for now.
-        }}
+        onPress={() => onTalkToClaude(relationship)}
         style={styles.voiceButton}
       >
         <Text style={styles.voiceLabel}>Talk to Claude</Text>
