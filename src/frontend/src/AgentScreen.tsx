@@ -104,6 +104,17 @@ export function AgentScreen({
       intent === "decline"
         ? { ...action, type: "DoNothing" as const, payload: {} }
         : action;
+
+    // SendMessage Accept: the agent emits `contactIds` only — it has no
+    // way to know phone numbers. Resolve the focused Contact's channel
+    // address here so the Executor can hand off to the system composer.
+    let userEditsPayload = edits;
+    if (intent === "accept" && effectiveAction.type === "SendMessage") {
+      const channel = (effectiveAction.payload as { channel?: string })?.channel;
+      const resolved = resolveRecipientFor(relationship, channel);
+      userEditsPayload = { ...(edits ?? {}), to: resolved };
+    }
+
     try {
       await agentService.executeAction({
         action: {
@@ -113,7 +124,7 @@ export function AgentScreen({
           type: effectiveAction.type,
           payload: effectiveAction.payload,
         },
-        userEdits: edits ? { payload: edits } : undefined,
+        userEdits: userEditsPayload ? { payload: userEditsPayload } : undefined,
       });
       setDecisions((prev) => ({
         ...prev,
@@ -174,6 +185,16 @@ export function AgentScreen({
       </View>
     </View>
   );
+}
+
+function resolveRecipientFor(
+  relationship: Relationship,
+  channel: string | undefined,
+): string[] {
+  const contact = relationship.contact;
+  if (channel === "email" && contact.email) return [contact.email];
+  if (channel === "text" && contact.phone) return [contact.phone];
+  return [];
 }
 
 function findCandidateSetIdFor(
