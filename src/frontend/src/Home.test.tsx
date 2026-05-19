@@ -54,6 +54,13 @@ describe("<Home /> — section scaffolding", () => {
     expect(screen.getByText(/nothing coming up/i)).toBeTruthy();
   });
 
+  it("invokes onTalkToClaude when the Talk to Claude tile is tapped", () => {
+    const onTalkToClaude = jest.fn();
+    renderEmpty({ onTalkToClaude });
+    fireEvent.press(screen.getByText(/^talk to claude$/i));
+    expect(onTalkToClaude).toHaveBeenCalledTimes(1);
+  });
+
   it("invokes onSignOut when the sign-out affordance is pressed", () => {
     const onSignOut = jest.fn();
     renderEmpty({ onSignOut });

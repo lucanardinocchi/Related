@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type {
+  AgentService,
   AuthClient,
   CandidatesClient,
   GroupsClient,
@@ -23,6 +24,7 @@ export interface AuthGateProps {
   candidatesClient: CandidatesClient;
   userContextClient: UserContextClient;
   onboardingClient: OnboardingClient;
+  agentService: AgentService;
 }
 
 export function AuthGate({
@@ -34,6 +36,7 @@ export function AuthGate({
   candidatesClient,
   userContextClient,
   onboardingClient,
+  agentService,
 }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -99,6 +102,7 @@ export function AuthGate({
       groupsClient={groupsClient}
       candidatesClient={candidatesClient}
       userContextClient={userContextClient}
+      agentService={agentService}
       onSignOut={() => {
         void authClient.signOut();
       }}
