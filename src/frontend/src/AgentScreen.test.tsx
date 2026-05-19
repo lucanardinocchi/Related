@@ -27,12 +27,14 @@ function fixtureRelationship(over: Partial<Relationship["contact"]> = {}): Relat
 type MockedService = {
   runEngagedTurn: jest.Mock;
   executeAction: jest.Mock;
+  captureIntentForTurn: jest.Mock;
 };
 
 function makeService(): MockedService {
   return {
     runEngagedTurn: jest.fn(),
     executeAction: jest.fn(),
+    captureIntentForTurn: jest.fn().mockResolvedValue({ captured: false }),
   };
 }
 
@@ -393,5 +395,89 @@ describe("<AgentScreen />", () => {
         }),
       );
     });
+  });
+
+  it("Send: calls captureIntentForTurn before runEngagedTurn so the just-captured intent is in the next Pass", async () => {
+    const service = makeService();
+    let captureFinished = false;
+    service.captureIntentForTurn.mockImplementation(async () => {
+      captureFinished = true;
+      return { captured: true, content: "plan my birthday", kind: "wants_to" };
+    });
+    service.runEngagedTurn.mockImplementation(async () => {
+      // Ordering invariant: capture must finish before runEngagedTurn fires,
+      // so the User Context snapshot reads the just-written intent.
+      expect(captureFinished).toBe(true);
+      return {
+        id: "cs-new",
+        ownerId: "u-1",
+        relationshipId: "r-1",
+        mode: "engaged",
+        createdAt: "2026-05-19T00:00:00Z",
+        actions: [{ id: "ca-1", type: "DoNothing", payload: {}, why: null, decisionState: "pending" }],
+      };
+    });
+
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship()}
+        agentService={service as unknown as AgentService}
+        onBack={jest.fn()}
+      />,
+    );
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/say something to Claude/i),
+      "I want to plan my birthday",
+    );
+    fireEvent.press(screen.getByText(/^Send$/));
+
+    await waitFor(() => {
+      expect(service.captureIntentForTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userTurn: "I want to plan my birthday",
+          relationshipId: "r-1",
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(service.runEngagedTurn).toHaveBeenCalled();
+    });
+  });
+
+  it("Renders a subtle annotation in the transcript when intent was captured", async () => {
+    const service = makeService();
+    service.captureIntentForTurn.mockResolvedValue({
+      captured: true,
+      content: "plan my birthday",
+      kind: "wants_to",
+    });
+    service.runEngagedTurn.mockResolvedValue({
+      id: "cs-new",
+      ownerId: "u-1",
+      relationshipId: "r-1",
+      mode: "engaged",
+      createdAt: "2026-05-19T00:00:00Z",
+      actions: [{ id: "ca-1", type: "DoNothing", payload: {}, why: null, decisionState: "pending" }],
+    });
+
+    render(
+      <AgentScreen
+        relationship={fixtureRelationship()}
+        agentService={service as unknown as AgentService}
+        onBack={jest.fn()}
+      />,
+    );
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/say something to Claude/i),
+      "I want to plan my birthday",
+    );
+    fireEvent.press(screen.getByText(/^Send$/));
+
+    // Acceptance criterion: captured intent is visible in the transcript as
+    // a subtle inline annotation so the User knows what was picked up.
+    // The label prefix "Intent:" disambiguates from the user bubble.
+    expect(
+      await screen.findByText(/^Intent: plan my birthday$/),
+    ).toBeTruthy();
   });
 });

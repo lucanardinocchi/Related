@@ -30,6 +30,8 @@ interface TranscriptUserTurn {
   role: "user";
   id: string;
   text: string;
+  /** Set when the User's turn produced a captured Transient Intent. */
+  capturedIntent?: { content: string };
 }
 interface TranscriptAgentTurn {
   role: "agent";
@@ -76,6 +78,24 @@ export function AgentScreen({
     ]);
 
     try {
+      // Capture Transient Intent FIRST so the just-written intent is
+      // included in the UserContext snapshot for the same Pass.
+      const intent = await agentService.captureIntentForTurn({
+        userTurn: text,
+        sessionId,
+        relationshipId: relationship.id,
+      });
+      if (intent.captured && intent.content) {
+        const capturedContent = intent.content;
+        setTranscript((prev) =>
+          prev.map((e) =>
+            e.role === "user" && e.id === userEntryId
+              ? { ...e, capturedIntent: { content: capturedContent } }
+              : e,
+          ),
+        );
+      }
+
       const set = await agentService.runEngagedTurn({
         relationshipId: relationship.id,
         userTurn: text,
@@ -145,8 +165,15 @@ export function AgentScreen({
 
         {transcript.map((entry) =>
           entry.role === "user" ? (
-            <View key={entry.id} style={styles.userBubble}>
-              <Text style={styles.userBubbleText}>{entry.text}</Text>
+            <View key={entry.id}>
+              <View style={styles.userBubble}>
+                <Text style={styles.userBubbleText}>{entry.text}</Text>
+              </View>
+              {entry.capturedIntent ? (
+                <Text style={styles.intentAnnotation}>
+                  Intent: {entry.capturedIntent.content}
+                </Text>
+              ) : null}
             </View>
           ) : (
             <View key={entry.id} style={styles.agentBlock}>
@@ -337,6 +364,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONT_REGULAR,
     color: "#111827",
+  },
+  intentAnnotation: {
+    alignSelf: "flex-end",
+    fontSize: 10,
+    fontFamily: FONT_BOLD,
+    fontWeight: "700",
+    color: STRAVA_ORANGE,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    marginTop: 4,
+    marginBottom: 8,
+    marginRight: 4,
+    maxWidth: "85%",
   },
   agentBlock: { marginBottom: 12 },
   card: {
