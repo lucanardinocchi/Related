@@ -10,7 +10,7 @@ export default defineConfig({
   reporter: "list",
   timeout: 30_000,
   webServer: {
-    command: "python3 -m http.server 8080 --directory src/frontend/dist",
+    command: "python3 -m http.server 8080 --directory src/mobile/dist",
     url: "http://localhost:8080",
     reuseExistingServer: true,
     timeout: 60_000,

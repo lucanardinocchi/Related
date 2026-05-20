@@ -19,15 +19,15 @@ Related is a multi-context monorepo:
 ├── CONTEXT-MAP.md
 ├── docs/adr/                        ← system-wide decisions
 └── src/
-    ├── frontend/
-    │   ├── CONTEXT.md
-    │   └── docs/adr/                ← frontend-specific decisions
-    ├── backend/
-    │   ├── CONTEXT.md
-    │   └── docs/adr/                ← backend-specific decisions
     ├── mobile/
     │   ├── CONTEXT.md
     │   └── docs/adr/                ← mobile-specific decisions
+    ├── web/
+    │   ├── CONTEXT.md
+    │   └── docs/adr/                ← web-specific decisions
+    ├── backend/
+    │   ├── CONTEXT.md
+    │   └── docs/adr/                ← backend-specific decisions
     └── shared/
         ├── CONTEXT.md
         └── docs/adr/                ← cross-cutting decisions

@@ -26,7 +26,7 @@ export class PlatformSleepFetcher {
   /**
    * Module-level slot for the iOS HealthKit adapter. The shared library
    * is Expo-free by policy — it can't `require` a native module — so
-   * the frontend installs the real bridge here at bootstrap on
+   * the mobile app installs the real bridge here at bootstrap on
    * `Platform.OS === 'ios'`. On every other platform the slot stays
    * null and `fetchIos` returns an empty array.
    *
@@ -69,7 +69,7 @@ export class PlatformSleepFetcher {
 
   /**
    * iOS integration point. Delegates to the installed HealthKit
-   * adapter when present (frontend wires the native bridge in at
+   * adapter when present (mobile app wires the native bridge in at
    * bootstrap), or returns [] when no adapter is installed (e.g.
    * shared-lib unit tests, Edge Functions running server-side).
    */

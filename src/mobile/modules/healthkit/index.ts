@@ -9,7 +9,7 @@
  *
  * On non-iOS platforms the facade short-circuits to safe defaults so
  * the module can be imported anywhere without crashing the Metro
- * bundler. The frontend should still guard the install site with
+ * bundler. The mobile app should still guard the install site with
  * `Platform.OS === "ios"` — the iOS-only resolution is a defence in
  * depth, not the primary gate.
  */

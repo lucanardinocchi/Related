@@ -25,6 +25,13 @@ supabase/.temp
 .expo/
 .expo-shared/
 
+# Next.js
+.next/
+next-env.d.ts
+
+# TypeScript incremental cache
+*.tsbuildinfo
+
 # IDE
 .vscode/
 .idea/

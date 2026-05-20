@@ -13,5 +13,4 @@ Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`,
 
 ### Domain docs
 
-Multi-context monorepo: `frontend`, `backend`, `mobile`, `shared`.
-See `docs/agents/domain.md`.
+Multi-context monorepo: `mobile` (Expo iOS), `web` (Next.js), `backend` (Supabase), `shared` (framework-agnostic domain layer). See `docs/agents/domain.md` and [ADR-0007](docs/adr/0007-split-web-mobile-frontends.md) for the web/mobile split.

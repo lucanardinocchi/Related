@@ -6,7 +6,7 @@ Modules API.
 
 Per **ADR-0006**, the Sleep signal is iOS-only in v1 — this module is
 not built on web / Android. The shared library's `PlatformSleepFetcher`
-stays Expo-free; the frontend wires this adapter in at App.tsx bootstrap
+stays Expo-free; the mobile app wires this adapter in at App.tsx bootstrap
 on `Platform.OS === "ios"`.
 
 ## What's in here
@@ -20,10 +20,10 @@ on `Platform.OS === "ios"`.
 | `package.json` | Local-workspace metadata so `expoModule` field resolves |
 
 Plus two files **outside** this directory:
-- `src/frontend/plugins/withHealthKit.js` — Expo config plugin that
+- `src/mobile/plugins/withHealthKit.js` — Expo config plugin that
   injects `NSHealthShareUsageDescription` + the HealthKit entitlements
   during `expo prebuild`.
-- `src/frontend/app.json` — registers the plugin under `expo.plugins`.
+- `src/mobile/app.json` — registers the plugin under `expo.plugins`.
 
 ## Quality mapping
 
@@ -53,7 +53,7 @@ From repo root:
 
 ```bash
 npm install
-cd src/frontend
+cd src/mobile
 npx expo prebuild --platform ios
 # Opens an `ios/` directory next to App.tsx with a CocoaPods workspace.
 open ios/*.xcworkspace

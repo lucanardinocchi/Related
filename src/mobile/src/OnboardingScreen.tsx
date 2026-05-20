@@ -30,7 +30,7 @@ export interface OnboardingScreenProps {
   /**
    * Triggers the iOS HealthKit permission prompt and resolves with the
    * grant result. Provided only on iOS — the shared lib stays
-   * platform-agnostic; the frontend wires the native bridge in at
+   * platform-agnostic; the mobile app wires the native bridge in at
    * bootstrap. When undefined (web / Android), the HealthKit step
    * falls back to the Skip path with an "iOS only in v1" note.
    *

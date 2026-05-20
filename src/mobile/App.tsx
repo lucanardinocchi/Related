@@ -38,7 +38,7 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
-    "Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY. Check src/frontend/.env.",
+    "Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY. Check src/mobile/.env.",
   );
 }
 
@@ -108,7 +108,7 @@ const navigate = (url: string) => {
 
 // Install the iOS HealthKit bridge into the shared library's
 // PlatformSleepFetcher slot. The shared lib is Expo-free by policy —
-// the frontend owns the native-module wiring. On web/Android the slot
+// the mobile app owns the native-module wiring. On web/Android the slot
 // stays null and PlatformSleepFetcher.fetch returns []; this mirrors
 // the Slice B pattern of Platform.OS === 'web' gating.
 if (Platform.OS === "ios") {

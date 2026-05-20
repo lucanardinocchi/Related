@@ -1,6 +1,8 @@
 # Platform stack: Expo + Supabase + Expo Push / Web Push + Supabase Auth
 
-The app ships as a single Expo / React Native codebase targeting iOS, Android, and web simultaneously (Expo web target via React Native Web). Backend is Supabase (Postgres, Auth, Edge Functions, Realtime, Storage). Notifications use Expo Push on mobile and Web Push on web. Auth is Supabase Auth. Notifications are in v1 scope.
+> Partially superseded by [ADR-0007](./0007-split-web-mobile-frontends.md) for the web surface: web is now a separate Next.js workspace (`src/web/`) rather than the Expo web target. The mobile codebase, Supabase, Auth, and Push decisions below are unchanged.
+
+The app ships as an Expo / React Native codebase for iOS (and eventually Android per ADR-0006), with a separate Next.js workspace for web per ADR-0007. Backend is Supabase (Postgres, Auth, Edge Functions, Realtime, Storage). Notifications use Expo Push on mobile and Web Push on web. Auth is Supabase Auth. Notifications are in v1 scope.
 
 ## Considered options
 
