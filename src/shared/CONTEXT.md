@@ -1,6 +1,6 @@
 # Shared — CONTEXT
 
-Cross-cutting domain language for Related. These terms are the same in frontend, backend, and mobile.
+Cross-cutting domain language for Related. These terms are the same in mobile, backend, and (forthcoming) web.
 
 ## Language
 

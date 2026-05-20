@@ -13,5 +13,5 @@ Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`,
 
 ### Domain docs
 
-Multi-context monorepo: `frontend`, `backend`, `mobile`, `shared`.
+Multi-context monorepo: `mobile`, `backend`, `shared`.
 See `docs/agents/domain.md`.

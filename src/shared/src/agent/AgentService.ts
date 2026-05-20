@@ -69,7 +69,7 @@ export interface CaptureIntentInput {
 
 /**
  * Convenience wrapper around PassEngine + ClaudeAgent (via Edge Function) +
- * Executor. The frontend AgentScreen calls into here for both halves of the
+ * Executor. The mobile AgentScreen calls into here for both halves of the
  * loop: run a Pass (server-side LLM call), then execute the user's pick.
  */
 export class AgentService {

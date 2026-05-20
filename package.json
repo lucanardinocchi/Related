@@ -4,12 +4,12 @@
   "version": "0.0.0",
   "workspaces": [
     "src/shared",
-    "src/frontend",
+    "src/mobile",
     "src/backend"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
-    "build:web": "npm run build:web --workspace=@related/frontend",
+    "build:web": "npm run build:web --workspace=@related/mobile",
     "test:e2e": "npm run build:web && playwright test"
   },
   "devDependencies": {

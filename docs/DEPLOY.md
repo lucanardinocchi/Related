@@ -104,7 +104,7 @@ Voice mic toggle on AgentScreen now works in browsers (Web `MediaRecorder` → W
 ## Tier 4 — iOS native (HealthKit, push, App Store)
 
 Out of Vercel's scope — this needs a Mac with Xcode and an Apple Developer account ($99/yr). See:
-- [`src/frontend/modules/healthkit/README.md`](../src/frontend/modules/healthkit/README.md) for the HealthKit native build steps
+- [`src/mobile/modules/healthkit/README.md`](../src/mobile/modules/healthkit/README.md) for the HealthKit native build steps
 - The App Store readiness checklist (Sign in with Apple, privacy policy, microphone consent) tracked separately
 
 ## Troubleshooting
