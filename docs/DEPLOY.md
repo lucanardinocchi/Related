@@ -2,9 +2,11 @@
 
 Step-by-step to get Related running on Vercel against a hosted Supabase project.
 
+Per [ADR-0007](adr/0007-split-web-mobile-frontends.md): the **web** surface (Next.js 15 in `src/web/`) deploys to Vercel and exposes Sign-in / Onboarding's Connect Calendar / User Context editor / Talk to Claude. The **mobile** surface (Expo in `src/mobile/`) is the iOS app and ships through Xcode + the App Store (Tier 4).
+
 ## Tier 0 — minimum smoke test (~20 min)
 
-Just enough to sign up, click through onboarding, see Home, and add a Contact. The agent / voice / Calendar / Sleep are all skip-able from Onboarding, so this tier is genuinely usable for a UI sanity check.
+Just enough to sign up, sign in, and land on the Context editor on web.
 
 ### 0.1 Hosted Supabase project
 
@@ -30,26 +32,28 @@ That replays every migration in `src/backend/supabase/migrations/` against the h
 ### 0.3 Vercel project
 
 1. https://vercel.com → Add New → Project → import your GitHub repo.
-2. **Framework Preset:** Other.
-3. The `vercel.json` at the repo root already sets `buildCommand`, `outputDirectory`, and the SPA rewrite. Don't override.
+2. **Framework Preset:** Next.js (auto-detected from `vercel.json`).
+3. The `vercel.json` at the repo root sets `buildCommand`, `outputDirectory`, and `framework: nextjs` to build `@related/web`. Don't override.
 4. **Environment Variables:**
-   - `EXPO_PUBLIC_SUPABASE_URL` = the URL from 0.1
-   - `EXPO_PUBLIC_SUPABASE_ANON_KEY` = the anon key from 0.1
+   - `NEXT_PUBLIC_SUPABASE_URL` = the URL from 0.1
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = the anon key from 0.1
 5. Deploy.
 
-First deploy will take ~3 minutes (npm install pulls 1000+ packages for the Expo monorepo). Subsequent deploys are faster because Vercel caches `node_modules`.
+First deploy takes ~3 minutes (Next.js compile + npm install for the workspace). Subsequent deploys are faster because Vercel caches `node_modules` and `.next/cache`.
 
 ### 0.4 Smoke test
 
-Open the Vercel URL. Sign up with email + password. Click Skip through every onboarding step. You should land on Home.
+Open the Vercel URL. You'll land on `/sign-in`. Create an account via `/sign-up`. You'll be redirected through `/onboarding` (where you can skip Calendar for now) to `/context`. Add a Goal, save Situational State.
 
-**What works at Tier 0:** sign-up / sign-in, all CRUD (Contacts, Relationships, Open Threads, Interactions, Groups, Calendar view), the You/settings screen.
+**What works at Tier 0:** sign-up / sign-in, the User Context editor (Goals & Values + Situational State), navigation between `/context` / `/talk` / `/onboarding` in the sidebar.
 
-**What's broken:** "Talk to Claude" — the agent calls `engaged-pass` Edge Function which isn't deployed yet. Move to Tier 1 to fix.
+**What's broken:**
+- `/talk` — the agent calls the `engaged-pass` Edge Function which isn't deployed yet. Move to Tier 1.
+- `/onboarding` → Connect Calendar — relies on Google OAuth + the `sync-calendar` Edge Function. Move to Tier 2.
 
 ## Tier 1 — agent works (~10 more min)
 
-Adds the AI agent's text-mode chat.
+Adds the AI agent's voice-mode chat at `/talk`.
 
 ### 1.1 Deploy `engaged-pass` Edge Function
 
@@ -59,7 +63,9 @@ supabase secrets set ANTHROPIC_API_KEY=sk-ant-…
 supabase functions deploy engaged-pass
 ```
 
-Done. Refresh the Vercel URL. The "Talk to Claude" button on Home → pick a Relationship → type a message → Claude responds with typed Candidate Actions.
+Done. Refresh the Vercel URL → `/talk` → pick a Relationship → press mic → speak → Claude responds with typed Candidate Actions.
+
+Voice requires Tier 3 secrets too — without them the STT/TTS adapters error. If you only want text-mode Engaged Pass for now, that's fine: you can type into the transcript stub. Otherwise jump to Tier 3.
 
 ## Tier 2 — Calendar OAuth (~20 min, mostly Google Cloud setup)
 
@@ -88,7 +94,7 @@ supabase secrets set GOOGLE_OAUTH_CLIENT_SECRET=<from 2.1>
 supabase functions deploy sync-calendar
 ```
 
-Refresh. Now Onboarding → Connect calendar works end-to-end; the daily cron pulls real events.
+Refresh. Now `/onboarding` → Connect Calendar works end-to-end; the daily cron pulls real events.
 
 ## Tier 3 — Voice (~15 min)
 
@@ -99,17 +105,21 @@ supabase secrets set ELEVENLABS_DEFAULT_VOICE_ID=21m00Tcm4TlvDq8ikWAM
 supabase functions deploy voice-stt voice-tts
 ```
 
-Voice mic toggle on AgentScreen now works in browsers (Web `MediaRecorder` → Whisper → ElevenLabs).
+`/talk` mic now works end-to-end (browser `MediaRecorder` → Whisper STT → Claude (Sonnet, via `engaged-pass`) → ElevenLabs TTS).
 
 ## Tier 4 — iOS native (HealthKit, push, App Store)
 
-Out of Vercel's scope — this needs a Mac with Xcode and an Apple Developer account ($99/yr). See:
+Out of Vercel's scope — this is the **mobile** workspace (`src/mobile/`, Expo) and needs a Mac with Xcode and an Apple Developer account ($99/yr).
+
+Mobile env vars use the `EXPO_PUBLIC_` prefix (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`) in `src/mobile/.env`. They point at the same Supabase project as web's `NEXT_PUBLIC_` vars.
+
+See:
 - [`src/mobile/modules/healthkit/README.md`](../src/mobile/modules/healthkit/README.md) for the HealthKit native build steps
 - The App Store readiness checklist (Sign in with Apple, privacy policy, microphone consent) tracked separately
 
 ## Troubleshooting
 
-**"Missing EXPO_PUBLIC_SUPABASE_URL" at build time** — env vars must be set in Vercel BEFORE the build runs. Set them, then trigger a redeploy.
+**"Missing NEXT_PUBLIC_SUPABASE_URL" at build time** — env vars must be set in Vercel BEFORE the build runs. Set them, then trigger a redeploy. (The env helpers in `src/web/lib/supabase/*` defer the check to call time so `next build` itself doesn't require secrets, but the deployed app does.)
 
 **Sign-in redirects to localhost** — Supabase Auth URL Configuration redirect allowlist doesn't include your Vercel URL. Add it.
 

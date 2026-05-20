@@ -5,6 +5,7 @@ Related is a multi-context monorepo. Each context has its own `CONTEXT.md` gloss
 | Context | Path           | Glossary                  | ADRs                         |
 | ------- | -------------- | ------------------------- | ---------------------------- |
 | Mobile  | `src/mobile/`  | `src/mobile/CONTEXT.md`   | `src/mobile/docs/adr/`       |
+| Web     | `src/web/`     | `src/web/CONTEXT.md`      | `src/web/docs/adr/`          |
 | Backend | `src/backend/` | `src/backend/CONTEXT.md`  | `src/backend/docs/adr/`      |
 | Shared  | `src/shared/`  | `src/shared/CONTEXT.md`   | `src/shared/docs/adr/`       |
 

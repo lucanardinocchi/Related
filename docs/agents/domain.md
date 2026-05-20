@@ -22,6 +22,9 @@ Related is a multi-context monorepo:
     ├── mobile/
     │   ├── CONTEXT.md
     │   └── docs/adr/                ← mobile-specific decisions
+    ├── web/
+    │   ├── CONTEXT.md
+    │   └── docs/adr/                ← web-specific decisions
     ├── backend/
     │   ├── CONTEXT.md
     │   └── docs/adr/                ← backend-specific decisions
