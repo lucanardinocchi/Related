@@ -31,6 +31,7 @@ const TYPE_OPTIONS: { value: EventType; label: string }[] = [
 const STATUS_OPTIONS: { value: EventStatus; label: string }[] = [
   { value: "planned", label: "Planned" },
   { value: "occurred", label: "Occurred" },
+  { value: "attended", label: "Attended" },
   { value: "cancelled", label: "Cancelled" },
   { value: "missed", label: "Missed" },
 ];
@@ -38,6 +39,7 @@ const STATUS_OPTIONS: { value: EventStatus; label: string }[] = [
 const STATUS_TONE: Record<EventStatus, BadgeTone> = {
   planned: "sent",
   occurred: "approved",
+  attended: "approved",
   cancelled: "lost",
   missed: "warning",
 };
