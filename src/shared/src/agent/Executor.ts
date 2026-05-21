@@ -1,4 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type {
+  CloseThreadPayload,
+  LogInteractionPayload,
+  OpenThreadToolPayload,
+  ScheduleInteractionPayload,
+  SendMessageToolPayload,
+  UpdateRoleOrCadencePayload,
+} from "./ambientTools";
 
 export interface PendingCandidateAction {
   id: string;
@@ -50,43 +58,16 @@ export interface MessageComposer {
   compose(input: MessageComposerInput): Promise<void>;
 }
 
-export interface SendMessagePayload extends MessageComposerInput {
-  /**
-   * Contact ids the auto-logged Interaction is linked to. Sourced from
-   * the agent's proposal (one entry per recipient Contact in the User's
-   * address book); the User can add/remove via edit-before-accept.
-   */
-  contactIds: string[];
+export interface SendMessagePayload extends SendMessageToolPayload {
+  /** Resolved recipient addresses for the system composer. */
+  to: string[];
 }
 
-export interface ScheduleInteractionPayload {
-  time: string;
-  kind: string;
-  notes?: string;
-  contactIds: string[];
-}
+export type { ScheduleInteractionPayload, LogInteractionPayload, CloseThreadPayload, UpdateRoleOrCadencePayload };
 
-export interface LogInteractionPayload {
-  time: string;
-  kind: string;
-  notes?: string;
-  contactIds: string[];
-}
-
-export interface OpenThreadPayload {
-  description: string;
-  direction: "me_owes_them" | "they_owe_me";
+export interface OpenThreadPayload extends OpenThreadToolPayload {
   /** Defaults to the candidate's parent Relationship; can be expanded to span multiple. */
   relationshipIds?: string[];
-}
-
-export interface CloseThreadPayload {
-  openThreadId: string;
-}
-
-export interface UpdateRoleOrCadencePayload {
-  role?: string;
-  cadence?: string;
 }
 
 export interface ExecutorOptions {

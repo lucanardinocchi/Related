@@ -7,14 +7,17 @@
 //   supabase functions deploy engaged-pass --no-verify-jwt=false
 //   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 //
-// Runtime: Deno (Supabase Edge Runtime). Imports the shared ClaudeAgent from
-// the workspace via the published NPM specifier once @related/shared is on
-// npm, OR — for now — inlines the tool schema and tool-name mapping so this
-// function is self-contained at deploy time. The contract is the same as
-// ClaudeAgent: same tools, same DoNothing-always invariant.
+// Runtime: Deno (Supabase Edge Runtime). Tool schemas are mirrored from
+// @related/shared in ./ambientTools.ts — same tools, same DoNothing-always invariant.
 
 // deno-lint-ignore-file no-explicit-any
 import Anthropic from "npm:@anthropic-ai/sdk@^0.96.0";
+import {
+  AMBIENT_TOOLS,
+  TOOL_NAME_TO_ACTION_TYPE,
+  ensureDoNothingPeer,
+  type ParsedAmbientAction,
+} from "./ambientTools.ts";
 
 interface AgentPrompt {
   mode: "baseline" | "triggered" | "engaged";
@@ -24,126 +27,6 @@ interface AgentPrompt {
   userContext: unknown;
   liveContext?: unknown;
 }
-
-interface CandidateActionInput {
-  type: string;
-  payload?: unknown;
-  why?: string;
-}
-
-const WHY_FIELD = {
-  why: {
-    type: "string",
-    description:
-      "One-line rationale visible on the card. Required when this candidate replaces a previous one with a different stance; otherwise optional.",
-  },
-};
-
-const TOOLS = [
-  {
-    name: "schedule_interaction",
-    description:
-      "Propose a future Interaction. Creates an Interaction with status='planned'.",
-    input_schema: {
-      type: "object",
-      required: ["time", "kind", "contactIds"],
-      properties: {
-        time: { type: "string", description: "ISO-8601 timestamp." },
-        kind: { type: "string" },
-        notes: { type: "string" },
-        contactIds: { type: "array", items: { type: "string" } },
-        ...WHY_FIELD,
-      },
-    },
-  },
-  {
-    name: "log_interaction",
-    description:
-      "Record a past Interaction. Creates an Interaction with status='occurred'.",
-    input_schema: {
-      type: "object",
-      required: ["time", "kind", "contactIds"],
-      properties: {
-        time: { type: "string" },
-        kind: { type: "string" },
-        notes: { type: "string" },
-        contactIds: { type: "array", items: { type: "string" } },
-        ...WHY_FIELD,
-      },
-    },
-  },
-  {
-    name: "send_message",
-    description:
-      "Open the system composer pre-filled with a draft. The User can edit before sending.",
-    input_schema: {
-      type: "object",
-      required: ["channel", "contactIds", "body"],
-      properties: {
-        channel: { type: "string", enum: ["text", "email"] },
-        contactIds: { type: "array", items: { type: "string" } },
-        subject: { type: "string" },
-        body: { type: "string" },
-        ...WHY_FIELD,
-      },
-    },
-  },
-  {
-    name: "open_thread",
-    description: "Open a new Open Thread on the focused Relationship.",
-    input_schema: {
-      type: "object",
-      required: ["description", "direction"],
-      properties: {
-        description: { type: "string" },
-        direction: { type: "string", enum: ["me_owes_them", "they_owe_me"] },
-        ...WHY_FIELD,
-      },
-    },
-  },
-  {
-    name: "close_thread",
-    description:
-      "Close an existing Open Thread. Multi-Relationship Threads close on every linked Relationship.",
-    input_schema: {
-      type: "object",
-      required: ["openThreadId"],
-      properties: {
-        openThreadId: { type: "string" },
-        ...WHY_FIELD,
-      },
-    },
-  },
-  {
-    name: "update_role_or_cadence",
-    description:
-      "Mutate Relationship fields. Use for stance changes ('close friend' → 'acquaintance') or cadence preferences.",
-    input_schema: {
-      type: "object",
-      properties: {
-        role: { type: "string" },
-        cadence: { type: "string" },
-        ...WHY_FIELD,
-      },
-    },
-  },
-  {
-    name: "do_nothing",
-    description:
-      "Surface 'do nothing' as a peer option. Required: every Candidate Set must include this.",
-    input_schema: { type: "object", properties: { ...WHY_FIELD } },
-  },
-];
-
-const TOOL_NAME_TO_ACTION_TYPE: Record<string, string> = {
-  schedule_interaction: "ScheduleInteraction",
-  log_interaction: "LogInteraction",
-  send_message: "SendMessage",
-  open_thread: "OpenThread",
-  close_thread: "CloseThread",
-  update_role_or_cadence: "UpdateRoleOrCadence",
-  do_nothing: "DoNothing",
-};
 
 const SYSTEM_PROMPT = `You are the Ambient Intelligence agent for the Related app.
 
@@ -174,13 +57,13 @@ function buildUserMessage(prompt: AgentPrompt): string {
   );
 }
 
-function parseActions(content: unknown): CandidateActionInput[] {
+function parseActions(content: unknown): ParsedAmbientAction[] {
   const blocks = (content ?? []) as Array<{
     type: string;
     name?: string;
     input?: Record<string, unknown>;
   }>;
-  const actions: CandidateActionInput[] = [];
+  const actions: ParsedAmbientAction[] = [];
   for (const block of blocks) {
     if (block.type !== "tool_use") continue;
     const actionType = TOOL_NAME_TO_ACTION_TYPE[block.name ?? ""];
@@ -193,10 +76,7 @@ function parseActions(content: unknown): CandidateActionInput[] {
       why: typeof why === "string" ? why : undefined,
     });
   }
-  if (!actions.some((a) => a.type === "DoNothing")) {
-    actions.push({ type: "DoNothing", payload: {} });
-  }
-  return actions;
+  return ensureDoNothingPeer(actions);
 }
 
 const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -233,7 +113,7 @@ Deno.serve(async (req) => {
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
-      tools: TOOLS as any,
+      tools: AMBIENT_TOOLS as any,
       messages: [{ role: "user", content: buildUserMessage(prompt) }],
     });
     const actions = parseActions(response.content);
