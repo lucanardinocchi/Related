@@ -64,6 +64,7 @@ describe("ClaudeAgent.propose — live Anthropic call", () => {
         goalsAndValues: ["Be present with close friends, not just family"],
         inferredSignals: { calendarDensity: null, sleep: null },
       },
+      relationshipContext: null,
       liveContext: { sessionId: "sess-test", userTurn: "what should I do about Sam" },
     };
 

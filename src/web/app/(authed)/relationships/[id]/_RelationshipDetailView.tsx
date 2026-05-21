@@ -8,12 +8,14 @@ import type {
   OpenThread,
   Relationship,
   RelationshipAnalytics,
+  RelationshipContext,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import {
   Badge,
   AnalyticsRow,
   AnalyticTile,
+  Button,
   DataGrid,
   EmptyState,
   Eyebrow,
@@ -21,6 +23,7 @@ import {
   Mono,
   PropertyRow,
   Section,
+  Textarea,
 } from "@/components/ui";
 import type { DataGridColumn } from "@/components/ui";
 
@@ -37,6 +40,12 @@ interface Props {
   openThreads: OpenThread[];
   groupMemberships: GroupSummary[];
   analytics: RelationshipAnalytics;
+  /**
+   * Per-Relationship narrative written by the Extraction Pass (or edited
+   * directly by the User). Null when no Chat has yet been extracted for
+   * this Relationship. Per ADR-0009 amendment 2026-05-21.
+   */
+  relationshipContext: RelationshipContext | null;
 }
 
 function fmtDate(iso: string): string {
@@ -64,9 +73,41 @@ export function RelationshipDetailView({
   openThreads,
   groupMemberships,
   analytics,
+  relationshipContext: initialContext,
 }: Props) {
   const deps = getBrowserDeps();
   const [relationship, setRelationship] = useState(initialRelationship);
+  const [context, setContext] = useState(initialContext);
+  const [editingContext, setEditingContext] = useState(false);
+  const [contextDraft, setContextDraft] = useState(initialContext?.content ?? "");
+  const [savingContext, setSavingContext] = useState(false);
+
+  async function saveContextDraft() {
+    const trimmed = contextDraft.trim();
+    setSavingContext(true);
+    try {
+      if (trimmed === "") {
+        if (context) {
+          await deps.relationshipContext.deleteForRelationship(relationship.id);
+          setContext(null);
+        }
+      } else {
+        const updated = await deps.relationshipContext.upsert(
+          relationship.id,
+          trimmed,
+        );
+        setContext(updated);
+      }
+      setEditingContext(false);
+    } finally {
+      setSavingContext(false);
+    }
+  }
+
+  function cancelContextEdit() {
+    setContextDraft(context?.content ?? "");
+    setEditingContext(false);
+  }
 
   async function saveContact(
     field: "name" | "phone" | "email" | "birthday" | "area" | "occupation" | "education",
@@ -250,6 +291,68 @@ export function RelationshipDetailView({
           }
           placeholder="No groups yet"
         />
+      </Section>
+
+      <Section
+        title="Relationship Context"
+        meta={
+          context
+            ? `updated ${fmtDate(context.updatedAt)}`
+            : undefined
+        }
+        actions={
+          !editingContext ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setContextDraft(context?.content ?? "");
+                setEditingContext(true);
+              }}
+            >
+              {context ? "Edit" : "Add"}
+            </Button>
+          ) : undefined
+        }
+      >
+        {editingContext ? (
+          <div className="space-y-2">
+            <Textarea
+              value={contextDraft}
+              onChange={(e) => setContextDraft(e.target.value)}
+              rows={6}
+              placeholder="What's currently true about this bond? The Extraction Pass writes here after each Chat — you can also edit directly to correct attribution."
+              className="w-full"
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={saveContextDraft}
+                disabled={savingContext}
+              >
+                {savingContext ? "Saving…" : "Save"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={cancelContextEdit}
+                disabled={savingContext}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : context ? (
+          <p className="whitespace-pre-wrap text-[14px] leading-[22px] text-fg">
+            {context.content}
+          </p>
+        ) : (
+          <EmptyState
+            title="No Relationship Context yet"
+            description="The Extraction Pass writes a per-Relationship narrative here after you close a Chat that mentions this person. You can also write it yourself."
+          />
+        )}
       </Section>
 
       <Section title="Recent Context" meta={`${recent.length} of ${interactions.length}`}>

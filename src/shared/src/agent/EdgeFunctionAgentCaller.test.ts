@@ -16,6 +16,7 @@ function samplePrompt(): AgentPrompt {
       goalsAndValues: [],
       inferredSignals: { calendarDensity: null, sleep: null },
     },
+    relationshipContext: null,
   };
 }
 

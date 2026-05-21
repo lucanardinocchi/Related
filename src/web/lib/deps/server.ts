@@ -7,6 +7,7 @@ import {
   InteractionsClient,
   OnboardingClient,
   OpenThreadsClient,
+  RelationshipContextClient,
   RelationshipsClient,
   UserContextClient,
   UserProviderTokensClient,
@@ -39,6 +40,7 @@ export async function getServerDeps() {
     candidates: new CandidatesClient(supabase),
     chats: new ChatsClient(supabase),
     userContext: new UserContextClient(supabase, resolveOwnerId),
+    relationshipContext: new RelationshipContextClient(supabase, resolveOwnerId),
     onboarding: new OnboardingClient(supabase, resolveOwnerId),
     userProviderTokens: new UserProviderTokensClient(supabase, resolveOwnerId),
   };

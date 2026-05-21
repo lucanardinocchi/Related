@@ -12,16 +12,24 @@ function makeQueryMock() {
   // For reads:    from('relationships').select('*,...').eq('id', id).single()
   //               from('open_threads').select(...).eq(...).order(...) etc.
   //               from('candidate_sets').select(...).eq(...).order(...).limit(...)
+  //               from('relationship_context').select(...).eq(...).maybeSingle()
   // For writes:   from('candidate_sets').insert({...}).select().single()
   //               from('candidate_actions').insert([{...}])
   const single = jest.fn<Promise<Resolved<unknown>>, []>();
+  const maybeSingle = jest.fn<Promise<Resolved<unknown>>, []>();
   const limit = jest.fn();
   const order = jest.fn(() => ({ limit }));
-  const eqInner = jest.fn(() => ({ single, order, limit }));
-  const eq = jest.fn(() => ({ single, order, limit, eq: eqInner }));
+  const eqInner = jest.fn(() => ({ single, order, limit, maybeSingle }));
+  const eq = jest.fn(() => ({
+    single,
+    order,
+    limit,
+    maybeSingle,
+    eq: eqInner,
+  }));
   const insertSelect = jest.fn(() => ({ single }));
   const insertFlat = jest.fn<Promise<Resolved<unknown>>, [unknown]>();
-  const select = jest.fn(() => ({ single, order, eq, limit }));
+  const select = jest.fn(() => ({ single, order, eq, limit, maybeSingle }));
   const insert = jest.fn((row: unknown) => {
     if (Array.isArray(row)) {
       return insertFlat(row);
@@ -29,7 +37,19 @@ function makeQueryMock() {
     return { select: insertSelect };
   });
   const from = jest.fn((_t: string) => ({ select, insert }));
-  return { from, select, single, eq, eqInner, order, limit, insert, insertSelect, insertFlat };
+  return {
+    from,
+    select,
+    single,
+    maybeSingle,
+    eq,
+    eqInner,
+    order,
+    limit,
+    insert,
+    insertSelect,
+    insertFlat,
+  };
 }
 
 function withEngine(stubActions: { type: string; payload?: unknown; why?: string }[]) {
@@ -77,6 +97,9 @@ describe("PassEngine.runPass", () => {
         error: null,
       })
       .mockResolvedValueOnce({ data: openThreads, error: null });
+    // .maybeSingle() resolves once for the relationship_context lookup —
+    // default to no row so relationshipContext is null on the prompt.
+    q.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
     q.insertFlat.mockResolvedValueOnce({ data: null, error: null });
   }
 
@@ -132,6 +155,49 @@ describe("PassEngine.runPass", () => {
           mode: "baseline",
         }),
       }),
+    );
+  });
+
+  it("forwards Relationship Context into the prompt when a row exists", async () => {
+    const { q, engine, propose } = withEngine([{ type: "DoNothing" }]);
+    q.single
+      .mockResolvedValueOnce({ data: fixedRelationship, error: null })
+      .mockResolvedValueOnce({
+        data: {
+          id: "cs-new",
+          owner_id: "u-1",
+          relationship_id: "r-1",
+          mode: "baseline",
+          created_at: "2026-05-19T00:00:00Z",
+        },
+        error: null,
+      });
+    q.limit
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [], error: null });
+    q.maybeSingle.mockResolvedValueOnce({
+      data: { content: "Sam has been quiet this week." },
+      error: null,
+    });
+    q.insertFlat.mockResolvedValueOnce({ data: null, error: null });
+
+    await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
+
+    expect(propose).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relationshipContext: "Sam has been quiet this week.",
+      }),
+    );
+  });
+
+  it("forwards null relationshipContext when no row exists", async () => {
+    const { q, engine, propose } = withEngine([{ type: "DoNothing" }]);
+    primeReads(q);
+
+    await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
+
+    expect(propose).toHaveBeenCalledWith(
+      expect.objectContaining({ relationshipContext: null }),
     );
   });
 
@@ -239,10 +305,17 @@ describe("PassEngine.runPass", () => {
       //   2nd: candidate_sets .eq('relationship_id', ...).order(...).limit(...)
       //   3rd: candidate_actions .eq('candidate_set_id', ...) — awaitable
       //   4th: open_thread_relationships .eq('relationship_id', ...).order(...).limit(...)
+      //   5th: relationship_context .eq('relationship_id', ...).maybeSingle()
       if (eqCallCount === 3) {
         return Promise.resolve({ data: decisions, error: null }) as unknown as ReturnType<typeof q.eq>;
       }
-      return { single: q.single, order: q.order, limit: q.limit, eq: q.eqInner } as unknown as ReturnType<typeof q.eq>;
+      return {
+        single: q.single,
+        order: q.order,
+        limit: q.limit,
+        maybeSingle: q.maybeSingle,
+        eq: q.eqInner,
+      } as unknown as ReturnType<typeof q.eq>;
     });
 
     const supa = { from: q.from } as unknown as SupabaseClient;
@@ -267,6 +340,7 @@ describe("PassEngine.runPass", () => {
         error: null,
       })
       .mockResolvedValueOnce({ data: [], error: null });
+    q.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
     q.insertFlat.mockResolvedValueOnce({ data: null, error: null });
 
     await engine.runPass({ relationshipId: "r-1", mode: "baseline" });

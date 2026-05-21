@@ -1,19 +1,41 @@
 # extract-context
 
-Extraction Pass per [ADR-0009](../../../../../docs/adr/0009-three-agent-architecture.md).
+Extraction Pass per [ADR-0009](../../../../../docs/adr/0009-three-agent-architecture.md) (amended 2026-05-21 to add Relationship Context as a write surface).
 
-Runs over the transcript of a **closed** Chat and writes the User's self-narrative content into User Context. Triggered by the frontend immediately after the User closes a Chat.
+Runs over the transcript of a **closed** Chat. Sorts the User's narrative content **by Relationship** and writes:
 
-## Write surface (only)
+- `situational_state` — User-wide self-narrative (singleton per User; replace whole content).
+- `transient_intent` — User-wide ephemeral intents (append; 7-day decay from chat `closed_at`; optional `relationship_id` when an intent targets a specific person/group).
+- `relationship_context` — per-Relationship narrative singleton (one row per Relationship; replace whole content). For Group-targeted Relationships, holistic group content lands here. Member-specific fragments within that group content fan out additionally to each member Contact's Relationship Context.
 
-- `situational_state` (singleton per User — replace whole content)
-- `transient_intent` (append, with `expires_at` = chat `closed_at` + 7 days)
+**Will not** write to:
 
-**Will not** write to `goals_and_values` (User-authored only) or any operational entity (`interactions`, `open_threads`, `relationships`, …) — those remain gated by the Candidate Action invariant. See ADR-0009 sections (a) and (α).
+- `goals_and_values` — User-authored only.
+- `interactions`, `open_threads`, `relationships.role`, `relationships.cadence` — operational entities, still gated by the Candidate Action invariant. The next Ambient Pass will surface candidates informed by the richer narrative this function just wrote.
+
+## Read tools (mirror chat-respond)
+
+The model has read access to enumerate the User's world before writing:
+
+- `list_relationships`, `get_relationship`
+- `list_contacts`, `get_contact`
+- `list_groups`, `get_group` (includes member Contacts — essential for fan-out)
+- `get_relationship_context` — read prior content so the replacement preserves what's still true.
+
+## Sort passes (prompt-driven)
+
+1. **Group sort.** Holistic group content → Group Relationship Context.
+2. **Member fan-out.** Member-specific fragments inside group content → that member Contact's Relationship Context (additionally to the Group's).
+3. **Direct individual mentions.** Per-Contact content outside any group framing → that Contact's Relationship Context.
+4. **User self-narrative.** User's own life → Situational State; ephemeral User intents → Transient Intent (with `relationship_id` when targeted).
+
+## Naming ambiguity
+
+Conversational Intelligence (`chat-respond`) is expected to disambiguate names live during the Chat (it has the same read tools and a prompt rule to do so). If ambiguity remains in the transcript, this function over-attributes — writes the relevant fragment to **all** plausible matches with an inline `[possibly also refers to: Other Name]` marker. Never drops a fragment silently.
 
 ## Idempotency
 
-The function reads `chats.extracted_at`; if set, it returns `{ skipped: true, reason: "already extracted" }` without invoking the model. On success, it stamps `extracted_at = now()`. Empty transcripts are also stamped to avoid wasted future invocations.
+Reads `chats.extracted_at`. If set, returns `{ skipped: true, reason: "already extracted" }` without invoking the model. On success, stamps `extracted_at = now()`. Empty transcripts are stamped to avoid wasted future invocations.
 
 ## Deploy
 
@@ -38,6 +60,7 @@ POST. `Authorization: Bearer <user_jwt>`. Body:
   "extracted_at": "2026-05-21T...",
   "situationalStateUpdated": true,
   "intentsCaptured": 2,
+  "relationshipsTouched": ["rel-uuid-a", "rel-uuid-b"],
   "toolErrors": []
 }
 ```

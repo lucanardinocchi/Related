@@ -44,6 +44,13 @@ export interface AgentPrompt {
   openThreads: unknown[];
   previousCandidateSet: PreviousCandidateSet | null;
   userContext: UserContextSnapshot;
+  /**
+   * Per-Relationship narrative written by the Extraction Pass (or edited
+   * directly by the User). Null when no Relationship Context exists yet
+   * for this Relationship. Per the ADR-0009 2026-05-21 amendment, the
+   * next Pass reads this alongside User Context.
+   */
+  relationshipContext: string | null;
   liveContext?: unknown;
 }
 
@@ -155,6 +162,14 @@ export class PassEngine {
       .order("open_threads(created_at)", { ascending: true })
       .limit(50);
 
+    const { data: relContextRow } = await this.supabase
+      .from("relationship_context")
+      .select("content")
+      .eq("relationship_id", relationshipId)
+      .maybeSingle();
+    const relationshipContext =
+      (relContextRow as { content: string } | null)?.content ?? null;
+
     // Engaged-Pass live context carries the voice session id so the
     // builder can pull non-expired Transient Intent for that session.
     // Other modes leave transientIntent empty by design.
@@ -171,6 +186,7 @@ export class PassEngine {
       openThreads: openThreads ?? [],
       previousCandidateSet,
       userContext,
+      relationshipContext,
       liveContext,
     };
     const actions = await this.agent.propose(prompt);

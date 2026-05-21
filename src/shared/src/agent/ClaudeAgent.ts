@@ -146,6 +146,7 @@ Rules:
 - Strong continuity bias. If the previous Candidate Set is provided, default to keeping its candidates unless something materially changed (new Open Thread, recent Interaction, a Goals/Values edit, an Inferred-Signal shift, or the User declined the candidate last Pass). When you replace a previous candidate, supply a one-line 'why' explaining the change.
 - Edits the User has already made on a previous candidate are signal: respect them. Decisions the User declined are signal: don't re-propose unchanged.
 - Engaged mode: reason against the User's live Transient Intent if present. Baseline / Triggered: there is no live intent.
+- The prompt may include \`relationshipContext\` — a paragraph of per-Relationship narrative written by the Extraction Pass (or edited directly by the User) over recent Chat transcripts. Treat it as recent ground truth about what is true about this bond. It is narrative state, not a directive; do not echo it verbatim in a candidate's 'why' string.
 
 Output: tool_use blocks only. One per Candidate Action.`;
 
@@ -154,6 +155,7 @@ function buildUserMessage(prompt: AgentPrompt): string {
     {
       mode: prompt.mode,
       relationship: prompt.relationship,
+      relationshipContext: prompt.relationshipContext,
       openThreads: prompt.openThreads,
       previousCandidateSet: prompt.previousCandidateSet,
       userContext: prompt.userContext,

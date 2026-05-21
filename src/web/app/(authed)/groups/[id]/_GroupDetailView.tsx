@@ -9,12 +9,14 @@ import type {
   Interaction,
   OpenThread,
   RelationshipAnalytics,
+  RelationshipContext,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import {
   AnalyticTile,
   Badge,
   AnalyticsRow,
+  Button,
   DataGrid,
   EmptyState,
   Eyebrow,
@@ -22,6 +24,7 @@ import {
   Mono,
   PropertyRow,
   Section,
+  Textarea,
 } from "@/components/ui";
 import type { DataGridColumn } from "@/components/ui";
 
@@ -37,6 +40,13 @@ interface Props {
   interactions: Interaction[];
   openThreads: OpenThread[];
   analytics: RelationshipAnalytics;
+  /**
+   * Per-Relationship narrative for this Group's Relationship — the
+   * holistic "what's true about this Group" chunk written by the
+   * Extraction Pass. Member-specific fan-out is on each member Contact's
+   * own Relationship Context.
+   */
+  relationshipContext: RelationshipContext | null;
 }
 
 function fmtDate(iso: string): string {
@@ -60,19 +70,52 @@ function fmtDateTime(iso: string): string {
 
 export function GroupDetailView({
   group: initialGroup,
+  relationship,
   members,
   interactions,
   openThreads,
   analytics,
+  relationshipContext: initialContext,
 }: Props) {
   const deps = getBrowserDeps();
   const [group, setGroup] = useState(initialGroup);
+  const [context, setContext] = useState(initialContext);
+  const [editingContext, setEditingContext] = useState(false);
+  const [contextDraft, setContextDraft] = useState(initialContext?.content ?? "");
+  const [savingContext, setSavingContext] = useState(false);
 
   async function saveName(next: string) {
     const trimmed = next.trim();
     if (trimmed === "" || trimmed === group.name) return;
     const updated = await deps.groups.updateGroup(group.id, { name: trimmed });
     setGroup(updated);
+  }
+
+  async function saveContextDraft() {
+    const trimmed = contextDraft.trim();
+    setSavingContext(true);
+    try {
+      if (trimmed === "") {
+        if (context) {
+          await deps.relationshipContext.deleteForRelationship(relationship.id);
+          setContext(null);
+        }
+      } else {
+        const updated = await deps.relationshipContext.upsert(
+          relationship.id,
+          trimmed,
+        );
+        setContext(updated);
+      }
+      setEditingContext(false);
+    } finally {
+      setSavingContext(false);
+    }
+  }
+
+  function cancelContextEdit() {
+    setContextDraft(context?.content ?? "");
+    setEditingContext(false);
   }
 
   const interactionColumns: DataGridColumn<Interaction>[] = [
@@ -170,6 +213,68 @@ export function GroupDetailView({
           }
           placeholder="No members yet"
         />
+      </Section>
+
+      <Section
+        title="Relationship Context"
+        meta={
+          context
+            ? `updated ${fmtDate(context.updatedAt)}`
+            : undefined
+        }
+        actions={
+          !editingContext ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setContextDraft(context?.content ?? "");
+                setEditingContext(true);
+              }}
+            >
+              {context ? "Edit" : "Add"}
+            </Button>
+          ) : undefined
+        }
+      >
+        {editingContext ? (
+          <div className="space-y-2">
+            <Textarea
+              value={contextDraft}
+              onChange={(e) => setContextDraft(e.target.value)}
+              rows={6}
+              placeholder="What's currently true about this group as a whole? The Extraction Pass writes here after each Chat — member-specific notes live on each member's Relationship page."
+              className="w-full"
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={saveContextDraft}
+                disabled={savingContext}
+              >
+                {savingContext ? "Saving…" : "Save"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={cancelContextEdit}
+                disabled={savingContext}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : context ? (
+          <p className="whitespace-pre-wrap text-[14px] leading-[22px] text-fg">
+            {context.content}
+          </p>
+        ) : (
+          <EmptyState
+            title="No Relationship Context yet"
+            description="The Extraction Pass writes a holistic narrative for the group here after a Chat that mentions it. Member-specific fragments fan out to each member's own page."
+          />
+        )}
       </Section>
 
       <Section title="Analytics">

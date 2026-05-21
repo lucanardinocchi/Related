@@ -13,7 +13,8 @@ export default async function GroupDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { groups, interactions, openThreads } = await getServerDeps();
+  const { groups, interactions, openThreads, relationshipContext } =
+    await getServerDeps();
 
   let group;
   try {
@@ -28,10 +29,11 @@ export default async function GroupDetailPage({
   const rel = groupRels.find((r) => r.group.id === id);
   if (!rel) notFound();
 
-  const [members, groupInteractions, threads] = await Promise.all([
+  const [members, groupInteractions, threads, context] = await Promise.all([
     groups.listMembers(id),
     interactions.listForGroup(id),
     openThreads.listOpenForRelationship(rel.id),
+    relationshipContext.getForRelationship(rel.id),
   ]);
 
   const analytics = relationshipAnalytics({
@@ -55,6 +57,7 @@ export default async function GroupDetailPage({
         interactions={groupInteractions}
         openThreads={threads}
         analytics={analytics}
+        relationshipContext={context}
       />
     </div>
   );

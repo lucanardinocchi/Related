@@ -16,6 +16,12 @@ export type {
   RelationshipsClientConfig,
 } from "./relationships/RelationshipsClient";
 
+export { RelationshipContextClient } from "./relationships/RelationshipContextClient";
+export type {
+  RelationshipContext,
+  RelationshipContextClientConfig,
+} from "./relationships/RelationshipContextClient";
+
 export { OpenThreadsClient } from "./open-threads/OpenThreadsClient";
 export type {
   OpenThread,

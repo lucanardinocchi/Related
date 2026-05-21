@@ -46,9 +46,20 @@ function withService({ proposed }: RunOptions) {
     .fn()
     .mockResolvedValueOnce({ data: [], error: null })
     .mockResolvedValueOnce({ data: [], error: null });
+  // relationship_context lookup resolves once via .maybeSingle(); no row
+  // means the engine forwards null on the prompt — fine for this test.
+  const maybeSingle = jest
+    .fn()
+    .mockResolvedValueOnce({ data: null, error: null });
   const order = jest.fn(() => ({ limit }));
-  const eq = jest.fn(() => ({ single, order, limit, eq: jest.fn() }));
-  const select = jest.fn(() => ({ single, order, eq, limit }));
+  const eq = jest.fn(() => ({
+    single,
+    order,
+    limit,
+    maybeSingle,
+    eq: jest.fn(),
+  }));
+  const select = jest.fn(() => ({ single, order, eq, limit, maybeSingle }));
   const insertSelect = jest.fn(() => ({ single }));
   const insertFlat = jest.fn().mockResolvedValue({ data: null, error: null });
   const insert = jest.fn((row: unknown) => {

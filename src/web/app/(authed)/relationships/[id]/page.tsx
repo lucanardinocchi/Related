@@ -17,7 +17,7 @@ export default async function RelationshipDetailPage({
   params: Promise<Params>;
 }) {
   const { id } = await params;
-  const { relationships, interactions, openThreads, groups } =
+  const { relationships, interactions, openThreads, groups, relationshipContext } =
     await getServerDeps();
 
   let relationship;
@@ -27,11 +27,13 @@ export default async function RelationshipDetailPage({
     notFound();
   }
 
-  const [interactionHistory, threads, groupMemberships] = await Promise.all([
-    interactions.listForContact(relationship.contact.id),
-    openThreads.listOpenForRelationship(relationship.id),
-    groups.listForContact(relationship.contact.id),
-  ]);
+  const [interactionHistory, threads, groupMemberships, context] =
+    await Promise.all([
+      interactions.listForContact(relationship.contact.id),
+      openThreads.listOpenForRelationship(relationship.id),
+      groups.listForContact(relationship.contact.id),
+      relationshipContext.getForRelationship(relationship.id),
+    ]);
 
   const analytics = relationshipAnalytics({
     interactions: interactionHistory,
@@ -57,6 +59,7 @@ export default async function RelationshipDetailPage({
           relationshipId: g.id,
         }))}
         analytics={analytics}
+        relationshipContext={context}
       />
     </div>
   );

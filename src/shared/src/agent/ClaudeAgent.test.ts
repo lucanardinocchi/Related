@@ -19,6 +19,7 @@ function samplePrompt(over: Partial<AgentPrompt> = {}): AgentPrompt {
       goalsAndValues: [],
       inferredSignals: { calendarDensity: null, sleep: null },
     },
+    relationshipContext: null,
     ...over,
   };
 }
