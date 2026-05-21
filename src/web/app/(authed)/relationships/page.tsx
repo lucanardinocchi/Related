@@ -69,28 +69,37 @@ export default async function RelationshipsIndexPage() {
     }
   }
 
-  const contactOptions = contactRels.map((relationship) => ({
-    id: relationship.contact.id,
-    name: relationship.contact.name,
-  }));
+  const contactOptions = contactRels
+    .filter((relationship) => relationship.contact != null)
+    .map((relationship) => ({
+      id: relationship.contact.id,
+      name: relationship.contact.name,
+    }));
 
   const rows: RelationshipRow[] = [
-    ...contactRels.map((r): RelationshipRow => ({
-      id: r.id,
-      href: `/relationships/${r.id}`,
-      name: r.contact.name,
-      kind: "individual",
-      subtitle: r.role ?? null,
-      lastSeenLabel: daysAgo(lastSeenByContact.get(r.contact.id) ?? null, now),
-    })),
-    ...groupRels.map((r): RelationshipRow => ({
-      id: r.id,
-      href: `/groups/${r.group.id}`,
-      name: r.group.name,
-      kind: "group",
-      subtitle: "Group",
-      lastSeenLabel: "—",
-    })),
+    ...contactRels
+      .filter((r) => r.contact != null)
+      .map((r): RelationshipRow => ({
+        id: r.id,
+        href: `/relationships/${r.id}`,
+        name: r.contact.name,
+        kind: "individual",
+        subtitle: r.role ?? null,
+        lastSeenLabel: daysAgo(
+          lastSeenByContact.get(r.contact.id) ?? null,
+          now,
+        ),
+      })),
+    ...groupRels
+      .filter((r) => r.group != null)
+      .map((r): RelationshipRow => ({
+        id: r.id,
+        href: `/groups/${r.group.id}`,
+        name: r.group.name,
+        kind: "group",
+        subtitle: "Group",
+        lastSeenLabel: "—",
+      })),
   ];
 
   const openCommitmentCount = allOpenThreads.filter(

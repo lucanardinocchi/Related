@@ -21,6 +21,7 @@ import { OpenThreadsSection } from "./_OpenThreadsSection";
 import { ContextTimelineSection } from "./_ContextTimelineSection";
 import { RelationshipAnalyticsSection } from "./_RelationshipAnalyticsSection";
 import { RecentCandidateSection } from "./_RecentCandidateSection";
+import { EmailSection } from "./_EmailSection";
 
 interface Props {
   relationship: Relationship;
@@ -212,6 +213,11 @@ export function RelationshipDetailView({
         onSaveContact={saveContact}
         onSaveLocation={saveLocation}
         onSaveRelationship={saveRelationship}
+      />
+
+      <EmailSection
+        contactEmail={relationship.contact.email}
+        contactName={relationship.contact.name}
       />
 
       {latestCandidateSet ? (

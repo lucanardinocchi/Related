@@ -255,6 +255,24 @@ export type {
 } from "./integrations/UserProviderTokensClient";
 
 export {
+  GOOGLE_SCOPE_CALENDAR_READONLY,
+  GOOGLE_SCOPE_GMAIL_READONLY,
+  GOOGLE_SCOPE_GMAIL_SEND,
+  GOOGLE_CALENDAR_SCOPES,
+  GOOGLE_INTEGRATION_SCOPES,
+  tokenHasGmailAccess,
+  tokenHasCalendarAccess,
+} from "./integrations/google/googleScopes";
+
+export { GmailClient } from "./integrations/GmailClient";
+export type {
+  GmailMessageSummary,
+  ListGmailForContactInput,
+  SendGmailInput,
+  GmailContactStatus,
+} from "./integrations/GmailClient";
+
+export {
   fetchGoogleCalendarEvents,
   refreshGoogleAccessToken,
 } from "./integrations/google/GoogleCalendarFetcher";

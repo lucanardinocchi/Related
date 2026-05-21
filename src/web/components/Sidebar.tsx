@@ -33,7 +33,7 @@ const PRIMARY: NavItem[] = [
 
 const SETTINGS: NavItem[] = [
   { href: "/context", label: "Context", icon: Sparkles },
-  { href: "/onboarding", label: "Setup", icon: Settings },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 const COLLAPSED_KEY = "related.sidebar.collapsed";

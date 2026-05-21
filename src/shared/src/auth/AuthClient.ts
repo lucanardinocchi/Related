@@ -4,6 +4,10 @@ import {
   User as SbUser,
   Session as SbSession,
 } from "@supabase/supabase-js";
+import {
+  GOOGLE_CALENDAR_SCOPES,
+  GOOGLE_INTEGRATION_SCOPES,
+} from "../integrations/google/googleScopes";
 
 export interface AuthClientConfig {
   supabaseUrl: string;
@@ -111,10 +115,26 @@ export class AuthClient {
    * then persists via UserProviderTokensClient.
    */
   async linkGoogleCalendar(redirectTo: string): Promise<{ url: string }> {
+    return this.linkGoogleWithScopes(redirectTo, GOOGLE_CALENDAR_SCOPES);
+  }
+
+  /**
+   * Links Google with Calendar + Gmail scopes so the User can read and send
+   * mail for Contacts on the relationship detail page. Includes the Calendar
+   * scope so re-consent does not drop an existing Calendar connection.
+   */
+  async linkGoogleGmail(redirectTo: string): Promise<{ url: string }> {
+    return this.linkGoogleWithScopes(redirectTo, GOOGLE_INTEGRATION_SCOPES);
+  }
+
+  private async linkGoogleWithScopes(
+    redirectTo: string,
+    scopes: string,
+  ): Promise<{ url: string }> {
     const { data, error } = await this.client.auth.linkIdentity({
       provider: "google",
       options: {
-        scopes: "https://www.googleapis.com/auth/calendar.readonly",
+        scopes,
         redirectTo,
         queryParams: {
           access_type: "offline",

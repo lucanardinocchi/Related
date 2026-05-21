@@ -17,6 +17,7 @@ import {
   UserContextClient,
   UserProviderTokensClient,
   VoiceSessionManager,
+  GmailClient,
 } from "@related/shared";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 
@@ -65,6 +66,7 @@ function build() {
     userContext: new UserContextClient(supabase, resolveOwnerId),
     onboarding: new OnboardingClient(supabase, resolveOwnerId),
     userProviderTokens: new UserProviderTokensClient(supabase, resolveOwnerId),
+    gmail: new GmailClient(supabase),
     agentService,
     voiceSessionManager,
     sttAdapter,
