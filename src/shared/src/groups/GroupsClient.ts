@@ -194,7 +194,7 @@ export class GroupsClient {
       .from("contact_groups")
       .select("contact:contacts(id, name, phone, email, created_at)")
       .eq("group_id", groupId)
-      .order("contacts(name)", { ascending: true });
+      .order("contact(name)", { ascending: true });
     if (error) throw error;
     return ((data ?? []) as unknown as MembershipRow[]).map((r) =>
       toMember(r.contact),
