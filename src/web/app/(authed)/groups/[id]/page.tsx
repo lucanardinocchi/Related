@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, User } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { getServerDeps } from "@/lib/deps/server";
 import { relationshipAnalytics } from "@related/shared";
 import { GroupDetailView } from "./_GroupDetailView";
@@ -13,7 +13,8 @@ export default async function GroupDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { groups, interactions, openThreads } = await getServerDeps();
+  const { groups, interactions, openThreads, relationships } =
+    await getServerDeps();
 
   let group;
   try {
@@ -28,11 +29,17 @@ export default async function GroupDetailPage({
   const rel = groupRels.find((r) => r.group.id === id);
   if (!rel) notFound();
 
-  const [members, groupInteractions, threads] = await Promise.all([
-    groups.listMembers(id),
-    interactions.listForGroup(id),
-    openThreads.listOpenForRelationship(rel.id),
-  ]);
+  const [members, groupInteractions, threads, contactRelationships] =
+    await Promise.all([
+      groups.listMembers(id),
+      interactions.listForGroup(id),
+      openThreads.listOpenForRelationship(rel.id),
+      relationships.listRelationships(),
+    ]);
+
+  const relationshipIdByContact = new Map(
+    contactRelationships.map((r) => [r.contact.id, r.id]),
+  );
 
   const analytics = relationshipAnalytics({
     interactions: groupInteractions,
@@ -51,7 +58,11 @@ export default async function GroupDetailPage({
       <GroupDetailView
         group={group}
         relationship={rel}
-        members={members.map((m) => ({ id: m.id, name: m.name }))}
+        members={members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          relationshipId: relationshipIdByContact.get(m.id) ?? null,
+        }))}
         interactions={groupInteractions}
         openThreads={threads}
         analytics={analytics}
