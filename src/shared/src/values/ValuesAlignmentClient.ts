@@ -1,11 +1,19 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import type { ValuesCharacter } from "./valuesCharacters";
+import {
+  getValuesCharacter,
+  toValuesCharacter,
+  type ValuesCharacter,
+  type ValuesCharacterDraft,
+} from "./valuesCharacters";
 
 export interface CharacterValuesAlignment {
   id: string;
   characterId: string;
   aligned: boolean;
   rankPosition: number | null;
+  characterName: string | null;
+  characterSource: string | null;
+  characterValues: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,6 +30,12 @@ export interface InferencePayload {
   rejected: InferenceCharacter[];
 }
 
+export interface SuggestCharactersPayload {
+  aligned: InferenceCharacter[];
+  rejected: InferenceCharacter[];
+  excludeIds: string[];
+}
+
 export interface ValuesAlignmentClientConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
@@ -32,6 +46,9 @@ interface CharacterValuesAlignmentRow {
   character_id: string;
   aligned: boolean;
   rank_position: number | null;
+  character_name: string | null;
+  character_source: string | null;
+  character_values: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -44,6 +61,9 @@ function toCharacterValuesAlignment(
     characterId: row.character_id,
     aligned: row.aligned,
     rankPosition: row.rank_position,
+    characterName: row.character_name,
+    characterSource: row.character_source,
+    characterValues: row.character_values,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -73,6 +93,51 @@ export class ValuesAlignmentClient {
     );
   }
 
+  static alignmentToInferenceCharacter(
+    row: CharacterValuesAlignment,
+  ): InferenceCharacter | null {
+    const seed = getValuesCharacter(row.characterId);
+    const name = row.characterName ?? seed?.name;
+    const source = row.characterSource ?? seed?.source;
+    const values = row.characterValues ?? seed?.values;
+    if (!name || !source || !values?.length) return null;
+    return {
+      characterId: row.characterId,
+      name,
+      source,
+      values,
+    };
+  }
+
+  static resolveCharactersFromAlignments(
+    rows: CharacterValuesAlignment[],
+    seed: ValuesCharacter[],
+  ): ValuesCharacter[] {
+    const seedById = new Map(seed.map((c) => [c.id, c]));
+    const byId = new Map<string, ValuesCharacter>();
+
+    for (const row of rows) {
+      const existing = seedById.get(row.characterId);
+      if (existing) {
+        byId.set(row.characterId, existing);
+        continue;
+      }
+      if (row.characterName && row.characterSource && row.characterValues) {
+        byId.set(
+          row.characterId,
+          toValuesCharacter({
+            id: row.characterId,
+            name: row.characterName,
+            source: row.characterSource,
+            values: row.characterValues,
+          }),
+        );
+      }
+    }
+
+    return [...byId.values()];
+  }
+
   static buildInferencePayload(
     alignments: Record<string, boolean>,
     characters: ValuesCharacter[],
@@ -98,10 +163,28 @@ export class ValuesAlignmentClient {
     return { aligned, rejected };
   }
 
+  static buildInferencePayloadFromRows(
+    rows: CharacterValuesAlignment[],
+  ): InferencePayload {
+    const aligned: InferenceCharacter[] = [];
+    const rejected: InferenceCharacter[] = [];
+
+    for (const row of rows) {
+      const entry = ValuesAlignmentClient.alignmentToInferenceCharacter(row);
+      if (!entry) continue;
+      if (row.aligned) aligned.push(entry);
+      else rejected.push(entry);
+    }
+
+    return { aligned, rejected };
+  }
+
   async listAlignments(): Promise<CharacterValuesAlignment[]> {
     const { data, error } = await this.client
       .from("user_character_values_alignment")
-      .select("id, character_id, aligned, rank_position, created_at, updated_at")
+      .select(
+        "id, character_id, aligned, rank_position, character_name, character_source, character_values, created_at, updated_at",
+      )
       .order("updated_at", { ascending: false });
 
     if (error) throw error;
@@ -111,7 +194,7 @@ export class ValuesAlignmentClient {
   }
 
   async upsertAlignment(
-    characterId: string,
+    character: ValuesCharacter,
     aligned: boolean,
   ): Promise<CharacterValuesAlignment> {
     const ownerId = await this.resolveOwnerId();
@@ -120,12 +203,17 @@ export class ValuesAlignmentClient {
       .upsert(
         {
           owner_id: ownerId,
-          character_id: characterId,
+          character_id: character.id,
           aligned,
+          character_name: character.name,
+          character_source: character.source,
+          character_values: character.values,
         },
         { onConflict: "owner_id,character_id" },
       )
-      .select("id, character_id, aligned, rank_position, created_at, updated_at")
+      .select(
+        "id, character_id, aligned, rank_position, character_name, character_source, character_values, created_at, updated_at",
+      )
       .single();
 
     if (error) throw error;
@@ -149,6 +237,29 @@ export class ValuesAlignmentClient {
 
       if (error) throw error;
     }
+  }
+
+  /**
+   * AI-generated characters similar to the User's right-swipes.
+   */
+  async suggestCharacters(
+    payload: SuggestCharactersPayload,
+  ): Promise<ValuesCharacterDraft[]> {
+    const { data, error } = await this.client.functions.invoke(
+      "suggest-values-characters",
+      { body: payload },
+    );
+    if (error) {
+      const errMsg = (error as { message?: string }).message ??
+        "suggest-values-characters failed";
+      throw new Error(errMsg);
+    }
+    const characters = (data as { characters?: ValuesCharacterDraft[] })
+      ?.characters;
+    if (!Array.isArray(characters) || characters.length === 0) {
+      throw new Error("suggest-values-characters returned no characters");
+    }
+    return characters;
   }
 
   /**

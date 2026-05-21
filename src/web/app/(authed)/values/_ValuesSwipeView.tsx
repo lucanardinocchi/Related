@@ -9,69 +9,155 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import Link from "next/link";
-import { ArrowRight, HeartHandshake, HelpCircle, ThumbsDown, ThumbsUp, Users } from "lucide-react";
-import type { ValuesCharacter } from "@related/shared";
+import {
+  ArrowRight,
+  HeartHandshake,
+  HelpCircle,
+  Loader2,
+  ThumbsDown,
+  ThumbsUp,
+  Users,
+} from "lucide-react";
+import {
+  ValuesAlignmentClient,
+  appendUniqueQueue,
+  buildSeedQueue,
+  mergeCharacterRegistry,
+  toValuesCharacter,
+  QUEUE_LOW_WATER,
+  VALUES_LAUNCH_CHARACTER_IDS,
+  type ValuesCharacter,
+} from "@related/shared";
 import { MIN_ALIGNED_FOR_RANKING } from "@related/shared";
 import { cn } from "@/lib/cn";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Button, Card, EmptyState } from "@/components/ui";
 
 interface Props {
-  characters: ValuesCharacter[];
+  seedCharacters: ValuesCharacter[];
   initialAlignments: Record<string, boolean>;
+  initialDynamicCharacters: ValuesCharacter[];
 }
 
 const SWIPE_THRESHOLD = 96;
 const EXIT_DISTANCE = 520;
 
-function shuffle<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
-  }
-  return copy;
-}
-
-function buildQueue(
-  characters: ValuesCharacter[],
-  alignments: Record<string, boolean>,
-  includeReviewed: boolean,
-): ValuesCharacter[] {
-  const pool = includeReviewed
-    ? characters
-    : characters.filter((character) => alignments[character.id] === undefined);
-  return shuffle(pool);
-}
-
-export function ValuesSwipeView({ characters, initialAlignments }: Props) {
+export function ValuesSwipeView({
+  seedCharacters,
+  initialAlignments,
+  initialDynamicCharacters,
+}: Props) {
   const [alignments, setAlignments] =
     useState<Record<string, boolean>>(initialAlignments);
+  const [registry, setRegistry] = useState(() =>
+    mergeCharacterRegistry(seedCharacters, initialDynamicCharacters),
+  );
   const [includeReviewed, setIncludeReviewed] = useState(false);
   const [queue, setQueue] = useState(() =>
-    buildQueue(characters, initialAlignments, false),
+    buildSeedQueue(
+      seedCharacters,
+      initialAlignments,
+      false,
+      VALUES_LAUNCH_CHARACTER_IDS,
+    ),
   );
   const [saving, setSaving] = useState(false);
+  const [refilling, setRefilling] = useState(false);
+  const refillLock = useRef(false);
+
+  const seenIds = useMemo(() => {
+    const ids = new Set(Object.keys(alignments));
+    for (const character of registry) {
+      if (alignments[character.id] !== undefined) ids.add(character.id);
+    }
+    return ids;
+  }, [alignments, registry]);
 
   const alignedCount = useMemo(
-    () =>
-      characters.filter((character) => alignments[character.id] === true).length,
-    [characters, alignments],
+    () => Object.values(alignments).filter((value) => value === true).length,
+    [alignments],
   );
 
   const reviewedCount = useMemo(
-    () =>
-      characters.filter((character) => alignments[character.id] !== undefined)
-        .length,
-    [characters, alignments],
+    () => Object.keys(alignments).length,
+    [alignments],
   );
+
+  const buildSuggestPayload = useCallback(() => {
+    const aligned: ReturnType<
+      typeof ValuesAlignmentClient.buildInferencePayload
+    >["aligned"] = [];
+    const rejected: ReturnType<
+      typeof ValuesAlignmentClient.buildInferencePayload
+    >["rejected"] = [];
+
+    for (const character of registry) {
+      const decision = alignments[character.id];
+      if (decision === undefined) continue;
+      const entry = {
+        characterId: character.id,
+        name: character.name,
+        source: character.source,
+        values: character.values,
+      };
+      if (decision) aligned.push(entry);
+      else rejected.push(entry);
+    }
+
+    return {
+      aligned,
+      rejected,
+      excludeIds: [...seenIds],
+    };
+  }, [alignments, registry, seenIds]);
+
+  const refillQueue = useCallback(async () => {
+    if (refillLock.current) return;
+    refillLock.current = true;
+    setRefilling(true);
+
+    try {
+      const payload = buildSuggestPayload();
+
+      if (payload.aligned.length > 0) {
+        const drafts = await getBrowserDeps().valuesAlignment.suggestCharacters(
+          payload,
+        );
+        const suggested = drafts.map((draft) => toValuesCharacter(draft));
+        setRegistry((prev) => mergeCharacterRegistry(prev, suggested));
+        setQueue((prev) => appendUniqueQueue(prev, suggested, seenIds));
+      }
+
+      const seedLeft = seedCharacters.filter(
+        (c) => !seenIds.has(c.id) && alignments[c.id] === undefined,
+      );
+      if (seedLeft.length > 0) {
+        setQueue((prev) => appendUniqueQueue(prev, seedLeft, seenIds));
+      }
+    } catch {
+      const seedLeft = seedCharacters.filter(
+        (c) => !seenIds.has(c.id) && alignments[c.id] === undefined,
+      );
+      setQueue((prev) => appendUniqueQueue(prev, seedLeft, seenIds));
+    } finally {
+      setRefilling(false);
+      refillLock.current = false;
+    }
+  }, [alignments, buildSuggestPayload, seedCharacters, seenIds]);
+
+  useEffect(() => {
+    if (queue.length > QUEUE_LOW_WATER || refilling) return;
+    void refillQueue();
+  }, [queue.length, refilling, refillQueue]);
 
   const restart = useCallback(
     (withReviewed: boolean) => {
       setIncludeReviewed(withReviewed);
-      setQueue(buildQueue(characters, alignments, withReviewed));
+      setQueue(
+        buildSeedQueue(registry, alignments, withReviewed, VALUES_LAUNCH_CHARACTER_IDS),
+      );
     },
-    [characters, alignments],
+    [registry, alignments],
   );
 
   const advance = useCallback(() => {
@@ -89,7 +175,10 @@ export function ValuesSwipeView({ characters, initialAlignments }: Props) {
       setSaving(true);
       try {
         const { valuesAlignment } = getBrowserDeps();
-        await valuesAlignment.upsertAlignment(character.id, aligned);
+        await valuesAlignment.upsertAlignment(character, aligned);
+        if (aligned && queue.length <= QUEUE_LOW_WATER) {
+          void refillQueue();
+        }
       } catch {
         setAlignments((prev) => {
           const next = { ...prev };
@@ -101,21 +190,18 @@ export function ValuesSwipeView({ characters, initialAlignments }: Props) {
         setSaving(false);
       }
     },
-    [advance],
+    [advance, queue.length, refillQueue],
   );
 
-  const recordDontKnow = useCallback(
-    (character: ValuesCharacter) => {
-      advance();
-    },
-    [advance],
-  );
+  const recordDontKnow = useCallback(() => {
+    advance();
+  }, [advance]);
 
   const current = queue[0] ?? null;
   const next = queue[1] ?? null;
   const canRank = alignedCount >= MIN_ALIGNED_FOR_RANKING;
 
-  if (characters.length === 0) {
+  if (seedCharacters.length === 0) {
     return (
       <EmptyState
         icon={<Users size={28} />}
@@ -141,7 +227,10 @@ export function ValuesSwipeView({ characters, initialAlignments }: Props) {
         </Card>
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="text-[13px] text-fg-subtle">
+          {reviewedCount} reviewed · suggestions narrow as you align
+        </p>
         {reviewedCount > 0 && !current && (
           <Button variant="secondary" size="sm" onClick={() => restart(true)}>
             Review again
@@ -166,26 +255,27 @@ export function ValuesSwipeView({ characters, initialAlignments }: Props) {
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <EmptyState
-              icon={<HeartHandshake size={28} />}
-              title={
-                reviewedCount === characters.length
-                  ? "All caught up"
-                  : "Nothing left in this pass"
-              }
-              description={
-                reviewedCount === characters.length
-                  ? canRank
-                    ? "Rank your alignments above, or run through again."
-                    : "Keep swiping until you've aligned with 10 characters, then rank them."
-                  : "Start a new pass to revisit characters you've already reviewed."
-              }
-              action={
-                <Button variant="primary" onClick={() => restart(true)}>
-                  Review again
-                </Button>
-              }
-            />
+            {refilling ? (
+              <div className="flex flex-col items-center gap-3 text-fg-muted">
+                <Loader2 size={28} className="animate-spin" />
+                <p className="text-[14px]">Finding characters like your picks…</p>
+              </div>
+            ) : (
+              <EmptyState
+                icon={<HeartHandshake size={28} />}
+                title="Nothing left in this pass"
+                description={
+                  canRank
+                    ? "Rank your alignments above, or keep swiping — we'll suggest more like who you aligned with."
+                    : "Align with more characters and we'll narrow in on your taste."
+                }
+                action={
+                  <Button variant="primary" onClick={() => void refillQueue()}>
+                    Load more characters
+                  </Button>
+                }
+              />
+            )}
           </div>
         )}
       </div>
@@ -220,7 +310,7 @@ export function ValuesSwipeView({ characters, initialAlignments }: Props) {
             aria-label="Don't know"
             disabled={saving}
             leading={<HelpCircle size={16} />}
-            onClick={() => recordDontKnow(current)}
+            onClick={() => recordDontKnow()}
           >
             Don&apos;t know
           </Button>
@@ -252,6 +342,7 @@ function SwipeCard({
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const muxed = character.mediaMuxed;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -259,18 +350,21 @@ function SwipeCard({
     if (!video) return;
 
     video.muted = true;
+    video.volume = 0.45;
     void video.play().catch(() => {});
 
-    if (audio) {
+    if (!muxed && audio && character.themeAudioUrl) {
       audio.volume = 0.45;
       void audio.play().catch(() => {});
     }
 
     return () => {
+      video.pause();
+      video.currentTime = 0;
       audio?.pause();
       if (audio) audio.currentTime = 0;
     };
-  }, [character.id]);
+  }, [character.id, character.themeAudioUrl, muxed]);
 
   const resetDrag = () => {
     startRef.current = null;
@@ -283,12 +377,16 @@ function SwipeCard({
       x: direction === "right" ? EXIT_DISTANCE : -EXIT_DISTANCE,
       y: -24,
     });
+    videoRef.current?.pause();
     audioRef.current?.pause();
     window.setTimeout(() => onSwipe(direction === "right"), 220);
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (disabled || exiting) return;
+    if (muxed && videoRef.current) {
+      videoRef.current.muted = false;
+    }
     startRef.current = { x: event.clientX, y: event.clientY };
     setDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -349,7 +447,14 @@ function SwipeCard({
           muted
           preload="metadata"
         />
-        <audio ref={audioRef} src={character.themeAudioUrl} loop preload="auto" />
+        {!muxed && character.themeAudioUrl ? (
+          <audio
+            ref={audioRef}
+            src={character.themeAudioUrl}
+            loop
+            preload="auto"
+          />
+        ) : null}
 
         <div
           aria-hidden

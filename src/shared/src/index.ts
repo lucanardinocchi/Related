@@ -164,12 +164,30 @@ export {
 } from "./values/valuesCharacters";
 export type { ValuesCharacter } from "./values/valuesCharacters";
 export { MIN_ALIGNED_FOR_RANKING } from "./values/valuesConstants";
+export {
+  VALUES_LAUNCH_CHARACTER_IDS,
+  isLaunchCharacter,
+} from "./values/valuesLaunchCharacters";
+export { VALUES_SEED_COUNT } from "./values/valuesSeedData";
+export {
+  QUEUE_LOW_WATER,
+  SUGGEST_BATCH_SIZE,
+  buildSeedQueue,
+  appendUniqueQueue,
+} from "./values/valuesQueue";
+export {
+  slugifyCharacterId,
+  toValuesCharacter,
+  mergeCharacterRegistry,
+} from "./values/valuesCharacters";
+export type { ValuesCharacterDraft } from "./values/valuesCharacters";
 
 export { ValuesAlignmentClient } from "./values/ValuesAlignmentClient";
 export type {
   CharacterValuesAlignment,
   InferenceCharacter,
   InferencePayload,
+  SuggestCharactersPayload,
   ValuesAlignmentClientConfig,
 } from "./values/ValuesAlignmentClient";
 

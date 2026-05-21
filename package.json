@@ -12,7 +12,9 @@
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "build:web": "npm run build --workspace=@related/web",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "generate:values-media": "node src/backend/scripts/generate-values-media.mjs",
+    "generate:values-launch": "REPLICATE_VIDEO_MODEL=kwaivgi/kling-v3-video node src/backend/scripts/generate-values-media.mjs --launch --force"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0"

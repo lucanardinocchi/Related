@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import {
   ValuesAlignmentClient,
+  type CharacterValuesAlignment,
   type ValuesCharacter,
 } from "@related/shared";
 import { MIN_ALIGNED_FOR_RANKING } from "@related/shared";
@@ -20,13 +21,18 @@ interface ProposedGoalRow {
 interface Props {
   alignments: Record<string, boolean>;
   characters: ValuesCharacter[];
+  alignmentRows?: CharacterValuesAlignment[];
 }
 
 function nextRowId(): string {
   return `goal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function ValuesConfirmPanel({ alignments, characters }: Props) {
+export function ValuesConfirmPanel({
+  alignments,
+  characters,
+  alignmentRows,
+}: Props) {
   const alignedCount = useMemo(
     () =>
       characters.filter((character) => alignments[character.id] === true).length,
@@ -54,10 +60,9 @@ export function ValuesConfirmPanel({ alignments, characters }: Props) {
     setAddedCount(null);
     setInferring(true);
     try {
-      const payload = ValuesAlignmentClient.buildInferencePayload(
-        alignments,
-        characters,
-      );
+      const payload = alignmentRows
+        ? ValuesAlignmentClient.buildInferencePayloadFromRows(alignmentRows)
+        : ValuesAlignmentClient.buildInferencePayload(alignments, characters);
       const proposed = await getBrowserDeps().valuesAlignment.inferProposedGoals(
         payload,
       );
@@ -76,7 +81,7 @@ export function ValuesConfirmPanel({ alignments, characters }: Props) {
     } finally {
       setInferring(false);
     }
-  }, [alignments, characters]);
+  }, [alignments, characters, alignmentRows]);
 
   async function onAddToContext() {
     const selected = rows.filter((row) => row.selected && row.text.trim());

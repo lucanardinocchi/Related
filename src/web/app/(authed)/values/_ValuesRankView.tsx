@@ -5,6 +5,7 @@ import Link from "next/link";
 import { GripVertical } from "lucide-react";
 import {
   MIN_ALIGNED_FOR_RANKING,
+  type CharacterValuesAlignment,
   type ValuesCharacter,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
@@ -15,12 +16,14 @@ interface Props {
   characters: ValuesCharacter[];
   alignments: Record<string, boolean>;
   initialOrder: string[];
+  alignmentRows: CharacterValuesAlignment[];
 }
 
 export function ValuesRankView({
   characters,
   alignments,
   initialOrder,
+  alignmentRows,
 }: Props) {
   const alignedCharacters = useMemo(
     () => characters.filter((c) => alignments[c.id] === true),
@@ -149,7 +152,11 @@ export function ValuesRankView({
       </div>
 
       {saved && (
-        <ValuesConfirmPanel alignments={alignments} characters={characters} />
+        <ValuesConfirmPanel
+          alignments={alignments}
+          characters={characters}
+          alignmentRows={alignmentRows}
+        />
       )}
     </div>
   );

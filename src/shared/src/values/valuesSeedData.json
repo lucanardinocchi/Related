@@ -1,0 +1,1102 @@
+[
+  {
+    "id": "james-bond",
+    "name": "James Bond",
+    "source": "007",
+    "values": [
+      "Independence",
+      "Competence",
+      "Loyalty",
+      "Composure"
+    ]
+  },
+  {
+    "id": "kim-kardashian",
+    "name": "Kim Kardashian",
+    "source": "Keeping Up with the Kardashians",
+    "values": [
+      "Ambition",
+      "Family",
+      "Self-expression",
+      "Resilience"
+    ]
+  },
+  {
+    "id": "groot",
+    "name": "Groot",
+    "source": "Guardians of the Galaxy",
+    "values": [
+      "Loyalty",
+      "Protection",
+      "Simplicity",
+      "Belonging"
+    ]
+  },
+  {
+    "id": "hermione-granger",
+    "name": "Hermione Granger",
+    "source": "Harry Potter",
+    "values": [
+      "Justice",
+      "Learning",
+      "Integrity",
+      "Courage"
+    ]
+  },
+  {
+    "id": "tony-stark",
+    "name": "Tony Stark",
+    "source": "Marvel Cinematic Universe",
+    "values": [
+      "Innovation",
+      "Responsibility",
+      "Confidence",
+      "Legacy"
+    ]
+  },
+  {
+    "id": "leslie-knope",
+    "name": "Leslie Knope",
+    "source": "Parks and Recreation",
+    "values": [
+      "Service",
+      "Optimism",
+      "Friendship",
+      "Dedication"
+    ]
+  },
+  {
+    "id": "walter-white",
+    "name": "Walter White",
+    "source": "Breaking Bad",
+    "values": [
+      "Security",
+      "Recognition",
+      "Control",
+      "Family"
+    ]
+  },
+  {
+    "id": "moana",
+    "name": "Moana",
+    "source": "Moana",
+    "values": [
+      "Exploration",
+      "Courage",
+      "Heritage",
+      "Purpose"
+    ]
+  },
+  {
+    "id": "batman",
+    "name": "Batman",
+    "source": "DC Comics",
+    "values": [
+      "Justice",
+      "Discipline",
+      "Sacrifice",
+      "Protection"
+    ]
+  },
+  {
+    "id": "oprah-winfrey",
+    "name": "Oprah Winfrey",
+    "source": "The Oprah Winfrey Show",
+    "values": [
+      "Empathy",
+      "Growth",
+      "Authenticity",
+      "Generosity"
+    ]
+  },
+  {
+    "id": "elle-woods",
+    "name": "Elle Woods",
+    "source": "Legally Blonde",
+    "values": [
+      "Determination",
+      "Kindness",
+      "Self-respect",
+      "Excellence"
+    ]
+  },
+  {
+    "id": "michael-scott",
+    "name": "Michael Scott",
+    "source": "The Office",
+    "values": [
+      "Belonging",
+      "Humor",
+      "Loyalty",
+      "Recognition"
+    ]
+  },
+  {
+    "id": "katniss-everdeen",
+    "name": "Katniss Everdeen",
+    "source": "The Hunger Games",
+    "values": [
+      "Survival",
+      "Protection",
+      "Sacrifice",
+      "Autonomy"
+    ]
+  },
+  {
+    "id": "mr-rogers",
+    "name": "Fred Rogers",
+    "source": "Mister Rogers' Neighborhood",
+    "values": [
+      "Kindness",
+      "Patience",
+      "Acceptance",
+      "Neighbourliness"
+    ]
+  },
+  {
+    "id": "wednesday-addams",
+    "name": "Wednesday Addams",
+    "source": "Wednesday",
+    "values": [
+      "Authenticity",
+      "Independence",
+      "Loyalty",
+      "Truth"
+    ]
+  },
+  {
+    "id": "luke-skywalker",
+    "name": "Luke Skywalker",
+    "source": "Star Wars",
+    "values": [
+      "Hope",
+      "Faith",
+      "Redemption",
+      "Courage"
+    ]
+  },
+  {
+    "id": "miranda-priestly",
+    "name": "Miranda Priestly",
+    "source": "The Devil Wears Prada",
+    "values": [
+      "Excellence",
+      "Standards",
+      "Ambition",
+      "Discipline"
+    ]
+  },
+  {
+    "id": "t-800",
+    "name": "T-800",
+    "source": "Terminator 2",
+    "values": [
+      "Protection",
+      "Duty",
+      "Learning",
+      "Sacrifice"
+    ]
+  },
+  {
+    "id": "dory",
+    "name": "Dory",
+    "source": "Finding Nemo",
+    "values": [
+      "Optimism",
+      "Friendship",
+      "Persistence",
+      "Trust"
+    ]
+  },
+  {
+    "id": "black-panther",
+    "name": "T'Challa",
+    "source": "Black Panther",
+    "values": [
+      "Duty",
+      "Heritage",
+      "Justice",
+      "Leadership"
+    ]
+  },
+  {
+    "id": "fleabag",
+    "name": "Fleabag",
+    "source": "Fleabag",
+    "values": [
+      "Honesty",
+      "Growth",
+      "Connection",
+      "Humour"
+    ]
+  },
+  {
+    "id": "ted-lasso",
+    "name": "Ted Lasso",
+    "source": "Ted Lasso",
+    "values": [
+      "Kindness",
+      "Curiosity",
+      "Belief",
+      "Teamwork"
+    ]
+  },
+  {
+    "id": "eleven",
+    "name": "Eleven",
+    "source": "Stranger Things",
+    "values": [
+      "Belonging",
+      "Courage",
+      "Loyalty",
+      "Protection"
+    ]
+  },
+  {
+    "id": "michael-corleone",
+    "name": "Michael Corleone",
+    "source": "The Godfather",
+    "values": [
+      "Family",
+      "Loyalty",
+      "Power",
+      "Legacy"
+    ]
+  },
+  {
+    "id": "harry-potter",
+    "name": "Harry Potter",
+    "source": "Harry Potter",
+    "values": [
+      "Bravery",
+      "Loyalty",
+      "Humility",
+      "Sacrifice"
+    ]
+  },
+  {
+    "id": "sherlock-holmes",
+    "name": "Sherlock Holmes",
+    "source": "Sherlock",
+    "values": [
+      "Logic",
+      "Truth",
+      "Intensity",
+      "Justice"
+    ]
+  },
+  {
+    "id": "wonder-woman",
+    "name": "Wonder Woman",
+    "source": "DC Comics",
+    "values": [
+      "Compassion",
+      "Courage",
+      "Justice",
+      "Truth"
+    ]
+  },
+  {
+    "id": "spider-man",
+    "name": "Spider-Man",
+    "source": "Marvel",
+    "values": [
+      "Responsibility",
+      "Humility",
+      "Wit",
+      "Sacrifice"
+    ]
+  },
+  {
+    "id": "captain-america",
+    "name": "Captain America",
+    "source": "Marvel",
+    "values": [
+      "Duty",
+      "Integrity",
+      "Leadership",
+      "Persistence"
+    ]
+  },
+  {
+    "id": "naruto-uzumaki",
+    "name": "Naruto Uzumaki",
+    "source": "Naruto",
+    "values": [
+      "Perseverance",
+      "Loyalty",
+      "Empathy",
+      "Growth"
+    ]
+  },
+  {
+    "id": "goku",
+    "name": "Goku",
+    "source": "Dragon Ball",
+    "values": [
+      "Growth",
+      "Joy",
+      "Protection",
+      "Competition"
+    ]
+  },
+  {
+    "id": "luffy",
+    "name": "Monkey D. Luffy",
+    "source": "One Piece",
+    "values": [
+      "Freedom",
+      "Loyalty",
+      "Adventure",
+      "Trust"
+    ]
+  },
+  {
+    "id": "sailor-moon",
+    "name": "Usagi Tsukino",
+    "source": "Sailor Moon",
+    "values": [
+      "Love",
+      "Hope",
+      "Friendship",
+      "Courage"
+    ]
+  },
+  {
+    "id": "gandalf",
+    "name": "Gandalf",
+    "source": "The Lord of the Rings",
+    "values": [
+      "Wisdom",
+      "Guidance",
+      "Courage",
+      "Sacrifice"
+    ]
+  },
+  {
+    "id": "frodo-baggins",
+    "name": "Frodo Baggins",
+    "source": "The Lord of the Rings",
+    "values": [
+      "Persistence",
+      "Humility",
+      "Duty",
+      "Mercy"
+    ]
+  },
+  {
+    "id": "aragorn",
+    "name": "Aragorn",
+    "source": "The Lord of the Rings",
+    "values": [
+      "Leadership",
+      "Honor",
+      "Courage",
+      "Service"
+    ]
+  },
+  {
+    "id": "daenerys-targaryen",
+    "name": "Daenerys Targaryen",
+    "source": "Game of Thrones",
+    "values": [
+      "Ambition",
+      "Liberation",
+      "Power",
+      "Conviction"
+    ]
+  },
+  {
+    "id": "jon-snow",
+    "name": "Jon Snow",
+    "source": "Game of Thrones",
+    "values": [
+      "Honor",
+      "Duty",
+      "Loyalty",
+      "Sacrifice"
+    ]
+  },
+  {
+    "id": "tyrion-lannister",
+    "name": "Tyrion Lannister",
+    "source": "Game of Thrones",
+    "values": [
+      "Wit",
+      "Pragmatism",
+      "Empathy",
+      "Survival"
+    ]
+  },
+  {
+    "id": "rachel-green",
+    "name": "Rachel Green",
+    "source": "Friends",
+    "values": [
+      "Ambition",
+      "Style",
+      "Growth",
+      "Connection"
+    ]
+  },
+  {
+    "id": "ross-geller",
+    "name": "Ross Geller",
+    "source": "Friends",
+    "values": [
+      "Knowledge",
+      "Loyalty",
+      "Earnestness",
+      "Family"
+    ]
+  },
+  {
+    "id": "phoebe-buffay",
+    "name": "Phoebe Buffay",
+    "source": "Friends",
+    "values": [
+      "Authenticity",
+      "Creativity",
+      "Compassion",
+      "Freedom"
+    ]
+  },
+  {
+    "id": "chandler-bing",
+    "name": "Chandler Bing",
+    "source": "Friends",
+    "values": [
+      "Humor",
+      "Loyalty",
+      "Vulnerability",
+      "Wit"
+    ]
+  },
+  {
+    "id": "monica-geller",
+    "name": "Monica Geller",
+    "source": "Friends",
+    "values": [
+      "Excellence",
+      "Order",
+      "Care",
+      "Competition"
+    ]
+  },
+  {
+    "id": "joey-tribbiani",
+    "name": "Joey Tribbiani",
+    "source": "Friends",
+    "values": [
+      "Loyalty",
+      "Warmth",
+      "Simplicity",
+      "Joy"
+    ]
+  },
+  {
+    "id": "don-draper",
+    "name": "Don Draper",
+    "source": "Mad Men",
+    "values": [
+      "Charisma",
+      "Ambition",
+      "Mystery",
+      "Reinvention"
+    ]
+  },
+  {
+    "id": "peggy-olson",
+    "name": "Peggy Olson",
+    "source": "Mad Men",
+    "values": [
+      "Ambition",
+      "Agency",
+      "Growth",
+      "Integrity"
+    ]
+  },
+  {
+    "id": "tony-soprano",
+    "name": "Tony Soprano",
+    "source": "The Sopranos",
+    "values": [
+      "Family",
+      "Power",
+      "Loyalty",
+      "Conflict"
+    ]
+  },
+  {
+    "id": "olivia-pope",
+    "name": "Olivia Pope",
+    "source": "Scandal",
+    "values": [
+      "Fixing",
+      "Loyalty",
+      "Intensity",
+      "Justice"
+    ]
+  },
+  {
+    "id": "indiana-jones",
+    "name": "Indiana Jones",
+    "source": "Indiana Jones",
+    "values": [
+      "Adventure",
+      "Curiosity",
+      "Bravery",
+      "Independence"
+    ]
+  },
+  {
+    "id": "marty-mcfly",
+    "name": "Marty McFly",
+    "source": "Back to the Future",
+    "values": [
+      "Loyalty",
+      "Courage",
+      "Optimism",
+      "Family"
+    ]
+  },
+  {
+    "id": "ellen-ripley",
+    "name": "Ellen Ripley",
+    "source": "Alien",
+    "values": [
+      "Survival",
+      "Courage",
+      "Protection",
+      "Resolve"
+    ]
+  },
+  {
+    "id": "sarah-connor",
+    "name": "Sarah Connor",
+    "source": "Terminator",
+    "values": [
+      "Protection",
+      "Resolve",
+      "Sacrifice",
+      "Strength"
+    ]
+  },
+  {
+    "id": "mulan",
+    "name": "Mulan",
+    "source": "Mulan",
+    "values": [
+      "Honor",
+      "Courage",
+      "Family",
+      "Authenticity"
+    ]
+  },
+  {
+    "id": "simba",
+    "name": "Simba",
+    "source": "The Lion King",
+    "values": [
+      "Growth",
+      "Responsibility",
+      "Courage",
+      "Belonging"
+    ]
+  },
+  {
+    "id": "elsa",
+    "name": "Elsa",
+    "source": "Frozen",
+    "values": [
+      "Independence",
+      "Protection",
+      "Self-acceptance",
+      "Duty"
+    ]
+  },
+  {
+    "id": "woody",
+    "name": "Woody",
+    "source": "Toy Story",
+    "values": [
+      "Loyalty",
+      "Leadership",
+      "Duty",
+      "Friendship"
+    ]
+  },
+  {
+    "id": "buzz-lightyear",
+    "name": "Buzz Lightyear",
+    "source": "Toy Story",
+    "values": [
+      "Duty",
+      "Courage",
+      "Loyalty",
+      "Confidence"
+    ]
+  },
+  {
+    "id": "wall-e",
+    "name": "WALL-E",
+    "source": "WALL-E",
+    "values": [
+      "Love",
+      "Persistence",
+      "Care",
+      "Hope"
+    ]
+  },
+  {
+    "id": "remy",
+    "name": "Remy",
+    "source": "Ratatouille",
+    "values": [
+      "Passion",
+      "Excellence",
+      "Courage",
+      "Creativity"
+    ]
+  },
+  {
+    "id": "mario",
+    "name": "Mario",
+    "source": "Super Mario",
+    "values": [
+      "Helpfulness",
+      "Persistence",
+      "Joy",
+      "Loyalty"
+    ]
+  },
+  {
+    "id": "link",
+    "name": "Link",
+    "source": "The Legend of Zelda",
+    "values": [
+      "Courage",
+      "Duty",
+      "Silence",
+      "Protection"
+    ]
+  },
+  {
+    "id": "master-chief",
+    "name": "Master Chief",
+    "source": "Halo",
+    "values": [
+      "Duty",
+      "Protection",
+      "Discipline",
+      "Sacrifice"
+    ]
+  },
+  {
+    "id": "lara-croft",
+    "name": "Lara Croft",
+    "source": "Tomb Raider",
+    "values": [
+      "Adventure",
+      "Resilience",
+      "Independence",
+      "Discovery"
+    ]
+  },
+  {
+    "id": "geralt-of-rivia",
+    "name": "Geralt of Rivia",
+    "source": "The Witcher",
+    "values": [
+      "Duty",
+      "Pragmatism",
+      "Protection",
+      "Isolation"
+    ]
+  },
+  {
+    "id": "harvey-specter",
+    "name": "Harvey Specter",
+    "source": "Suits",
+    "values": [
+      "Confidence",
+      "Loyalty",
+      "Winning",
+      "Charisma"
+    ]
+  },
+  {
+    "id": "saul-goodman",
+    "name": "Saul Goodman",
+    "source": "Better Call Saul",
+    "values": [
+      "Resourcefulness",
+      "Charm",
+      "Survival",
+      "Moral flexibility"
+    ]
+  },
+  {
+    "id": "jesse-pinkman",
+    "name": "Jesse Pinkman",
+    "source": "Breaking Bad",
+    "values": [
+      "Loyalty",
+      "Conscience",
+      "Growth",
+      "Pain"
+    ]
+  },
+  {
+    "id": "beyonce",
+    "name": "Beyoncé",
+    "source": "Music",
+    "values": [
+      "Excellence",
+      "Power",
+      "Artistry",
+      "Work ethic"
+    ]
+  },
+  {
+    "id": "taylor-swift",
+    "name": "Taylor Swift",
+    "source": "Music",
+    "values": [
+      "Authenticity",
+      "Craft",
+      "Connection",
+      "Reinvention"
+    ]
+  },
+  {
+    "id": "lebron-james",
+    "name": "LeBron James",
+    "source": "Sports",
+    "values": [
+      "Excellence",
+      "Leadership",
+      "Legacy",
+      "Community"
+    ]
+  },
+  {
+    "id": "serena-williams",
+    "name": "Serena Williams",
+    "source": "Sports",
+    "values": [
+      "Power",
+      "Resilience",
+      "Excellence",
+      "Intensity"
+    ]
+  },
+  {
+    "id": "lionel-messi",
+    "name": "Lionel Messi",
+    "source": "Sports",
+    "values": [
+      "Humility",
+      "Craft",
+      "Loyalty",
+      "Excellence"
+    ]
+  },
+  {
+    "id": "cristiano-ronaldo",
+    "name": "Cristiano Ronaldo",
+    "source": "Sports",
+    "values": [
+      "Discipline",
+      "Ambition",
+      "Excellence",
+      "Confidence"
+    ]
+  },
+  {
+    "id": "nelson-mandela",
+    "name": "Nelson Mandela",
+    "source": "History",
+    "values": [
+      "Forgiveness",
+      "Justice",
+      "Patience",
+      "Unity"
+    ]
+  },
+  {
+    "id": "malala-yousafzai",
+    "name": "Malala Yousafzai",
+    "source": "History",
+    "values": [
+      "Courage",
+      "Education",
+      "Justice",
+      "Voice"
+    ]
+  },
+  {
+    "id": "marie-curie",
+    "name": "Marie Curie",
+    "source": "History",
+    "values": [
+      "Curiosity",
+      "Persistence",
+      "Discovery",
+      "Integrity"
+    ]
+  },
+  {
+    "id": "forrest-gump",
+    "name": "Forrest Gump",
+    "source": "Forrest Gump",
+    "values": [
+      "Kindness",
+      "Loyalty",
+      "Simplicity",
+      "Persistence"
+    ]
+  },
+  {
+    "id": "rocky-balboa",
+    "name": "Rocky Balboa",
+    "source": "Rocky",
+    "values": [
+      "Grit",
+      "Heart",
+      "Persistence",
+      "Humility"
+    ]
+  },
+  {
+    "id": "joker",
+    "name": "Joker",
+    "source": "The Dark Knight",
+    "values": [
+      "Chaos",
+      "Agency",
+      "Intensity",
+      "Anarchy"
+    ]
+  },
+  {
+    "id": "neo",
+    "name": "Neo",
+    "source": "The Matrix",
+    "values": [
+      "Awakening",
+      "Choice",
+      "Courage",
+      "Sacrifice"
+    ]
+  },
+  {
+    "id": "trinity",
+    "name": "Trinity",
+    "source": "The Matrix",
+    "values": [
+      "Skill",
+      "Loyalty",
+      "Courage",
+      "Love"
+    ]
+  },
+  {
+    "id": "jake-sully",
+    "name": "Jake Sully",
+    "source": "Avatar",
+    "values": [
+      "Adaptation",
+      "Loyalty",
+      "Protection",
+      "Belonging"
+    ]
+  },
+  {
+    "id": "sansa-stark",
+    "name": "Sansa Stark",
+    "source": "Game of Thrones",
+    "values": [
+      "Survival",
+      "Growth",
+      "Strategy",
+      "Resilience"
+    ]
+  },
+  {
+    "id": "arya-stark",
+    "name": "Arya Stark",
+    "source": "Game of Thrones",
+    "values": [
+      "Agency",
+      "Justice",
+      "Independence",
+      "Skill"
+    ]
+  },
+  {
+    "id": "michael-jordan",
+    "name": "Michael Jordan",
+    "source": "The Last Dance",
+    "values": [
+      "Excellence",
+      "Competition",
+      "Discipline",
+      "Legacy"
+    ]
+  },
+  {
+    "id": "kobe-bryant",
+    "name": "Kobe Bryant",
+    "source": "Sports",
+    "values": [
+      "Discipline",
+      "Craft",
+      "Legacy",
+      "Intensity"
+    ]
+  },
+  {
+    "id": "simone-biles",
+    "name": "Simone Biles",
+    "source": "Sports",
+    "values": [
+      "Courage",
+      "Excellence",
+      "Honesty",
+      "Power"
+    ]
+  },
+  {
+    "id": "david-attenborough",
+    "name": "David Attenborough",
+    "source": "Nature TV",
+    "values": [
+      "Wonder",
+      "Stewardship",
+      "Patience",
+      "Education"
+    ]
+  },
+  {
+    "id": "anthony-bourdain",
+    "name": "Anthony Bourdain",
+    "source": "Travel TV",
+    "values": [
+      "Curiosity",
+      "Honesty",
+      "Adventure",
+      "Empathy"
+    ]
+  },
+  {
+    "id": "gordon-ramsay",
+    "name": "Gordon Ramsay",
+    "source": "Kitchen TV",
+    "values": [
+      "Standards",
+      "Intensity",
+      "Mentorship",
+      "Excellence"
+    ]
+  },
+  {
+    "id": "ru-paul",
+    "name": "RuPaul",
+    "source": "Drag Race",
+    "values": [
+      "Self-expression",
+      "Joy",
+      "Mentorship",
+      "Confidence"
+    ]
+  },
+  {
+    "id": "dwayne-johnson",
+    "name": "Dwayne Johnson",
+    "source": "Film",
+    "values": [
+      "Work ethic",
+      "Charisma",
+      "Positivity",
+      "Discipline"
+    ]
+  },
+  {
+    "id": "keanu-reeves",
+    "name": "Keanu Reeves",
+    "source": "Film",
+    "values": [
+      "Kindness",
+      "Humility",
+      "Discipline",
+      "Grace"
+    ]
+  },
+  {
+    "id": "padme-amidala",
+    "name": "Padmé Amidala",
+    "source": "Star Wars",
+    "values": [
+      "Service",
+      "Peace",
+      "Courage",
+      "Conviction"
+    ]
+  },
+  {
+    "id": "han-solo",
+    "name": "Han Solo",
+    "source": "Star Wars",
+    "values": [
+      "Independence",
+      "Loyalty",
+      "Wit",
+      "Courage"
+    ]
+  },
+  {
+    "id": "princess-leia",
+    "name": "Princess Leia",
+    "source": "Star Wars",
+    "values": [
+      "Leadership",
+      "Courage",
+      "Hope",
+      "Defiance"
+    ]
+  },
+  {
+    "id": "marty-creed",
+    "name": "Adonis Creed",
+    "source": "Creed",
+    "values": [
+      "Legacy",
+      "Ambition",
+      "Identity",
+      "Heart"
+    ]
+  },
+  {
+    "id": "clarice-starling",
+    "name": "Clarice Starling",
+    "source": "The Silence of the Lambs",
+    "values": [
+      "Justice",
+      "Courage",
+      "Empathy",
+      "Resolve"
+    ]
+  },
+  {
+    "id": "hannibal-lecter",
+    "name": "Hannibal Lecter",
+    "source": "The Silence of the Lambs",
+    "values": [
+      "Intellect",
+      "Aesthetics",
+      "Control",
+      "Intensity"
+    ]
+  }
+]

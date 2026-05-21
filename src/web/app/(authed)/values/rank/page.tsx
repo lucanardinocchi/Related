@@ -1,4 +1,4 @@
-import { VALUES_CHARACTERS } from "@related/shared";
+import { VALUES_CHARACTERS, ValuesAlignmentClient } from "@related/shared";
 import { getServerDeps } from "@/lib/deps/server";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ValuesRankView } from "../_ValuesRankView";
@@ -7,13 +7,18 @@ export const dynamic = "force-dynamic";
 
 export default async function ValuesRankPage() {
   const { valuesAlignment } = await getServerDeps();
-  const alignments = await valuesAlignment.listAlignments();
+  const rows = await valuesAlignment.listAlignments();
 
   const alignmentByCharacterId = Object.fromEntries(
-    alignments.map((a) => [a.characterId, a.aligned] as const),
+    rows.map((a) => [a.characterId, a.aligned] as const),
   );
 
-  const initialOrder = alignments
+  const allCharacters = ValuesAlignmentClient.resolveCharactersFromAlignments(
+    rows,
+    VALUES_CHARACTERS,
+  );
+
+  const initialOrder = rows
     .filter((a) => a.aligned && a.rankPosition != null)
     .sort((a, b) => (a.rankPosition ?? 0) - (b.rankPosition ?? 0))
     .map((a) => a.characterId);
@@ -25,9 +30,10 @@ export default async function ValuesRankPage() {
         subtitle="Order the characters you resonate with most — top is strongest."
       />
       <ValuesRankView
-        characters={VALUES_CHARACTERS}
+        characters={allCharacters}
         alignments={alignmentByCharacterId}
         initialOrder={initialOrder}
+        alignmentRows={rows}
       />
     </>
   );
