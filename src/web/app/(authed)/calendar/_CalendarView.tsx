@@ -22,7 +22,7 @@ import {
   Pill,
 } from "@/components/ui";
 import type { BadgeTone, DataGridColumn } from "@/components/ui";
-import { CumulativeGrowthChart } from "./_CumulativeGrowthChart";
+import { EventsBarChart } from "./_EventsBarChart";
 
 interface Props {
   events: Event[];
@@ -199,7 +199,7 @@ export function CalendarView({ events, analytics }: Props) {
         />
       </AnalyticsRow>
 
-      <CumulativeGrowthChart events={events} now={now} />
+      <EventsBarChart events={events} now={now} />
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">

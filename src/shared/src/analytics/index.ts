@@ -1,11 +1,11 @@
 export { relationshipAnalytics } from "./relationshipAnalytics";
 export type { RelationshipAnalytics } from "./relationshipAnalytics";
 
-export { calendarAnalytics, cumulativeGrowth } from "./calendarAnalytics";
+export { calendarAnalytics, eventsPerDay } from "./calendarAnalytics";
 export type {
   CalendarAnalytics,
-  CumulativeBucket,
-  CumulativeGrowthInput,
+  DailyBucket,
+  EventsPerDayInput,
 } from "./calendarAnalytics";
 
 export { commitmentAnalytics } from "./commitmentAnalytics";

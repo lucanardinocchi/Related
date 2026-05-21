@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Event, EventStatus, EventType } from "@related/shared";
-import { cumulativeGrowth } from "@related/shared";
+import { eventsPerDay } from "@related/shared";
 import { Card, Eyebrow, H2, Pill } from "@/components/ui";
 
 type Tab =
@@ -45,12 +45,13 @@ function tabKey(t: Tab): string {
 }
 
 /**
- * Cumulative line chart for Calendar entries. Ported from #55 to read
- * from the unified `events` model (ADR-0010). Self-contained: scope pills
- * pick Past/Future 30 days; status tabs in the header pick a series;
- * type pills below narrow further.
+ * Vertical bar chart of Calendar entries per day. One bar per day in the
+ * 30-day window so empty days show as gaps — gives a read on activity
+ * density rather than a running total. Self-contained: scope pills pick
+ * Past/Future, status tabs in the header pick a series, type pills below
+ * narrow further.
  */
-export function CumulativeGrowthChart({ events, now }: Props) {
+export function EventsBarChart({ events, now }: Props) {
   const [scope, setScope] = useState<Scope>("past");
   const [activeTab, setActiveTab] = useState<Tab>(ALL_TAB);
 
@@ -92,7 +93,7 @@ export function CumulativeGrowthChart({ events, now }: Props) {
         : activeTab.axis === "status"
           ? { axis: "status" as const, value: activeTab.value }
           : { axis: "type" as const, value: activeTab.value };
-    return cumulativeGrowth({
+    return eventsPerDay({
       from: from.toISOString(),
       to: to.toISOString(),
       events,
@@ -119,17 +120,13 @@ export function CumulativeGrowthChart({ events, now }: Props) {
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
 
-  const xAt = (i: number) =>
-    PAD_L + (buckets.length > 1 ? (i / (buckets.length - 1)) * innerW : 0);
+  // One slot per day. Bar takes 70% of the slot — leaves a visible gap
+  // between bars but not so much that the columns feel sparse.
+  const slot = buckets.length > 0 ? innerW / buckets.length : 0;
+  const barW = Math.max(2, slot * 0.7);
+  const xAt = (i: number) => PAD_L + i * slot + (slot - barW) / 2;
   const yAt = (count: number) =>
     PAD_T + innerH - (count / niceMax) * innerH;
-
-  const path = buckets
-    .map(
-      (b, i) =>
-        `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(b.count).toFixed(1)}`,
-    )
-    .join(" ");
 
   const xLabelIndices = buckets
     .map((_, i) => i)
@@ -141,7 +138,7 @@ export function CumulativeGrowthChart({ events, now }: Props) {
 
   const description =
     activeTab.axis === "all"
-      ? `Total accumulated over the ${scope === "past" ? "last" : "next"} 30 days`
+      ? `Events per day over the ${scope === "past" ? "last" : "next"} 30 days`
       : activeTab.axis === "status"
         ? `${activeTab.label} — ${scope === "past" ? "last" : "next"} 30 days`
         : `${activeTab.label} events — ${scope === "past" ? "last" : "next"} 30 days`;
@@ -153,7 +150,7 @@ export function CumulativeGrowthChart({ events, now }: Props) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <Eyebrow>Activity</Eyebrow>
-          <H2 className="mt-1">Cumulative Growth</H2>
+          <H2 className="mt-1">Events per Day</H2>
           <p className="mt-1 text-[13px] leading-[20px] text-fg-muted">
             {description}
           </p>
@@ -215,7 +212,7 @@ export function CumulativeGrowthChart({ events, now }: Props) {
         <svg
           viewBox={`0 0 ${W} ${H}`}
           role="img"
-          aria-label={`Cumulative ${activeTab.label} growth`}
+          aria-label={`${activeTab.label} events per day`}
           className="block w-full"
         >
           {yTicks.map((t) => (
@@ -241,21 +238,29 @@ export function CumulativeGrowthChart({ events, now }: Props) {
             </g>
           ))}
 
-          {buckets.length > 0 && (
-            <path
-              d={path}
-              fill="none"
-              stroke="#ed7a35"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
+          {buckets.map((b, i) => {
+            if (b.count === 0) return null;
+            const y = yAt(b.count);
+            const h = PAD_T + innerH - y;
+            return (
+              <rect
+                key={`bar-${b.date}`}
+                x={xAt(i)}
+                y={y}
+                width={barW}
+                height={h}
+                rx={2}
+                fill="#ed7a35"
+              >
+                <title>{`${fmtAxis(b.date)}: ${b.count}`}</title>
+              </rect>
+            );
+          })}
 
           {xLabelIndices.map((i) => (
             <text
               key={`x-${i}`}
-              x={xAt(i)}
+              x={xAt(i) + barW / 2}
               y={H - PAD_B + 18}
               textAnchor="middle"
               className="fill-fg-muted text-[12px]"

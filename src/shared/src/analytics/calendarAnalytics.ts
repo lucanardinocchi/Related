@@ -62,17 +62,17 @@ export function calendarAnalytics(input: {
 }
 
 /**
- * One point on the cumulative growth chart — a calendar day and the
- * running total of matching entries from the window start up to and
- * including that day. Ported from #55 to read from the unified `events`
- * model.
+ * One bar on the daily-activity chart — a calendar day and the count of
+ * matching entries that fall on it. Not a running total; each day stands
+ * alone so the bar height reads as "how busy was that day". Reads from
+ * the unified `events` model (ADR-0010).
  */
-export interface CumulativeBucket {
+export interface DailyBucket {
   date: string;
   count: number;
 }
 
-export interface CumulativeGrowthInput {
+export interface EventsPerDayInput {
   /** Inclusive window start. ISO string. */
   from: string;
   /** Inclusive window end. ISO string. */
@@ -80,7 +80,7 @@ export interface CumulativeGrowthInput {
   events: Event[];
   /**
    * Filter that picks which events contribute. `all` is the unfiltered
-   * total — drives the default chart view so the line shows every event
+   * total — drives the default chart view so the bars show every event
    * before the User narrows by status or type.
    */
   filter:
@@ -103,18 +103,17 @@ function ymdUTC(d: Date): string {
 }
 
 /**
- * Cumulative running-total of matching events bucketed by day across
- * [from, to]. Walks the date axis so the line is continuous through
- * empty days. UTC bucketing matches `iso.slice(0,10)` on the entry side
- * — mixing local and UTC boundaries would silently land events in the
- * wrong day when the User's timezone offset crosses midnight.
+ * Per-day count of matching events bucketed across [from, to]. Walks the
+ * date axis so every day in the window appears (zero-count days included
+ * — the bar chart shows them as gaps, which is meaningful). UTC bucketing
+ * matches `iso.slice(0,10)` on the entry side; mixing local and UTC
+ * boundaries would silently land events in the wrong day when the User's
+ * timezone offset crosses midnight.
  */
-export function cumulativeGrowth(
-  input: CumulativeGrowthInput,
-): CumulativeBucket[] {
-  const deltas = new Map<string, number>();
+export function eventsPerDay(input: EventsPerDayInput): DailyBucket[] {
+  const counts = new Map<string, number>();
   const bump = (key: string) => {
-    deltas.set(key, (deltas.get(key) ?? 0) + 1);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   };
 
   const matches = (e: Event) => {
@@ -127,14 +126,12 @@ export function cumulativeGrowth(
     if (matches(e)) bump(e.start.slice(0, 10));
   }
 
-  const buckets: CumulativeBucket[] = [];
-  let running = 0;
+  const buckets: DailyBucket[] = [];
   const cursor = utcStartOfDay(input.from);
   const end = utcStartOfDay(input.to);
   while (cursor.getTime() <= end.getTime()) {
     const key = ymdUTC(cursor);
-    running += deltas.get(key) ?? 0;
-    buckets.push({ date: key, count: running });
+    buckets.push({ date: key, count: counts.get(key) ?? 0 });
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return buckets;

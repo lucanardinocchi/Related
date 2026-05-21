@@ -1,4 +1,4 @@
-import { calendarAnalytics, cumulativeGrowth } from "./calendarAnalytics";
+import { calendarAnalytics, eventsPerDay } from "./calendarAnalytics";
 import type { Event } from "../events/EventsClient";
 
 function ev(over: Partial<Event>): Event {
@@ -62,9 +62,9 @@ describe("calendarAnalytics", () => {
   });
 });
 
-describe("cumulativeGrowth", () => {
-  it("returns one bucket per day with a running running total", () => {
-    const buckets = cumulativeGrowth({
+describe("eventsPerDay", () => {
+  it("returns one bucket per day with that day's count (not a running total)", () => {
+    const buckets = eventsPerDay({
       from: "2026-05-20T00:00:00Z",
       to: "2026-05-22T00:00:00Z",
       events: [
@@ -76,13 +76,23 @@ describe("cumulativeGrowth", () => {
     });
     expect(buckets).toEqual([
       { date: "2026-05-20", count: 1 },
-      { date: "2026-05-21", count: 3 },
-      { date: "2026-05-22", count: 3 },
+      { date: "2026-05-21", count: 2 },
+      { date: "2026-05-22", count: 0 },
     ]);
   });
 
+  it("fills empty days with zero so the bar axis stays continuous", () => {
+    const buckets = eventsPerDay({
+      from: "2026-05-20T00:00:00Z",
+      to: "2026-05-23T00:00:00Z",
+      events: [ev({ id: "1", start: "2026-05-22T10:00:00Z" })],
+      filter: { axis: "all" },
+    });
+    expect(buckets.map((b) => b.count)).toEqual([0, 0, 1, 0]);
+  });
+
   it("narrows by status filter", () => {
-    const buckets = cumulativeGrowth({
+    const buckets = eventsPerDay({
       from: "2026-05-20T00:00:00Z",
       to: "2026-05-21T00:00:00Z",
       events: [
@@ -94,7 +104,7 @@ describe("cumulativeGrowth", () => {
     });
     expect(buckets).toEqual([
       { date: "2026-05-20", count: 1 },
-      { date: "2026-05-21", count: 2 },
+      { date: "2026-05-21", count: 1 },
     ]);
   });
 });
