@@ -20,6 +20,7 @@ import {
   Eyebrow,
   Mono,
   Pill,
+  Section,
 } from "@/components/ui";
 import type { BadgeTone, DataGridColumn } from "@/components/ui";
 import { EventsBarChart } from "./_EventsBarChart";
@@ -89,12 +90,73 @@ function fmtAttendees(event: Event): string {
   return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
 }
 
+function partitionByTime(events: Event[], now: Date) {
+  const t = now.getTime();
+  const future: Event[] = [];
+  const past: Event[] = [];
+  for (const e of events) {
+    if (new Date(e.end).getTime() < t) past.push(e);
+    else future.push(e);
+  }
+  future.sort(
+    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime(),
+  );
+  past.sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
+  return { future, past };
+}
+
+const COLUMNS: DataGridColumn<Event>[] = [
+  {
+    key: "time",
+    header: "When",
+    width: "170px",
+    mono: true,
+    cell: (e) => fmtDateTime(e.start),
+  },
+  {
+    key: "title",
+    header: "Title",
+    width: "minmax(200px, 2fr)",
+    cell: (e) => (
+      <span className="truncate text-fg">{e.title ?? "(untitled)"}</span>
+    ),
+  },
+  {
+    key: "type",
+    header: "Type",
+    width: "110px",
+    cell: (e) => <Badge tone={TYPE_TONE[e.type]}>{TYPE_LABEL[e.type]}</Badge>,
+  },
+  {
+    key: "status",
+    header: "Status",
+    width: "110px",
+    cell: (e) => <Badge tone={STATUS_TONE[e.status]}>{e.status}</Badge>,
+  },
+  {
+    key: "attendees",
+    header: "Attendees",
+    width: "minmax(140px, 1fr)",
+    cell: (e) => (
+      <span className="truncate text-fg-muted">{fmtAttendees(e)}</span>
+    ),
+  },
+  {
+    key: "location",
+    header: "Location",
+    width: "minmax(140px, 1fr)",
+    cell: (e) => (
+      <span className="truncate text-fg-muted">{e.location ?? "—"}</span>
+    ),
+  },
+];
+
 export function CalendarView({ events, analytics }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const now = useMemo(() => new Date(), []);
 
-  const rows = useMemo(() => {
+  const filtered = useMemo(() => {
     return events.filter((e) => {
       if (statusFilter !== "all" && e.status !== statusFilter) return false;
       if (typeFilter !== "all" && e.type !== typeFilter) return false;
@@ -102,61 +164,10 @@ export function CalendarView({ events, analytics }: Props) {
     });
   }, [events, statusFilter, typeFilter]);
 
-  const columns: DataGridColumn<Event>[] = [
-    {
-      key: "time",
-      header: "When",
-      width: "170px",
-      mono: true,
-      cell: (e) => fmtDateTime(e.start),
-    },
-    {
-      key: "title",
-      header: "Title",
-      width: "minmax(200px, 2fr)",
-      cell: (e) => (
-        <span className="truncate text-fg">{e.title ?? "(untitled)"}</span>
-      ),
-    },
-    {
-      key: "type",
-      header: "Type",
-      width: "110px",
-      cell: (e) => <Badge tone={TYPE_TONE[e.type]}>{TYPE_LABEL[e.type]}</Badge>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      width: "110px",
-      cell: (e) => <Badge tone={STATUS_TONE[e.status]}>{e.status}</Badge>,
-    },
-    {
-      key: "source",
-      header: "Source",
-      width: "100px",
-      cell: (e) => (
-        <Badge tone={e.source === "google" ? "info" : "approved"}>
-          {e.source === "google" ? "Google" : "Manual"}
-        </Badge>
-      ),
-    },
-    {
-      key: "attendees",
-      header: "Attendees",
-      width: "minmax(140px, 1fr)",
-      cell: (e) => (
-        <span className="truncate text-fg-muted">{fmtAttendees(e)}</span>
-      ),
-    },
-    {
-      key: "location",
-      header: "Location",
-      width: "minmax(140px, 1fr)",
-      cell: (e) => (
-        <span className="truncate text-fg-muted">{e.location ?? "—"}</span>
-      ),
-    },
-  ];
+  const { future: futureRows, past: pastRows } = useMemo(
+    () => partitionByTime(filtered, now),
+    [filtered, now],
+  );
 
   return (
     <div className="space-y-6">
@@ -244,18 +255,55 @@ export function CalendarView({ events, analytics }: Props) {
         </div>
       </div>
 
-      <DataGrid
-        columns={columns}
-        rows={rows}
-        rowKey={(e) => e.id}
-        rowHref={(e) => `/calendar/${e.id}`}
-        emptyState={
-          <EmptyState
-            title="Nothing in the window"
-            description="The calendar shows the last 30 days and the next 30. Create an event with “New event”, or connect Google Calendar in Setup."
-          />
-        }
-      />
+      {filtered.length === 0 ? (
+        <EmptyState
+          title="Nothing in the window"
+          description="The calendar shows the last 30 days and the next 30. Create an event with “New event”, or connect Google Calendar in Setup."
+        />
+      ) : (
+        <>
+          <Section
+            title="Upcoming"
+            meta={
+              futureRows.length === 1
+                ? "1 event"
+                : `${futureRows.length} events`
+            }
+            fixed
+          >
+            <DataGrid
+              columns={COLUMNS}
+              rows={futureRows}
+              rowKey={(e) => e.id}
+              rowHref={(e) => `/calendar/${e.id}`}
+              emptyState={
+                <p className="text-[13px] text-fg-muted">
+                  No upcoming events match these filters.
+                </p>
+              }
+            />
+          </Section>
+          <Section
+            title="Past"
+            meta={
+              pastRows.length === 1 ? "1 event" : `${pastRows.length} events`
+            }
+            defaultCollapsed
+          >
+            <DataGrid
+              columns={COLUMNS}
+              rows={pastRows}
+              rowKey={(e) => e.id}
+              rowHref={(e) => `/calendar/${e.id}`}
+              emptyState={
+                <p className="text-[13px] text-fg-muted">
+                  No past events match these filters.
+                </p>
+              }
+            />
+          </Section>
+        </>
+      )}
     </div>
   );
 }
