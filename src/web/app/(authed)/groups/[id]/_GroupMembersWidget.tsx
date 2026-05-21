@@ -7,7 +7,12 @@ import { cn } from "@/lib/cn";
 export interface GroupMemberSummary {
   id: string;
   name: string;
+  phone: string | null;
   relationshipId: string | null;
+  xUsername?: string | null;
+  xUserId?: string | null;
+  tiktokUsername?: string | null;
+  tiktokOpenId?: string | null;
 }
 
 interface Props {

@@ -18,6 +18,11 @@ import {
   UserProviderTokensClient,
   VoiceSessionManager,
   GmailClient,
+  InstagramClient,
+  XClient,
+  WhatsAppClient,
+  TikTokClient,
+  MessagesClient,
 } from "@related/shared";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 
@@ -67,6 +72,11 @@ function build() {
     onboarding: new OnboardingClient(supabase, resolveOwnerId),
     userProviderTokens: new UserProviderTokensClient(supabase, resolveOwnerId),
     gmail: new GmailClient(supabase),
+    instagram: new InstagramClient(supabase),
+    x: new XClient(supabase),
+    whatsapp: new WhatsAppClient(supabase),
+    tiktok: new TikTokClient(supabase),
+    messages: new MessagesClient(supabase),
     agentService,
     voiceSessionManager,
     sttAdapter,

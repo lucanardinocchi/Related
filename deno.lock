@@ -1,0 +1,103 @@
+{
+  "version": "5",
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.46.1": "2bbc3d3c05dbc9df3720aa2c357c3fe18286bf79b37c9e091fd1f7b88b8f801c"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@playwright/test@^1.60.0"
+      ]
+    },
+    "members": {
+      "src/backend": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@supabase/supabase-js@^2.46.1",
+            "npm:@types/jest@^29.5.14",
+            "npm:@types/node@^22.9.0",
+            "npm:jest@^29.7.0",
+            "npm:ts-jest@^29.2.5",
+            "npm:typescript@^5.6.3"
+          ]
+        }
+      },
+      "src/mobile": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@expo-google-fonts/inter-tight@~0.4.2",
+            "npm:@react-navigation/bottom-tabs@^7.16.1",
+            "npm:@react-navigation/native-stack@^7.15.1",
+            "npm:@react-navigation/native@^7.2.4",
+            "npm:@related/shared@*",
+            "npm:@supabase/supabase-js@^2.46.1",
+            "npm:@testing-library/react-native@^12.7.0",
+            "npm:@types/jest@^29.5.14",
+            "npm:@types/react@19.1",
+            "npm:expo-audio@~1.1.1",
+            "npm:expo-file-system@~19.0.22",
+            "npm:expo-font@~14.0.11",
+            "npm:expo-status-bar@~3.0.9",
+            "npm:expo@~54.0.33",
+            "npm:jest-expo@54.0",
+            "npm:jest@^29.7.0",
+            "npm:react-dom@19.1.0",
+            "npm:react-native-safe-area-context@5.6",
+            "npm:react-native-screens@4.16",
+            "npm:react-native-web@0.21",
+            "npm:react-native@0.81.5",
+            "npm:react-test-renderer@19.1.0",
+            "npm:react@19.1.0",
+            "npm:typescript@~5.9.2"
+          ]
+        }
+      },
+      "src/shared": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@anthropic-ai/sdk@0.96",
+            "npm:@supabase/supabase-js@^2.46.1",
+            "npm:@types/jest@^29.5.14",
+            "npm:@types/node@^22.9.0",
+            "npm:@types/react@19.1",
+            "npm:jest@^29.7.0",
+            "npm:react@19.1.0",
+            "npm:ts-jest@^29.2.5",
+            "npm:typescript@^5.6.3"
+          ]
+        }
+      },
+      "src/web": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@related/shared@*",
+            "npm:@supabase/ssr@~0.5.2",
+            "npm:@supabase/supabase-js@^2.46.1",
+            "npm:@tailwindcss/postcss@4",
+            "npm:@testing-library/jest-dom@^6.9.1",
+            "npm:@testing-library/react@^16.3.2",
+            "npm:@testing-library/user-event@^14.6.1",
+            "npm:@types/node@22",
+            "npm:@types/react-dom@19.1",
+            "npm:@types/react@19.1",
+            "npm:@vitejs/plugin-react@^6.0.2",
+            "npm:clsx@^2.1.1",
+            "npm:date-fns@^4.2.1",
+            "npm:jsdom@^20.0.3",
+            "npm:lucide-react@^1.16.0",
+            "npm:next@^15.1.0",
+            "npm:postcss@^8.4.0",
+            "npm:react-dom@19.1.0",
+            "npm:react-hook-form@^7.76.0",
+            "npm:react@19.1.0",
+            "npm:tailwind-merge@^3.6.0",
+            "npm:tailwindcss@4",
+            "npm:typescript@~5.9.2",
+            "npm:vitest@^4.1.7",
+            "npm:zod@^4.4.3"
+          ]
+        }
+      }
+    }
+  }
+}

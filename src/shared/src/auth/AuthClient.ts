@@ -8,6 +8,10 @@ import {
   GOOGLE_CALENDAR_SCOPES,
   GOOGLE_INTEGRATION_SCOPES,
 } from "../integrations/google/googleScopes";
+import { INSTAGRAM_INTEGRATION_SCOPES } from "../integrations/instagram/instagramScopes";
+import { X_INTEGRATION_SCOPES } from "../integrations/x/xScopes";
+import { WHATSAPP_INTEGRATION_SCOPES } from "../integrations/whatsapp/whatsappScopes";
+import { TIKTOK_INTEGRATION_SCOPES } from "../integrations/tiktok/tiktokScopes";
 
 export interface AuthClientConfig {
   supabaseUrl: string;
@@ -125,6 +129,84 @@ export class AuthClient {
    */
   async linkGoogleGmail(redirectTo: string): Promise<{ url: string }> {
     return this.linkGoogleWithScopes(redirectTo, GOOGLE_INTEGRATION_SCOPES);
+  }
+
+  /**
+   * Builds the Instagram Login OAuth URL for a creator/professional account.
+   * Token exchange happens in the instagram-oauth Edge Function on callback.
+   */
+  buildInstagramOAuthUrl(input: {
+    appId: string;
+    redirectUri: string;
+  }): string {
+    const params = new URLSearchParams({
+      client_id: input.appId,
+      redirect_uri: input.redirectUri,
+      response_type: "code",
+      scope: INSTAGRAM_INTEGRATION_SCOPES,
+    });
+    return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
+  }
+
+  /**
+   * Builds the X OAuth 2.0 PKCE authorization URL. The caller must generate
+   * code_verifier/code_challenge (see xPkce) and store the verifier for the
+   * callback exchange in x-oauth.
+   */
+  buildXOAuthUrl(input: {
+    clientId: string;
+    redirectUri: string;
+    codeChallenge: string;
+    state: string;
+  }): string {
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: input.clientId,
+      redirect_uri: input.redirectUri,
+      scope: X_INTEGRATION_SCOPES,
+      state: input.state,
+      code_challenge: input.codeChallenge,
+      code_challenge_method: "S256",
+    });
+    return `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
+  }
+
+  /**
+   * Builds the Meta OAuth URL for WhatsApp Business Cloud API connect.
+   * Token exchange happens in the whatsapp-oauth Edge Function on callback.
+   */
+  buildWhatsAppOAuthUrl(input: {
+    appId: string;
+    redirectUri: string;
+    state: string;
+  }): string {
+    const params = new URLSearchParams({
+      client_id: input.appId,
+      redirect_uri: input.redirectUri,
+      response_type: "code",
+      scope: WHATSAPP_INTEGRATION_SCOPES,
+      state: input.state,
+    });
+    return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
+  }
+
+  /**
+   * Builds the TikTok Login Kit OAuth URL. Token exchange happens in the
+   * tiktok-oauth Edge Function on callback.
+   */
+  buildTikTokOAuthUrl(input: {
+    clientKey: string;
+    redirectUri: string;
+    state: string;
+  }): string {
+    const params = new URLSearchParams({
+      client_key: input.clientKey,
+      redirect_uri: input.redirectUri,
+      response_type: "code",
+      scope: TIKTOK_INTEGRATION_SCOPES,
+      state: input.state,
+    });
+    return `https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`;
   }
 
   private async linkGoogleWithScopes(

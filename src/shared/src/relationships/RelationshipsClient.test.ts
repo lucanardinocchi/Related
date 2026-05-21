@@ -60,6 +60,44 @@ const NULL_PROFILE = {
   education: null,
 };
 
+const NULL_INSTAGRAM_DB = {
+  instagram_username: null,
+  instagram_scoped_id: null,
+};
+
+const NULL_X_DB = {
+  x_username: null,
+  x_user_id: null,
+};
+
+const NULL_TIKTOK_DB = {
+  tiktok_username: null,
+  tiktok_open_id: null,
+};
+
+const NULL_WHATSAPP_DB = {
+  whatsapp_wa_id: null,
+};
+
+const NULL_INSTAGRAM = {
+  instagramUsername: null,
+  instagramScopedId: null,
+};
+
+const NULL_X = {
+  xUsername: null,
+  xUserId: null,
+};
+
+const NULL_TIKTOK = {
+  tiktokUsername: null,
+  tiktokOpenId: null,
+};
+
+const NULL_WHATSAPP = {
+  whatsappWaId: null,
+};
+
 describe("RelationshipsClient.createContact", () => {
   it("inserts a Contact and returns the persisted row", async () => {
     const { q, rels } = withClient();
@@ -70,6 +108,10 @@ describe("RelationshipsClient.createContact", () => {
         phone: null,
         email: null,
         ...NULL_PROFILE,
+        ...NULL_INSTAGRAM_DB,
+        ...NULL_X_DB,
+        ...NULL_TIKTOK_DB,
+        ...NULL_WHATSAPP_DB,
         created_at: "2026-05-17T00:00:00Z",
       },
       error: null,
@@ -83,6 +125,10 @@ describe("RelationshipsClient.createContact", () => {
       phone: null,
       email: null,
       ...NULL_PROFILE,
+      ...NULL_INSTAGRAM,
+      ...NULL_X,
+      ...NULL_TIKTOK,
+      ...NULL_WHATSAPP,
       createdAt: "2026-05-17T00:00:00Z",
     });
     expect(q.from).toHaveBeenCalledWith("contacts");
@@ -91,6 +137,10 @@ describe("RelationshipsClient.createContact", () => {
       phone: null,
       email: null,
       ...NULL_PROFILE,
+      ...NULL_INSTAGRAM_DB,
+      ...NULL_X_DB,
+      ...NULL_TIKTOK_DB,
+      whatsapp_wa_id: null,
     });
   });
 
@@ -108,6 +158,10 @@ describe("RelationshipsClient.createContact", () => {
         longitude: 151.2109,
         occupation: "designer",
         education: "UNSW",
+        ...NULL_INSTAGRAM_DB,
+        ...NULL_X_DB,
+        ...NULL_TIKTOK_DB,
+        ...NULL_WHATSAPP_DB,
         created_at: "2026-05-17T00:00:00Z",
       },
       error: null,
@@ -135,6 +189,10 @@ describe("RelationshipsClient.createContact", () => {
       longitude: 151.2109,
       occupation: "designer",
       education: "UNSW",
+      ...NULL_INSTAGRAM_DB,
+      ...NULL_X_DB,
+      ...NULL_TIKTOK_DB,
+      whatsapp_wa_id: null,
     });
   });
 
@@ -231,6 +289,7 @@ describe("RelationshipsClient.listRelationships", () => {
             phone: null,
             email: null,
             ...NULL_PROFILE,
+            ...NULL_INSTAGRAM_DB,
             created_at: "2026-05-17T00:00:00Z",
           },
         },
@@ -251,6 +310,7 @@ describe("RelationshipsClient.listRelationships", () => {
             longitude: 151.1799,
             occupation: "designer",
             education: null,
+            ...NULL_INSTAGRAM_DB,
             created_at: "2026-05-17T00:30:00Z",
           },
         },
@@ -275,6 +335,7 @@ describe("RelationshipsClient.listRelationships", () => {
           phone: null,
           email: null,
           ...NULL_PROFILE,
+          ...NULL_INSTAGRAM,
           createdAt: "2026-05-17T00:00:00Z",
         },
       },
@@ -295,6 +356,7 @@ describe("RelationshipsClient.listRelationships", () => {
           longitude: 151.1799,
           occupation: "designer",
           education: null,
+          ...NULL_INSTAGRAM,
           createdAt: "2026-05-17T00:30:00Z",
         },
       },
@@ -325,6 +387,7 @@ describe("RelationshipsClient.getRelationship", () => {
           phone: null,
           email: "maya@x.com",
           ...NULL_PROFILE,
+          ...NULL_INSTAGRAM_DB,
           created_at: "2026-05-17T03:00:00Z",
         },
       },
@@ -347,6 +410,7 @@ describe("RelationshipsClient.getRelationship", () => {
         phone: null,
         email: "maya@x.com",
         ...NULL_PROFILE,
+        ...NULL_INSTAGRAM,
         createdAt: "2026-05-17T03:00:00Z",
       },
     });

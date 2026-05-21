@@ -16,6 +16,20 @@ export interface Contact {
   longitude: number | null;
   occupation: string | null;
   education: string | null;
+  /** Instagram handle without @ — used to match DM conversations. */
+  instagramUsername: string | null;
+  /** Instagram-scoped user ID (IGSID) — required to send DMs via the API. */
+  instagramScopedId: string | null;
+  /** X handle without @ — used to match DM conversations. */
+  xUsername: string | null;
+  /** X user ID — required to send DMs via the API. */
+  xUserId: string | null;
+  /** TikTok handle without @ — used to match DM conversations. */
+  tiktokUsername: string | null;
+  /** TikTok open ID — required to send DMs via the API. */
+  tiktokOpenId: string | null;
+  /** WhatsApp user ID (E.164 digits without +) — used to send DMs via the API. */
+  whatsappWaId: string | null;
   createdAt: string;
 }
 
@@ -29,6 +43,13 @@ export interface CreateContactInput {
   longitude?: number | null;
   occupation?: string | null;
   education?: string | null;
+  instagramUsername?: string | null;
+  instagramScopedId?: string | null;
+  xUsername?: string | null;
+  xUserId?: string | null;
+  tiktokUsername?: string | null;
+  tiktokOpenId?: string | null;
+  whatsappWaId?: string | null;
 }
 
 export interface UpdateContactInput {
@@ -41,6 +62,13 @@ export interface UpdateContactInput {
   longitude?: number | null;
   occupation?: string | null;
   education?: string | null;
+  instagramUsername?: string | null;
+  instagramScopedId?: string | null;
+  xUsername?: string | null;
+  xUserId?: string | null;
+  tiktokUsername?: string | null;
+  tiktokOpenId?: string | null;
+  whatsappWaId?: string | null;
 }
 
 export interface Relationship {
@@ -82,6 +110,13 @@ interface ContactRow {
   longitude: number | null;
   occupation: string | null;
   education: string | null;
+  instagram_username: string | null;
+  instagram_scoped_id: string | null;
+  x_username: string | null;
+  x_user_id: string | null;
+  tiktok_username: string | null;
+  tiktok_open_id: string | null;
+  whatsapp_wa_id: string | null;
   created_at: string;
 }
 
@@ -106,6 +141,13 @@ function toContact(row: ContactRow): Contact {
     longitude: row.longitude,
     occupation: row.occupation,
     education: row.education,
+    instagramUsername: row.instagram_username,
+    instagramScopedId: row.instagram_scoped_id,
+    xUsername: row.x_username,
+    xUserId: row.x_user_id,
+    tiktokUsername: row.tiktok_username,
+    tiktokOpenId: row.tiktok_open_id,
+    whatsappWaId: row.whatsapp_wa_id,
     createdAt: row.created_at,
   };
 }
@@ -122,7 +164,7 @@ function toRelationship(row: RelationshipRow): Relationship {
 }
 
 const CONTACT_COLUMNS =
-  "id, name, phone, email, birthday, area, latitude, longitude, occupation, education, created_at";
+  "id, name, phone, email, birthday, area, latitude, longitude, occupation, education, instagram_username, instagram_scoped_id, x_username, x_user_id, tiktok_username, tiktok_open_id, whatsapp_wa_id, created_at";
 
 const RELATIONSHIP_SELECT =
   `id, target_type, created_at, role, cadence, contact:contacts!target_contact_id(${CONTACT_COLUMNS})`;
@@ -159,6 +201,13 @@ export class RelationshipsClient {
         longitude: input.longitude ?? null,
         occupation: input.occupation ?? null,
         education: input.education ?? null,
+        instagram_username: input.instagramUsername ?? null,
+        instagram_scoped_id: input.instagramScopedId ?? null,
+        x_username: input.xUsername ?? null,
+        x_user_id: input.xUserId ?? null,
+        tiktok_username: input.tiktokUsername ?? null,
+        tiktok_open_id: input.tiktokOpenId ?? null,
+        whatsapp_wa_id: input.whatsappWaId ?? null,
       })
       .select(CONTACT_COLUMNS)
       .single();
@@ -177,6 +226,27 @@ export class RelationshipsClient {
     if (input.longitude !== undefined) patch.longitude = input.longitude;
     if (input.occupation !== undefined) patch.occupation = input.occupation;
     if (input.education !== undefined) patch.education = input.education;
+    if (input.instagramUsername !== undefined) {
+      patch.instagram_username = input.instagramUsername;
+    }
+    if (input.instagramScopedId !== undefined) {
+      patch.instagram_scoped_id = input.instagramScopedId;
+    }
+    if (input.xUsername !== undefined) {
+      patch.x_username = input.xUsername;
+    }
+    if (input.xUserId !== undefined) {
+      patch.x_user_id = input.xUserId;
+    }
+    if (input.tiktokUsername !== undefined) {
+      patch.tiktok_username = input.tiktokUsername;
+    }
+    if (input.tiktokOpenId !== undefined) {
+      patch.tiktok_open_id = input.tiktokOpenId;
+    }
+    if (input.whatsappWaId !== undefined) {
+      patch.whatsapp_wa_id = input.whatsappWaId;
+    }
 
     const { data, error } = await this.client
       .from("contacts")

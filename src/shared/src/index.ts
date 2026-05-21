@@ -273,6 +273,81 @@ export type {
 } from "./integrations/GmailClient";
 
 export {
+  INSTAGRAM_SCOPE_BASIC,
+  INSTAGRAM_SCOPE_MANAGE_MESSAGES,
+  INSTAGRAM_INTEGRATION_SCOPES,
+  tokenHasInstagramAccess,
+} from "./integrations/instagram/instagramScopes";
+
+export { InstagramClient } from "./integrations/InstagramClient";
+export type {
+  InstagramMessageSummary,
+  ListInstagramForContactInput,
+  SendInstagramInput,
+  InstagramContactStatus,
+} from "./integrations/InstagramClient";
+
+export {
+  X_SCOPE_DM_READ,
+  X_SCOPE_DM_WRITE,
+  X_SCOPE_USERS_READ,
+  X_SCOPE_TWEET_READ,
+  X_SCOPE_OFFLINE_ACCESS,
+  X_INTEGRATION_SCOPES,
+  tokenHasXAccess,
+} from "./integrations/x/xScopes";
+
+export {
+  generateCodeVerifier,
+  generateCodeChallenge,
+} from "./integrations/x/xPkce";
+
+export { XClient } from "./integrations/XClient";
+export type {
+  XMessageSummary,
+  ListXForContactInput,
+  SendXInput,
+  ListXForGroupInput,
+  SendXGroupInput,
+  XContactStatus,
+} from "./integrations/XClient";
+
+export {
+  TIKTOK_SCOPE_USER_INFO_BASIC,
+  TIKTOK_SCOPE_USER_INFO_PROFILE,
+  TIKTOK_INTEGRATION_SCOPES,
+  tokenHasTikTokAccess,
+} from "./integrations/tiktok/tiktokScopes";
+
+export { TikTokClient } from "./integrations/TikTokClient";
+export type {
+  TikTokMessageSummary,
+  ListTikTokForContactInput,
+  SendTikTokInput,
+  ListTikTokForGroupInput,
+  SendTikTokGroupInput,
+  TikTokContactStatus,
+} from "./integrations/TikTokClient";
+
+export {
+  WHATSAPP_SCOPE_BUSINESS_MANAGEMENT,
+  WHATSAPP_SCOPE_BUSINESS_MESSAGING,
+  WHATSAPP_SCOPE_BUSINESS_MANAGEMENT_ALT,
+  WHATSAPP_INTEGRATION_SCOPES,
+  tokenHasWhatsAppAccess,
+} from "./integrations/whatsapp/whatsappScopes";
+
+export { WhatsAppClient } from "./integrations/WhatsAppClient";
+export type {
+  WhatsAppMessageSummary,
+  ListWhatsAppForContactInput,
+  SendWhatsAppInput,
+  ListWhatsAppForGroupInput,
+  SendWhatsAppGroupInput,
+  WhatsAppContactStatus,
+} from "./integrations/WhatsAppClient";
+
+export {
   fetchGoogleCalendarEvents,
   refreshGoogleAccessToken,
 } from "./integrations/google/GoogleCalendarFetcher";
@@ -309,6 +384,20 @@ export type {
   SetMessagesFn,
   ConsumeRespondStreamParams,
 } from "./chats/conversationalChatState";
+
+export { MessagesClient, normalizePhone } from "./messages/MessagesClient";
+export type {
+  MessageThread,
+  Message,
+  MessageDirection,
+  OutboundQueueItem,
+  OutboundQueueStatus,
+  RelayDevice,
+  RelayPairingCode,
+  MessagesClientConfig,
+  LinkThreadInput,
+  SendMessageInput,
+} from "./messages/MessagesClient";
 
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {

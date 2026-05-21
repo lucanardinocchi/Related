@@ -10,6 +10,7 @@ import {
   RelationshipsClient,
   UserContextClient,
   UserProviderTokensClient,
+  MessagesClient,
 } from "@related/shared";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -41,5 +42,6 @@ export async function getServerDeps() {
     userContext: new UserContextClient(supabase, resolveOwnerId),
     onboarding: new OnboardingClient(supabase, resolveOwnerId),
     userProviderTokens: new UserProviderTokensClient(supabase, resolveOwnerId),
+    messages: new MessagesClient(supabase),
   };
 }

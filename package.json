@@ -6,7 +6,8 @@
     "src/shared",
     "src/mobile",
     "src/web",
-    "src/backend"
+    "src/backend",
+    "src/relay"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",

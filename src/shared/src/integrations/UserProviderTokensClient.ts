@@ -1,7 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OwnerIdResolver } from "../user-context/UserContextClient";
 
-export type ProviderName = "google";
+export type ProviderName =
+  | "google"
+  | "instagram"
+  | "x"
+  | "whatsapp"
+  | "tiktok";
 
 export interface UserProviderToken {
   ownerId: string;
@@ -10,6 +15,7 @@ export interface UserProviderToken {
   refreshToken: string | null;
   expiresAt: string | null;
   scopes: string | null;
+  providerAccountId: string | null;
   updatedAt: string;
 }
 
@@ -19,6 +25,7 @@ export interface UpsertUserProviderTokenInput {
   refreshToken?: string | null;
   expiresAt?: string | null;
   scopes?: string | null;
+  providerAccountId?: string | null;
 }
 
 interface Row {
@@ -28,6 +35,7 @@ interface Row {
   refresh_token: string | null;
   expires_at: string | null;
   scopes: string | null;
+  provider_account_id: string | null;
   updated_at?: string;
 }
 
@@ -39,6 +47,7 @@ function rowToToken(row: Row): UserProviderToken {
     refreshToken: row.refresh_token,
     expiresAt: row.expires_at,
     scopes: row.scopes,
+    providerAccountId: row.provider_account_id,
     updatedAt: row.updated_at ?? "",
   };
 }
@@ -68,6 +77,7 @@ export class UserProviderTokensClient {
           refresh_token: input.refreshToken ?? null,
           expires_at: input.expiresAt ?? null,
           scopes: input.scopes ?? null,
+          provider_account_id: input.providerAccountId ?? null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "owner_id,provider" },
@@ -80,7 +90,9 @@ export class UserProviderTokensClient {
   async getForProvider(provider: ProviderName): Promise<UserProviderToken | null> {
     const { data, error } = await this.client
       .from("user_provider_tokens")
-      .select("owner_id, provider, access_token, refresh_token, expires_at, scopes, updated_at")
+      .select(
+        "owner_id, provider, access_token, refresh_token, expires_at, scopes, provider_account_id, updated_at",
+      )
       .eq("provider", provider)
       .maybeSingle();
     if (error) throw error;

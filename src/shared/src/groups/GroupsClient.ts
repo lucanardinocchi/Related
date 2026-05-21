@@ -3,6 +3,12 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 export interface Group {
   id: string;
   name: string;
+  /** Linked X group DM conversation ID, when known. */
+  xDmConversationId: string | null;
+  /** Linked TikTok group DM conversation ID, when known. */
+  tiktokDmConversationId: string | null;
+  /** Linked WhatsApp group ID, when known. */
+  whatsappGroupId: string | null;
   createdAt: string;
 }
 
@@ -24,6 +30,10 @@ export interface GroupMember {
   name: string;
   phone: string | null;
   email: string | null;
+  xUsername: string | null;
+  xUserId: string | null;
+  tiktokUsername: string | null;
+  tiktokOpenId: string | null;
   createdAt: string;
 }
 
@@ -32,6 +42,10 @@ interface ContactRow {
   name: string;
   phone: string | null;
   email: string | null;
+  x_username: string | null;
+  x_user_id: string | null;
+  tiktok_username: string | null;
+  tiktok_open_id: string | null;
   created_at: string;
 }
 
@@ -67,6 +81,10 @@ function toMember(row: ContactRow): GroupMember {
     name: row.name,
     phone: row.phone,
     email: row.email,
+    xUsername: row.x_username,
+    xUserId: row.x_user_id,
+    tiktokUsername: row.tiktok_username,
+    tiktokOpenId: row.tiktok_open_id,
     createdAt: row.created_at,
   };
 }
@@ -88,6 +106,9 @@ export interface GroupsClientConfig {
 interface GroupRow {
   id: string;
   name: string;
+  x_dm_conversation_id: string | null;
+  tiktok_dm_conversation_id: string | null;
+  whatsapp_group_id: string | null;
   created_at: string;
 }
 
@@ -95,6 +116,9 @@ function toGroup(row: GroupRow): Group {
   return {
     id: row.id,
     name: row.name,
+    xDmConversationId: row.x_dm_conversation_id,
+    tiktokDmConversationId: row.tiktok_dm_conversation_id,
+    whatsappGroupId: row.whatsapp_group_id,
     createdAt: row.created_at,
   };
 }
@@ -144,7 +168,7 @@ export class GroupsClient {
     const { data, error } = await this.client
       .from("contact_groups")
       .select(
-        "group:groups(id, name, created_at, relationships(id, created_at))",
+        "group:groups(id, name, x_dm_conversation_id, tiktok_dm_conversation_id, whatsapp_group_id, created_at, relationships(id, created_at))",
       )
       .eq("contact_id", contactId)
       .order("created_at", { ascending: false });
@@ -170,7 +194,7 @@ export class GroupsClient {
     const { data, error } = await this.client
       .from("relationships")
       .select(
-        "id, target_type, created_at, group:groups(id, name, created_at)",
+        "id, target_type, created_at, group:groups(id, name, x_dm_conversation_id, tiktok_dm_conversation_id, whatsapp_group_id, created_at)",
       )
       .eq("target_type", "group")
       .order("created_at", { ascending: false });
@@ -183,7 +207,7 @@ export class GroupsClient {
   async listGroups(): Promise<Group[]> {
     const { data, error } = await this.client
       .from("groups")
-      .select("id, name, created_at")
+      .select("id, name, x_dm_conversation_id, tiktok_dm_conversation_id, whatsapp_group_id, created_at")
       .order("created_at", { ascending: false });
     if (error) throw error;
     return ((data ?? []) as GroupRow[]).map(toGroup);
@@ -192,7 +216,7 @@ export class GroupsClient {
   async listMembers(groupId: string): Promise<GroupMember[]> {
     const { data, error } = await this.client
       .from("contact_groups")
-      .select("contact:contacts(id, name, phone, email, created_at)")
+      .select("contact:contacts(id, name, phone, email, x_username, x_user_id, tiktok_username, tiktok_open_id, created_at)")
       .eq("group_id", groupId)
       .order("contact(name)", { ascending: true });
     if (error) throw error;
@@ -217,7 +241,7 @@ export class GroupsClient {
   async getGroup(id: string): Promise<Group> {
     const { data, error } = await this.client
       .from("groups")
-      .select("id, name, created_at")
+      .select("id, name, x_dm_conversation_id, tiktok_dm_conversation_id, whatsapp_group_id, created_at")
       .eq("id", id)
       .single();
     if (error) throw error;
@@ -226,16 +250,30 @@ export class GroupsClient {
 
   async updateGroup(
     id: string,
-    input: { name?: string },
+    input: {
+      name?: string;
+      xDmConversationId?: string | null;
+      tiktokDmConversationId?: string | null;
+      whatsappGroupId?: string | null;
+    },
   ): Promise<Group> {
     const patch: Record<string, unknown> = {};
     if (input.name !== undefined) patch.name = input.name;
+    if (input.xDmConversationId !== undefined) {
+      patch.x_dm_conversation_id = input.xDmConversationId;
+    }
+    if (input.tiktokDmConversationId !== undefined) {
+      patch.tiktok_dm_conversation_id = input.tiktokDmConversationId;
+    }
+    if (input.whatsappGroupId !== undefined) {
+      patch.whatsapp_group_id = input.whatsappGroupId;
+    }
 
     const { data, error } = await this.client
       .from("groups")
       .update(patch)
       .eq("id", id)
-      .select("id, name, created_at")
+      .select("id, name, x_dm_conversation_id, tiktok_dm_conversation_id, whatsapp_group_id, created_at")
       .single();
     if (error) throw error;
     return toGroup(data as GroupRow);

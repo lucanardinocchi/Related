@@ -61,7 +61,12 @@ export default async function GroupDetailPage({
         members={members.map((m) => ({
           id: m.id,
           name: m.name,
+          phone: m.phone,
           relationshipId: relationshipIdByContact.get(m.id) ?? null,
+          xUsername: m.xUsername,
+          xUserId: m.xUserId,
+          tiktokUsername: m.tiktokUsername,
+          tiktokOpenId: m.tiktokOpenId,
         }))}
         interactions={groupInteractions}
         openThreads={threads}

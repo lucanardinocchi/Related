@@ -19,6 +19,10 @@ import { OpenThreadsSection } from "../../relationships/[id]/_OpenThreadsSection
 import { ContextTimelineSection } from "../../relationships/[id]/_ContextTimelineSection";
 import { RelationshipAnalyticsSection } from "../../relationships/[id]/_RelationshipAnalyticsSection";
 import { GroupKeyDetailsSection } from "./_GroupKeyDetailsSection";
+import { GroupMessagesSection } from "./_GroupMessagesSection";
+import { GroupXSection } from "./_GroupXSection";
+import { GroupTikTokSection } from "./_GroupTikTokSection";
+import { GroupWhatsAppSection } from "./_GroupWhatsAppSection";
 import type { GroupMemberSummary } from "./_GroupMembersWidget";
 
 interface Props {
@@ -33,7 +37,7 @@ interface Props {
 export function GroupDetailView({
   group: initialGroup,
   relationship,
-  members,
+  members: initialMembers,
   interactions: initialInteractions,
   openThreads: initialOpenThreads,
   analytics,
@@ -46,11 +50,61 @@ export function GroupDetailView({
   const [openThreads, setOpenThreads] = useState<OpenThread[]>(
     initialOpenThreads,
   );
+  const [members, setMembers] = useState(initialMembers);
 
   async function saveName(next: string) {
     const trimmed = next.trim();
     if (trimmed === "" || trimmed === group.name) return;
     const updated = await deps.groups.updateGroup(group.id, { name: trimmed });
+    setGroup(updated);
+  }
+
+  async function saveMember(
+    contactId: string,
+    field: "phone" | "xUsername" | "tiktokUsername",
+    next: string,
+  ) {
+    const value =
+      next.trim() === ""
+        ? null
+        : field === "phone"
+          ? next.trim()
+          : next.trim().replace(/^@/, "");
+    const updated = await deps.relationships.updateContact(contactId, {
+      [field]: value,
+    });
+    setMembers((current) =>
+      current.map((m) =>
+        m.id === contactId
+          ? {
+              ...m,
+              phone: updated.phone,
+              xUsername: updated.xUsername,
+              tiktokUsername: updated.tiktokUsername,
+            }
+          : m,
+      ),
+    );
+  }
+
+  async function saveXConversationId(conversationId: string) {
+    const updated = await deps.groups.updateGroup(group.id, {
+      xDmConversationId: conversationId,
+    });
+    setGroup(updated);
+  }
+
+  async function saveWhatsAppGroupId(whatsappGroupId: string) {
+    const updated = await deps.groups.updateGroup(group.id, {
+      whatsappGroupId,
+    });
+    setGroup(updated);
+  }
+
+  async function saveTikTokConversationId(conversationId: string) {
+    const updated = await deps.groups.updateGroup(group.id, {
+      tiktokDmConversationId: conversationId,
+    });
     setGroup(updated);
   }
 
@@ -175,7 +229,64 @@ export function GroupDetailView({
       <GroupKeyDetailsSection
         name={group.name}
         members={members}
+        memberMessaging={members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          relationshipId: m.relationshipId,
+          phone: m.phone,
+          xUsername: m.xUsername ?? null,
+          tiktokUsername: m.tiktokUsername ?? null,
+        }))}
         onSaveName={saveName}
+        onSaveMember={saveMember}
+      />
+
+      <GroupMessagesSection
+        groupId={group.id}
+        groupName={group.name}
+        members={members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          phone: m.phone,
+        }))}
+      />
+
+      <GroupXSection
+        groupId={group.id}
+        groupName={group.name}
+        xDmConversationId={group.xDmConversationId}
+        members={members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          xUsername: m.xUsername ?? null,
+          xUserId: m.xUserId ?? null,
+        }))}
+        onConversationIdResolved={saveXConversationId}
+      />
+
+      <GroupWhatsAppSection
+        groupId={group.id}
+        groupName={group.name}
+        whatsappGroupId={group.whatsappGroupId}
+        members={members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          phone: m.phone,
+        }))}
+        onGroupIdResolved={saveWhatsAppGroupId}
+      />
+
+      <GroupTikTokSection
+        groupId={group.id}
+        groupName={group.name}
+        tiktokDmConversationId={group.tiktokDmConversationId}
+        members={members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          tiktokUsername: m.tiktokUsername ?? null,
+          tiktokOpenId: m.tiktokOpenId ?? null,
+        }))}
+        onConversationIdResolved={saveTikTokConversationId}
       />
 
       <RelationshipAnalyticsSection analytics={analytics} />

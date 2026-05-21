@@ -1,0 +1,21 @@
+{
+  "name": "@related/relay",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "related-relay": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}

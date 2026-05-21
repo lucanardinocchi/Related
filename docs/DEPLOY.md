@@ -182,6 +182,65 @@ The script clears all `owner_id`-scoped rows for that User, then inserts contact
 
 Optional: `SEED_EMAIL=other@example.com` or `SEED_CLEAR_ONLY=1` (wipe only).
 
+## Tier 5 — Mac Messages relay (~15 min)
+
+Syncs SMS/iMessage from a paired Mac into Supabase so the web app can read threads and queue sends on relationship pages.
+
+### 5.1 Apply migration
+
+```sh
+cd src/backend
+supabase db push
+```
+
+Creates `relay_devices`, `message_threads`, `messages`, `outbound_queue`, and enables Realtime on message tables.
+
+### 5.2 Deploy relay edge functions
+
+```sh
+cd src/backend
+supabase functions deploy relay-pair relay-sync relay-outbound-pull relay-outbound-ack
+```
+
+No extra secrets — device auth uses hashed credentials stored in `relay_devices`.
+
+### 5.3 Install the Mac relay daemon
+
+On the Mac signed into Messages (same Apple ID as your iPhone):
+
+```sh
+brew install steipete/tap/imsg
+cd src/relay && npm install && npm run build
+```
+
+Grant **Full Disk Access** and **Automation** (Messages.app) to Terminal or the process running the relay. See `src/relay/README.md` for the one-time permission flow and a `launchd` plist for always-on sync.
+
+### 5.4 Pair from web Settings
+
+1. Open the web app → **Settings** → **Mac relay** → **Generate pairing code**.
+2. On the Mac:
+
+```sh
+node src/relay/dist/index.js pair \
+  --code ABCD1234 \
+  --supabase-url https://<ref>.supabase.co \
+  --name "My MacBook"
+```
+
+3. Start the relay:
+
+```sh
+node src/relay/dist/index.js run
+```
+
+### 5.5 Verify
+
+- Settings shows relay **Online** (heartbeat within 90s).
+- Individual relationship page → **Messages** section shows synced threads.
+- Compose from web → message sends via Mac when relay is running.
+
+**Mac must stay on** with Messages signed in. Web reads cached messages when relay is offline; sends queue until the Mac reconnects.
+
 ## Troubleshooting
 
 **"Missing NEXT_PUBLIC_SUPABASE_URL" at build time** — env vars must be set in Vercel BEFORE the build runs. Set them, then trigger a redeploy. (The env helpers in `src/web/lib/supabase/*` defer the check to call time so `next build` itself doesn't require secrets, but the deployed app does.)

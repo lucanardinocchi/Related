@@ -35,7 +35,10 @@ interface Props {
       | "email"
       | "birthday"
       | "occupation"
-      | "education",
+      | "education"
+      | "instagramUsername"
+      | "xUsername"
+      | "tiktokUsername",
     next: string,
   ) => Promise<void>;
   onSaveLocation: (next: ContactLocationValue) => Promise<void>;
@@ -67,14 +70,32 @@ export function KeyDetailsSection({
         <CompactField
           label="Phone"
           value={relationship.contact.phone ?? ""}
-          placeholder="Add a phone number"
+          placeholder="e.g. +61 412 345 678"
           onSave={(v) => onSaveContact("phone", v)}
         />
         <CompactField
           label="Email"
           value={relationship.contact.email ?? ""}
-          placeholder="Add an email"
+          placeholder="e.g. alex@example.com"
           onSave={(v) => onSaveContact("email", v)}
+        />
+        <CompactField
+          label="Instagram handle"
+          value={relationship.contact.instagramUsername ?? ""}
+          placeholder="username (without @)"
+          onSave={(v) => onSaveContact("instagramUsername", v.replace(/^@/, ""))}
+        />
+        <CompactField
+          label="X handle"
+          value={relationship.contact.xUsername ?? ""}
+          placeholder="username (without @)"
+          onSave={(v) => onSaveContact("xUsername", v.replace(/^@/, ""))}
+        />
+        <CompactField
+          label="TikTok handle"
+          value={relationship.contact.tiktokUsername ?? ""}
+          placeholder="username (without @)"
+          onSave={(v) => onSaveContact("tiktokUsername", v.replace(/^@/, ""))}
         />
         <CompactField
           label="Birthday"

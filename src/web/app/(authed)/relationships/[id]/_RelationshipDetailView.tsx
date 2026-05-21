@@ -20,6 +20,11 @@ import { OpenThreadsSection } from "./_OpenThreadsSection";
 import { ContextTimelineSection } from "./_ContextTimelineSection";
 import { RecentCandidateSection } from "./_RecentCandidateSection";
 import { EmailSection } from "./_EmailSection";
+import { InstagramSection } from "./_InstagramSection";
+import { XSection } from "./_XSection";
+import { WhatsAppSection } from "./_WhatsAppSection";
+import { TikTokSection } from "./_TikTokSection";
+import { MessagesSection } from "./_MessagesSection";
 
 interface Props {
   relationship: Relationship;
@@ -64,13 +69,48 @@ export function RelationshipDetailView({
       | "email"
       | "birthday"
       | "occupation"
-      | "education",
+      | "education"
+      | "instagramUsername"
+      | "xUsername"
+      | "tiktokUsername",
     next: string,
   ) {
     const value = next.trim() === "" ? null : next.trim();
     const updated = await deps.relationships.updateContact(
       relationship.contact.id,
       { [field]: value },
+    );
+    setRelationship((r) => ({ ...r, contact: updated }));
+  }
+
+  async function saveInstagramScopedId(scopedId: string) {
+    const updated = await deps.relationships.updateContact(
+      relationship.contact.id,
+      { instagramScopedId: scopedId },
+    );
+    setRelationship((r) => ({ ...r, contact: updated }));
+  }
+
+  async function saveXUserId(userId: string) {
+    const updated = await deps.relationships.updateContact(
+      relationship.contact.id,
+      { xUserId: userId },
+    );
+    setRelationship((r) => ({ ...r, contact: updated }));
+  }
+
+  async function saveWhatsappWaId(waId: string) {
+    const updated = await deps.relationships.updateContact(
+      relationship.contact.id,
+      { whatsappWaId: waId },
+    );
+    setRelationship((r) => ({ ...r, contact: updated }));
+  }
+
+  async function saveTikTokOpenId(openId: string) {
+    const updated = await deps.relationships.updateContact(
+      relationship.contact.id,
+      { tiktokOpenId: openId },
     );
     setRelationship((r) => ({ ...r, contact: updated }));
   }
@@ -211,9 +251,47 @@ export function RelationshipDetailView({
         onSaveRelationship={saveRelationship}
       />
 
+      <MessagesSection
+        contactId={relationship.contact.id}
+        contactName={relationship.contact.name}
+        contactPhone={relationship.contact.phone}
+      />
+
       <EmailSection
         contactEmail={relationship.contact.email}
         contactName={relationship.contact.name}
+      />
+
+      <InstagramSection
+        contactId={relationship.contact.id}
+        contactName={relationship.contact.name}
+        instagramUsername={relationship.contact.instagramUsername}
+        instagramScopedId={relationship.contact.instagramScopedId}
+        onScopedIdResolved={saveInstagramScopedId}
+      />
+
+      <XSection
+        contactId={relationship.contact.id}
+        contactName={relationship.contact.name}
+        xUsername={relationship.contact.xUsername}
+        xUserId={relationship.contact.xUserId}
+        onUserIdResolved={saveXUserId}
+      />
+
+      <WhatsAppSection
+        contactId={relationship.contact.id}
+        contactName={relationship.contact.name}
+        phone={relationship.contact.phone}
+        whatsappWaId={relationship.contact.whatsappWaId}
+        onWaIdResolved={saveWhatsappWaId}
+      />
+
+      <TikTokSection
+        contactId={relationship.contact.id}
+        contactName={relationship.contact.name}
+        tiktokUsername={relationship.contact.tiktokUsername}
+        tiktokOpenId={relationship.contact.tiktokOpenId}
+        onOpenIdResolved={saveTikTokOpenId}
       />
 
       {latestCandidateSet ? (
