@@ -26,6 +26,7 @@ function interaction(
     id,
     time,
     kind,
+    category: "personal",
     notes: null,
     status,
     contacts: [{ id: `c-${id}`, name: contactName }],

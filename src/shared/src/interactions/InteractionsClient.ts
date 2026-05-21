@@ -3,7 +3,25 @@ import {
   SupabaseClient,
 } from "@supabase/supabase-js";
 
-export type InteractionStatus = "planned" | "occurred" | "missed";
+export type InteractionStatus =
+  | "planned"
+  | "occurred"
+  | "attended"
+  | "missed"
+  | "cancelled";
+
+/**
+ * Category — the User-facing "what kind of thing is this" axis on the
+ * Calendar. Distinct from the per-Interaction `kind` label (which carries
+ * the conversational verb — call / text / coffee) and applies to past and
+ * future entries alike. Surfaces as the chart filter and inline picker.
+ */
+export type InteractionCategory =
+  | "work"
+  | "meeting"
+  | "activity"
+  | "personal"
+  | "errands";
 
 export interface InteractionContact {
   id: string;
@@ -14,6 +32,7 @@ export interface Interaction {
   id: string;
   time: string;
   kind: string;
+  category: InteractionCategory;
   notes: string | null;
   status: InteractionStatus;
   contacts: InteractionContact[];
@@ -22,6 +41,7 @@ export interface Interaction {
 export interface CreateInteractionInput {
   time: string;
   kind: string;
+  category?: InteractionCategory;
   notes?: string | null;
   status: InteractionStatus;
   contactIds: string[];
@@ -44,6 +64,7 @@ interface InteractionRow {
   id: string;
   time: string;
   kind: string;
+  category: InteractionCategory;
   notes: string | null;
   status: InteractionStatus;
   interaction_contacts: {
@@ -53,13 +74,14 @@ interface InteractionRow {
 }
 
 const SELECT_WITH_CONTACTS =
-  "id, time, kind, notes, status, interaction_contacts(contact_id, contacts(name))";
+  "id, time, kind, category, notes, status, interaction_contacts(contact_id, contacts(name))";
 
 function toInteraction(row: InteractionRow): Interaction {
   return {
     id: row.id,
     time: row.time,
     kind: row.kind,
+    category: row.category,
     notes: row.notes,
     status: row.status,
     contacts: (row.interaction_contacts ?? []).map((link) => ({
@@ -136,6 +158,22 @@ export class InteractionsClient {
     return ((data ?? []) as unknown as InteractionRow[]).map(toInteraction);
   }
 
+  async updateStatus(id: string, status: InteractionStatus): Promise<void> {
+    const { error } = await this.client
+      .from("interactions")
+      .update({ status })
+      .eq("id", id);
+    if (error) throw error;
+  }
+
+  async updateCategory(id: string, category: InteractionCategory): Promise<void> {
+    const { error } = await this.client
+      .from("interactions")
+      .update({ category })
+      .eq("id", id);
+    if (error) throw error;
+  }
+
   /**
    * Interactions involving a given Contact, most-recent-first. Drives the
    * history section on the Single Relationship view. The PostgREST `!inner`
@@ -191,12 +229,16 @@ export class InteractionsClient {
   async updateInteraction(
     id: string,
     input: Partial<
-      Pick<CreateInteractionInput, "time" | "kind" | "notes" | "status">
+      Pick<
+        CreateInteractionInput,
+        "time" | "kind" | "category" | "notes" | "status"
+      >
     >,
   ): Promise<Interaction> {
     const patch: Record<string, unknown> = {};
     if (input.time !== undefined) patch.time = input.time;
     if (input.kind !== undefined) patch.kind = input.kind;
+    if (input.category !== undefined) patch.category = input.category;
     if (input.notes !== undefined) patch.notes = input.notes;
     if (input.status !== undefined) patch.status = input.status;
 

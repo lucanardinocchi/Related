@@ -33,6 +33,7 @@ describe("InteractionsClient.listForContact", () => {
           id: "i-2",
           time: "2026-05-12T19:00:00Z",
           kind: "dinner",
+          category: "personal",
           notes: "group dinner",
           status: "occurred",
           interaction_contacts: [
@@ -43,6 +44,7 @@ describe("InteractionsClient.listForContact", () => {
           id: "i-1",
           time: "2026-05-10T09:00:00Z",
           kind: "coffee",
+          category: "personal",
           notes: null,
           status: "occurred",
           interaction_contacts: [
@@ -141,6 +143,7 @@ describe("InteractionsClient.listForGroup", () => {
           id: "i-2",
           time: "2026-05-12T19:00:00Z",
           kind: "dinner",
+          category: "personal",
           notes: "group dinner",
           status: "occurred",
           interaction_contacts: [
@@ -162,6 +165,7 @@ describe("InteractionsClient.listForGroup", () => {
         id: "i-2",
         time: "2026-05-12T19:00:00Z",
         kind: "dinner",
+        category: "personal",
         notes: "group dinner",
         status: "occurred",
         contacts: [

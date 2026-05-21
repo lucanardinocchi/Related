@@ -90,6 +90,7 @@ describe("<GroupDetailScreen />", () => {
         id: "i-1",
         time: "2026-05-12T19:00:00Z",
         kind: "dinner",
+        category: "personal",
         notes: "Vietnamese place",
         status: "occurred",
         contacts: [

@@ -115,6 +115,7 @@ describe("<HomeScreen />", () => {
         id: "i-1",
         time: "2026-05-20T13:30:00Z",
         kind: "coffee",
+        category: "personal",
         notes: null,
         status: "planned",
         contacts: [{ id: "c-1", name: "Sam" }],
