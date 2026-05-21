@@ -29,6 +29,16 @@ export interface OpenThread {
   createdAt: string;
   closedAt: string | null;
   relationshipIds: string[];
+  /**
+   * Free-text "why this matters to them". Nullable until the User fills it
+   * in from the Commitments view's expandable row. See ADR-0008.
+   */
+  whyHelpsPerson: string | null;
+  /**
+   * Free-text "why I'm in a position to help". Nullable until the User
+   * fills it in. See ADR-0008.
+   */
+  whyICanHelp: string | null;
 }
 
 export interface CreateOpenThreadInput {
@@ -50,6 +60,8 @@ export interface ListCommitmentsFilter {
 export interface SetCommitmentMetaInput {
   origin?: CommitmentOrigin | null;
   communicationStatus?: CommitmentCommunicationStatus;
+  whyHelpsPerson?: string | null;
+  whyICanHelp?: string | null;
 }
 
 export interface ClosedPerDayBucket {
@@ -75,6 +87,8 @@ interface OpenThreadRow {
   communication_status: CommitmentCommunicationStatus;
   created_at: string;
   closed_at: string | null;
+  why_helps_person: string | null;
+  why_i_can_help: string | null;
   open_thread_relationships: { relationship_id: string }[];
 }
 
@@ -84,7 +98,7 @@ interface ClosedPerDayRow {
 }
 
 const SELECT_WITH_LINKS =
-  "id, description, direction, origin, communication_status, created_at, closed_at, open_thread_relationships(relationship_id)";
+  "id, description, direction, origin, communication_status, created_at, closed_at, why_helps_person, why_i_can_help, open_thread_relationships(relationship_id)";
 
 function toOpenThread(row: OpenThreadRow): OpenThread {
   return {
@@ -95,6 +109,8 @@ function toOpenThread(row: OpenThreadRow): OpenThread {
     communicationStatus: row.communication_status,
     createdAt: row.created_at,
     closedAt: row.closed_at,
+    whyHelpsPerson: row.why_helps_person,
+    whyICanHelp: row.why_i_can_help,
     relationshipIds: (row.open_thread_relationships ?? []).map(
       (l) => l.relationship_id,
     ),
@@ -219,12 +235,47 @@ export class OpenThreadsClient {
     if (input.communicationStatus !== undefined) {
       patch.communication_status = input.communicationStatus;
     }
+    if (input.whyHelpsPerson !== undefined) {
+      patch.why_helps_person = input.whyHelpsPerson;
+    }
+    if (input.whyICanHelp !== undefined) {
+      patch.why_i_can_help = input.whyICanHelp;
+    }
 
     const { data, error } = await this.client
       .from("open_threads")
       .update(patch)
       .eq("id", id)
       .select(SELECT_WITH_LINKS)
+      .single();
+    if (error) throw error;
+    return toOpenThread(data as unknown as OpenThreadRow);
+  }
+
+  /**
+   * Replace the set of Relationships linked to an Open Thread. Goes through
+   * the `set_open_thread_relationships` RPC so the delete-and-reinsert lands
+   * in one transaction and the "at least one relationship required" invariant
+   * holds on update as on create. Returns the updated thread re-hydrated
+   * with the new join rows.
+   */
+  async setOpenThreadRelationships(
+    id: string,
+    relationshipIds: string[],
+  ): Promise<OpenThread> {
+    const { error: rpcError } = await this.client.rpc(
+      "set_open_thread_relationships",
+      {
+        p_open_thread_id: id,
+        p_relationship_ids: relationshipIds,
+      },
+    );
+    if (rpcError) throw rpcError;
+
+    const { data, error } = await this.client
+      .from("open_threads")
+      .select(SELECT_WITH_LINKS)
+      .eq("id", id)
       .single();
     if (error) throw error;
     return toOpenThread(data as unknown as OpenThreadRow);
