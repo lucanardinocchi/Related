@@ -11,6 +11,8 @@ function thread(over: Partial<OpenThread>): OpenThread {
     createdAt: "2026-05-01T00:00:00Z",
     closedAt: null,
     relationshipIds: ["r-1"],
+    whyHelpsPerson: null,
+    whyICanHelp: null,
     ...over,
   };
 }

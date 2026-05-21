@@ -54,9 +54,13 @@ function thread(id: string, description: string): OpenThread {
     id,
     description,
     direction: "me_owes_them",
+    origin: null,
+    communicationStatus: "not_communicated",
     createdAt: "2026-04-01T10:00:00Z",
     closedAt: null,
     relationshipIds: ["r-1"],
+    whyHelpsPerson: null,
+    whyICanHelp: null,
   };
 }
 
