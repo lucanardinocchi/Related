@@ -10,7 +10,6 @@ import type {
   InteractionStatus,
   OpenThread,
   Relationship,
-  RelationshipAnalytics,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Eyebrow, H1 } from "@/components/ui";
@@ -19,7 +18,6 @@ import { TouchpointsChart } from "./_TouchpointsChart";
 import { KeyDetailsSection, type GroupSummary } from "./_KeyDetailsSection";
 import { OpenThreadsSection } from "./_OpenThreadsSection";
 import { ContextTimelineSection } from "./_ContextTimelineSection";
-import { RelationshipAnalyticsSection } from "./_RelationshipAnalyticsSection";
 import { RecentCandidateSection } from "./_RecentCandidateSection";
 import { EmailSection } from "./_EmailSection";
 
@@ -28,7 +26,6 @@ interface Props {
   interactions: Interaction[];
   openThreads: OpenThread[];
   groupMemberships: GroupSummary[];
-  analytics: RelationshipAnalytics;
   latestCandidateSet: CandidateSet | null;
 }
 
@@ -37,7 +34,6 @@ export function RelationshipDetailView({
   interactions: initialInteractions,
   openThreads: initialOpenThreads,
   groupMemberships,
-  analytics,
   latestCandidateSet,
 }: Props) {
   const deps = getBrowserDeps();
@@ -223,8 +219,6 @@ export function RelationshipDetailView({
       {latestCandidateSet ? (
         <RecentCandidateSection candidateSet={latestCandidateSet} />
       ) : null}
-
-      <RelationshipAnalyticsSection analytics={analytics} />
 
       <OpenThreadsSection
         threads={openThreads}
