@@ -98,6 +98,35 @@ export class OnboardingClient {
     return { completedSteps: [], finishedAt: null, isFinished: false };
   }
 
+  /**
+   * Marks onboarding finished without requiring every canonical step to
+   * have been visited individually (e.g. web integrations wizard with
+   * optional skips).
+   */
+  async finishOnboarding(): Promise<OnboardingState> {
+    const ownerId = await this.resolveOwnerId();
+    const finishedAt = new Date().toISOString();
+    const { data, error } = await this.client
+      .from("onboarding_state")
+      .upsert(
+        {
+          owner_id: ownerId,
+          completed_steps: [...ONBOARDING_STEPS],
+          finished_at: finishedAt,
+        },
+        { onConflict: "owner_id" },
+      )
+      .select()
+      .single();
+    if (error) throw error;
+    const row = data as OnboardingRow;
+    return {
+      completedSteps: row.completed_steps as OnboardingStep[],
+      finishedAt: row.finished_at,
+      isFinished: true,
+    };
+  }
+
   async completeStep(step: OnboardingStep): Promise<OnboardingState> {
     const ownerId = await this.resolveOwnerId();
     const current = await this.getState();

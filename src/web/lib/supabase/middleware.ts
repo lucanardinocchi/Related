@@ -3,6 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/auth"];
 
+/** OAuth callbacks and onboarding must stay reachable while setup is incomplete. */
+function isOnboardingExempt(path: string): boolean {
+  if (path === "/onboarding" || path.startsWith("/onboarding/")) return true;
+  if (path.startsWith("/settings/") && path.endsWith("/callback")) return true;
+  return false;
+}
+
 export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -49,10 +56,38 @@ export async function updateSession(request: NextRequest) {
 
   if (user && (path === "/sign-in" || path === "/sign-up")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/context";
+    url.pathname = await resolvePostAuthPath(supabase);
     url.searchParams.delete("next");
     return NextResponse.redirect(url);
   }
 
+  if (user && !isPublic && !isOnboardingExempt(path)) {
+    const needsOnboarding = await userNeedsOnboarding(supabase);
+    if (needsOnboarding) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/onboarding";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return response;
+}
+
+async function userNeedsOnboarding(
+  supabase: ReturnType<typeof createServerClient>,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("onboarding_state")
+    .select("finished_at")
+    .maybeSingle();
+  if (error) return false;
+  if (!data) return false;
+  return data.finished_at === null;
+}
+
+async function resolvePostAuthPath(
+  supabase: ReturnType<typeof createServerClient>,
+): Promise<string> {
+  const needsOnboarding = await userNeedsOnboarding(supabase);
+  return needsOnboarding ? "/onboarding" : "/relationships";
 }

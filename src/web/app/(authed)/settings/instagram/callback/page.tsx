@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { getBrowserDeps } from "@/lib/deps/client";
-import { Button } from "@/components/ui";
+import { OAuthReturnLink } from "@/components/integrations/OAuthReturnLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function InstagramCallbackPage() {
@@ -61,11 +60,7 @@ export default function InstagramCallbackPage() {
               Instagram connected. You can now view and send DMs from relationship
               pages.
             </p>
-            <Link href="/settings">
-              <Button variant="secondary" size="sm">
-                Back to Settings
-              </Button>
-            </Link>
+            <OAuthReturnLink />
           </div>
         ) : null}
         {status === "error" ? (
@@ -73,11 +68,7 @@ export default function InstagramCallbackPage() {
             <p className="text-[13px] text-danger" role="alert">
               {error ?? "Could not connect Instagram"}
             </p>
-            <Link href="/settings">
-              <Button variant="secondary" size="sm">
-                Back to Settings
-              </Button>
-            </Link>
+            <OAuthReturnLink />
           </div>
         ) : null}
       </div>

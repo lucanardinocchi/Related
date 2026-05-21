@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { getBrowserDeps } from "@/lib/deps/client";
-import { Button } from "@/components/ui";
+import { OAuthReturnLink } from "@/components/integrations/OAuthReturnLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function WhatsAppCallbackPage() {
@@ -66,11 +65,7 @@ export default function WhatsAppCallbackPage() {
               relationship and group pages. Configure the Meta webhook to sync
               inbound messages.
             </p>
-            <Link href="/settings">
-              <Button variant="secondary" size="sm">
-                Back to Settings
-              </Button>
-            </Link>
+            <OAuthReturnLink />
           </div>
         ) : null}
         {status === "error" ? (
@@ -78,11 +73,7 @@ export default function WhatsAppCallbackPage() {
             <p className="text-[13px] text-danger" role="alert">
               {error ?? "Could not connect WhatsApp"}
             </p>
-            <Link href="/settings">
-              <Button variant="secondary" size="sm">
-                Back to Settings
-              </Button>
-            </Link>
+            <OAuthReturnLink />
           </div>
         ) : null}
       </div>

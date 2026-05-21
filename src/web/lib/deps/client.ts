@@ -22,6 +22,7 @@ import {
   XClient,
   WhatsAppClient,
   TikTokClient,
+  OutlookClient,
   MessagesClient,
 } from "@related/shared";
 import { createBrowserSupabase } from "@/lib/supabase/client";
@@ -76,6 +77,7 @@ function build() {
     x: new XClient(supabase),
     whatsapp: new WhatsAppClient(supabase),
     tiktok: new TikTokClient(supabase),
+    outlook: new OutlookClient(supabase),
     messages: new MessagesClient(supabase),
     agentService,
     voiceSessionManager,

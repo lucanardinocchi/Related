@@ -41,7 +41,12 @@ interface SendRequest {
   body: string;
 }
 
-type GmailContactRequest = ListRequest | SendRequest;
+interface GetRequest {
+  action: "get";
+  messageId: string;
+}
+
+type GmailContactRequest = ListRequest | SendRequest | GetRequest;
 
 interface GmailMessageSummary {
   id: string;
@@ -52,6 +57,15 @@ interface GmailMessageSummary {
   date: string;
   snippet: string;
   direction: "sent" | "received";
+}
+
+interface GmailMessageDetail {
+  id: string;
+  subject: string;
+  from: string;
+  to: string;
+  date: string;
+  body: string;
 }
 
 interface TokenRow {
@@ -172,6 +186,62 @@ function encodeBase64Url(input: string): string {
     .replace(/=+$/, "");
 }
 
+function decodeBase64Url(data: string): string {
+  const padded = data.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractTextFromPayload(payload: {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: Array<{ mimeType?: string; body?: { data?: string }; parts?: unknown[] }>;
+} | undefined): string {
+  if (!payload) return "";
+
+  if (payload.mimeType === "text/plain" && payload.body?.data) {
+    return decodeBase64Url(payload.body.data);
+  }
+
+  if (payload.parts?.length) {
+    let plain = "";
+    let html = "";
+    for (const part of payload.parts) {
+      const text = extractTextFromPayload(part as typeof payload);
+      if (!text) continue;
+      if (part.mimeType === "text/plain") {
+        plain = text;
+      } else if (part.mimeType === "text/html") {
+        html = text;
+      } else if (!plain && !html) {
+        plain = text;
+      }
+    }
+    return plain || html;
+  }
+
+  if (payload.mimeType === "text/html" && payload.body?.data) {
+    return stripHtml(decodeBase64Url(payload.body.data));
+  }
+
+  return "";
+}
+
 function buildRawEmail(input: {
   to: string;
   subject: string;
@@ -290,6 +360,42 @@ async function listMessagesForContact(
   return summaries.filter((m): m is GmailMessageSummary => m !== null);
 }
 
+async function getMessageDetail(
+  supabase: any,
+  tokenRow: TokenRow,
+  messageId: string,
+): Promise<GmailMessageDetail | null> {
+  const detailUrl = `${GMAIL_MESSAGES_URL}/${messageId}?format=full`;
+  const { response: detailResponse } = await withGoogleAccessToken(
+    supabase,
+    tokenRow,
+    (accessToken) => gmailFetch(detailUrl, accessToken),
+  );
+
+  if (detailResponse.status === 401) {
+    throw new Error("needs_reconsent");
+  }
+  if (!detailResponse.ok) return null;
+
+  const detail = await detailResponse.json();
+  const from = headerValue(detail.payload?.headers, "From");
+  const to = headerValue(detail.payload?.headers, "To");
+  const subject = headerValue(detail.payload?.headers, "Subject");
+  const date =
+    headerValue(detail.payload?.headers, "Date") ||
+    (detail.internalDate ?? "");
+  const body = extractTextFromPayload(detail.payload).trim();
+
+  return {
+    id: detail.id as string,
+    subject: subject || "(no subject)",
+    from,
+    to,
+    date,
+    body: body || (detail.snippet as string) || "",
+  };
+}
+
 async function sendMessage(
   supabase: any,
   tokenRow: TokenRow,
@@ -339,7 +445,7 @@ Deno.serve(async (req) => {
     return jsonResponse(400, { error: "invalid JSON body" });
   }
 
-  if (body.action !== "list" && body.action !== "send") {
+  if (body.action !== "list" && body.action !== "send" && body.action !== "get") {
     return jsonResponse(400, { error: "missing or invalid action" });
   }
 
@@ -399,6 +505,21 @@ Deno.serve(async (req) => {
         maxResults,
       );
       return jsonResponse(200, { status: "ok", messages });
+    }
+
+    if (body.action === "get") {
+      if (!body.messageId || typeof body.messageId !== "string") {
+        return jsonResponse(400, { error: "missing messageId" });
+      }
+      const message = await getMessageDetail(
+        adminClient,
+        tokenRow,
+        body.messageId,
+      );
+      if (!message) {
+        return jsonResponse(404, { status: "error", error: "message not found" });
+      }
+      return jsonResponse(200, { status: "ok", message });
     }
 
     if (!body.to || !body.subject || typeof body.body !== "string") {

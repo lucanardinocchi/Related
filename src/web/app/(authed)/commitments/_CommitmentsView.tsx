@@ -4,21 +4,16 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import {
-  commitmentAnalytics,
-  type CommitmentAnalytics,
   type CommitmentCommunicationStatus,
   type CommitmentOrigin,
   type OpenThread,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import {
-  AnalyticTile,
-  AnalyticsRow,
   Button,
   Display,
   EmptyState,
   Eyebrow,
-  Mono,
   Pill,
 } from "@/components/ui";
 import {
@@ -33,26 +28,22 @@ export type { AssignableRelationship };
 
 interface Props {
   initialCommitments: OpenThread[];
-  initialAnalytics: CommitmentAnalytics;
   assignableRelationships: AssignableRelationship[];
 }
 
 export function CommitmentsView({
   initialCommitments,
-  initialAnalytics,
   assignableRelationships,
 }: Props) {
   const deps = getBrowserDeps();
   const [commitments, setCommitments] = useState(initialCommitments);
-  const [analytics, setAnalytics] = useState(initialAnalytics);
   const [origin, setOrigin] = useState<OriginFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setCommitments(initialCommitments);
-    setAnalytics(initialAnalytics);
-  }, [initialCommitments, initialAnalytics]);
+  }, [initialCommitments]);
 
   // Re-render every minute so "days outstanding" rolls over without a refresh.
   const [, setTick] = useState(0);
@@ -75,7 +66,6 @@ export function CommitmentsView({
 
   function recompute(next: OpenThread[]) {
     setCommitments(next);
-    setAnalytics(commitmentAnalytics({ commitments: next }));
   }
 
   function replaceById(id: string, updated: OpenThread) {
@@ -132,22 +122,6 @@ export function CommitmentsView({
           </Button>
         </Link>
       </header>
-
-      <AnalyticsRow>
-        <AnalyticTile label="Open" value={<Mono>{analytics.total}</Mono>} />
-        <AnalyticTile
-          label="Asked of me"
-          value={<Mono>{analytics.byOrigin.askedOfMe}</Mono>}
-        />
-        <AnalyticTile
-          label="Self-led"
-          value={<Mono>{analytics.byOrigin.selfLed}</Mono>}
-        />
-        <AnalyticTile
-          label="Not yet communicated"
-          value={<Mono>{analytics.byCommunicationStatus.notCommunicated}</Mono>}
-        />
-      </AnalyticsRow>
 
       <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-y border-divider py-3">
         <FilterGroup label="Origin">

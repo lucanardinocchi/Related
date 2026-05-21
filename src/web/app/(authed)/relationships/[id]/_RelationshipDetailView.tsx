@@ -20,12 +20,7 @@ import { OpenThreadsSection } from "./_OpenThreadsSection";
 import { ContextTimelineSection } from "./_ContextTimelineSection";
 import type { AddContextResult } from "./_AddContextModal";
 import { RecentCandidateSection } from "./_RecentCandidateSection";
-import { EmailSection } from "./_EmailSection";
-import { InstagramSection } from "./_InstagramSection";
-import { XSection } from "./_XSection";
-import { WhatsAppSection } from "./_WhatsAppSection";
-import { TikTokSection } from "./_TikTokSection";
-import { MessagesSection } from "./_MessagesSection";
+import { CommsSection } from "./_CommsSection";
 
 interface Props {
   relationship: Relationship;
@@ -280,47 +275,24 @@ export function RelationshipDetailView({
         onSaveRelationship={saveRelationship}
       />
 
-      <MessagesSection
-        contactId={relationship.contact.id}
-        contactName={relationship.contact.name}
-        contactPhone={relationship.contact.phone}
-      />
-
-      <EmailSection
-        contactEmail={relationship.contact.email}
-        contactName={relationship.contact.name}
-      />
-
-      <InstagramSection
-        contactId={relationship.contact.id}
-        contactName={relationship.contact.name}
-        instagramUsername={relationship.contact.instagramUsername}
-        instagramScopedId={relationship.contact.instagramScopedId}
-        onScopedIdResolved={saveInstagramScopedId}
-      />
-
-      <XSection
-        contactId={relationship.contact.id}
-        contactName={relationship.contact.name}
-        xUsername={relationship.contact.xUsername}
-        xUserId={relationship.contact.xUserId}
-        onUserIdResolved={saveXUserId}
-      />
-
-      <WhatsAppSection
-        contactId={relationship.contact.id}
-        contactName={relationship.contact.name}
-        phone={relationship.contact.phone}
-        whatsappWaId={relationship.contact.whatsappWaId}
-        onWaIdResolved={saveWhatsappWaId}
-      />
-
-      <TikTokSection
-        contactId={relationship.contact.id}
-        contactName={relationship.contact.name}
-        tiktokUsername={relationship.contact.tiktokUsername}
-        tiktokOpenId={relationship.contact.tiktokOpenId}
-        onOpenIdResolved={saveTikTokOpenId}
+      <CommsSection
+        contact={{
+          id: relationship.contact.id,
+          name: relationship.contact.name,
+          phone: relationship.contact.phone,
+          email: relationship.contact.email,
+          instagramUsername: relationship.contact.instagramUsername,
+          instagramScopedId: relationship.contact.instagramScopedId,
+          xUsername: relationship.contact.xUsername,
+          xUserId: relationship.contact.xUserId,
+          tiktokUsername: relationship.contact.tiktokUsername,
+          tiktokOpenId: relationship.contact.tiktokOpenId,
+          whatsappWaId: relationship.contact.whatsappWaId,
+        }}
+        onInstagramScopedIdResolved={saveInstagramScopedId}
+        onXUserIdResolved={saveXUserId}
+        onWhatsappWaIdResolved={saveWhatsappWaId}
+        onTikTokOpenIdResolved={saveTikTokOpenId}
       />
 
       {latestCandidateSet ? (

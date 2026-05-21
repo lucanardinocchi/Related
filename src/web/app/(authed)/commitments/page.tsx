@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { getServerDeps } from "@/lib/deps/server";
-import { commitmentAnalytics } from "@related/shared";
 import { CommitmentsView } from "./_CommitmentsView";
 import { NewCommitmentModal } from "./_NewCommitmentModal";
 
@@ -17,8 +16,6 @@ export default async function CommitmentsPage() {
     relationships.listRelationships(),
     groups.listGroupRelationships(),
   ]);
-  const analytics = commitmentAnalytics({ commitments });
-
   // Flatten contact + group relationships into a single label-bearing list so
   // the reassign picker can show "Sam Chen" alongside "Climbing crew" without
   // the view needing to know about the polymorphism.
@@ -39,7 +36,6 @@ export default async function CommitmentsPage() {
     <>
       <CommitmentsView
         initialCommitments={commitments}
-        initialAnalytics={analytics}
         assignableRelationships={assignableRelationships}
       />
       <Suspense fallback={null}>

@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { getBrowserDeps } from "@/lib/deps/client";
-import { Button } from "@/components/ui";
+import { OAuthReturnLink } from "@/components/integrations/OAuthReturnLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 const TIKTOK_OAUTH_STATE_KEY = "related.tiktok-oauth-state";
@@ -71,11 +70,7 @@ export default function TikTokCallbackPage() {
               TikTok connected. You can now view and send DMs from relationship
               and group pages.
             </p>
-            <Link href="/settings">
-              <Button variant="secondary" size="sm">
-                Back to Settings
-              </Button>
-            </Link>
+            <OAuthReturnLink />
           </div>
         ) : null}
         {status === "error" ? (
@@ -83,11 +78,7 @@ export default function TikTokCallbackPage() {
             <p className="text-[13px] text-danger" role="alert">
               {error ?? "Could not connect TikTok"}
             </p>
-            <Link href="/settings">
-              <Button variant="secondary" size="sm">
-                Back to Settings
-              </Button>
-            </Link>
+            <OAuthReturnLink />
           </div>
         ) : null}
       </div>

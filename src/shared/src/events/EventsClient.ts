@@ -14,7 +14,7 @@ export type EventStatus =
   | "cancelled"
   | "missed";
 
-export type EventSource = "manual" | "google";
+export type EventSource = "manual" | "google" | "outlook";
 
 export interface EventAttendee {
   id: string;

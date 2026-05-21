@@ -3,40 +3,35 @@
 // DUAL-WRITE INVARIANT (ADR-0010) — keep in sync with
 // src/shared/src/signals/calendarSyncDualWrite.ts:
 //
-//   inferred_signal_calendar          events (source='google')
+//   inferred_signal_calendar          events (source='google'|'outlook')
 //   ─────────────────────────         ─────────────────────────
 //   Agent density input only          User-facing /calendar surface
 //   Upsert key: (owner_id, event_id)  Upsert key: (owner_id, external_event_id)
-//   Columns: title, start, end,       Google-owned (overwritten on sync):
-//            is_all_day                 title, start, end, is_all_day, location
-//   Full replace per 7-day window     User-owned (preserved on upsert):
-//                                       aim, required_prep, status, type
-//   GC: delete rows not in fetch       GC: delete google rows not in fetch
-//                                       (manual events untouched)
+//   Outlook event_ids prefixed        Outlook external_event_id prefixed
+//   with `outlook:`                   with `outlook:`
 //
 // Per ADR-0006, this iterates over every User who has a row in
-// `user_provider_tokens` for provider='google', pulls their next 7 days
-// of Calendar events from Google's API using their stored access token,
-// refreshes the token on 401 (writing the new token back), and upserts
-// the events into `inferred_signal_calendar` keyed on (owner_id, event_id).
+// `user_provider_tokens` for provider='google' or provider='outlook',
+// pulls their next 7 days of events, refreshes tokens on 401, and
+// dual-writes into inferred_signal_calendar + events.
 //
-// Triggered by pg_cron at 10 AM UTC (per-User-local time is a deferred
-// refinement). Can also be POSTed manually with `{ ownerId, asOf? }` to
-// sync a single User on demand.
+// Triggered by pg_cron at 10 AM UTC. Can also be POSTed manually with
+// `{ ownerId, asOf? }` to sync a single User on demand.
 //
-// The Google fetcher logic is duplicated from
-// `src/shared/src/integrations/google/GoogleCalendarFetcher.ts` because
-// `@related/shared` isn't on npm and Deno's NPM specifiers can't cross
-// the workspace boundary cleanly. The contract is the same — change
-// must be mirrored.
+// Fetcher logic is duplicated from shared integrations because
+// `@related/shared` isn't on npm for Deno imports.
 //
 // Deploy:
 //   supabase secrets set GOOGLE_OAUTH_CLIENT_ID=...
 //   supabase secrets set GOOGLE_OAUTH_CLIENT_SECRET=...
+//   supabase secrets set MICROSOFT_CLIENT_ID=...
+//   supabase secrets set MICROSOFT_CLIENT_SECRET=...
 //   supabase functions deploy sync-calendar
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
+
+type CalendarProvider = "google" | "outlook";
 
 interface RawCalendarEvent {
   id: string;
@@ -55,6 +50,7 @@ interface SyncRequest {
 
 interface CalendarCollectionSummary {
   ownerId: string;
+  provider: CalendarProvider;
   eventsWritten: number;
   windowEnd: string;
   status: "ok" | "no_token" | "needs_reconsent" | "error";
@@ -62,28 +58,19 @@ interface CalendarCollectionSummary {
 }
 
 const CALENDAR_WINDOW_DAYS = 7;
-const CALENDAR_EVENTS_URL =
+const CALENDAR_PROVIDERS: CalendarProvider[] = ["google", "outlook"];
+const OUTLOOK_EVENT_PREFIX = "outlook:";
+
+const GOOGLE_EVENTS_URL =
   "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const OUTLOOK_CALENDAR_VIEW_URL =
+  "https://graph.microsoft.com/v1.0/me/calendarView";
+const MICROSOFT_TOKEN_URL =
+  "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+const OUTLOOK_SCOPES = "Calendars.Read offline_access User.Read";
 
-interface GoogleEventTime {
-  dateTime?: string;
-  date?: string;
-}
-interface GoogleAttendee {
-  email?: string;
-  responseStatus?: string;
-}
-interface GoogleEvent {
-  id: string;
-  summary?: string;
-  location?: string;
-  start?: GoogleEventTime;
-  end?: GoogleEventTime;
-  attendees?: GoogleAttendee[];
-}
-
-function buildEventsUrl(asOf: Date): string {
+function buildGoogleEventsUrl(asOf: Date): string {
   const timeMax = new Date(asOf);
   timeMax.setUTCDate(timeMax.getUTCDate() + CALENDAR_WINDOW_DAYS);
   const params = new URLSearchParams({
@@ -93,10 +80,30 @@ function buildEventsUrl(asOf: Date): string {
     orderBy: "startTime",
     maxResults: "100",
   });
-  return `${CALENDAR_EVENTS_URL}?${params.toString()}`;
+  return `${GOOGLE_EVENTS_URL}?${params.toString()}`;
 }
 
-function mapEvent(e: GoogleEvent): RawCalendarEvent | null {
+function buildOutlookCalendarViewUrl(asOf: Date): string {
+  const timeMax = new Date(asOf);
+  timeMax.setUTCDate(timeMax.getUTCDate() + CALENDAR_WINDOW_DAYS);
+  const params = new URLSearchParams({
+    startDateTime: asOf.toISOString(),
+    endDateTime: timeMax.toISOString(),
+    $select: "id,subject,start,end,isAllDay,location,attendees",
+    $top: "100",
+    $orderby: "start/dateTime",
+  });
+  return `${OUTLOOK_CALENDAR_VIEW_URL}?${params.toString()}`;
+}
+
+function mapGoogleEvent(e: {
+  id: string;
+  summary?: string;
+  location?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  attendees?: Array<{ email?: string }>;
+}): RawCalendarEvent | null {
   if (!e.start || !e.end) return null;
   const isAllDay = Boolean(e.start.date && !e.start.dateTime);
   const start = e.start.dateTime ?? e.start.date;
@@ -116,7 +123,39 @@ function mapEvent(e: GoogleEvent): RawCalendarEvent | null {
   };
 }
 
-async function refreshAccessToken(
+function mapOutlookEvent(e: {
+  id: string;
+  subject?: string;
+  start?: { dateTime?: string };
+  end?: { dateTime?: string };
+  isAllDay?: boolean;
+  location?: { displayName?: string };
+  attendees?: Array<{ emailAddress?: { address?: string } }>;
+}): RawCalendarEvent | null {
+  if (!e.start?.dateTime || !e.end?.dateTime) return null;
+  const attendeeEmails = (e.attendees ?? [])
+    .map((a) => a.emailAddress?.address?.toLowerCase().trim())
+    .filter((email): email is string => Boolean(email));
+  return {
+    id: e.id,
+    title: e.subject ?? null,
+    start: e.start.dateTime,
+    end: e.end.dateTime,
+    isAllDay: e.isAllDay ?? false,
+    location: e.location?.displayName ?? null,
+    attendeeEmails,
+  };
+}
+
+function toSignalEventId(provider: CalendarProvider, eventId: string): string {
+  return provider === "outlook" ? `${OUTLOOK_EVENT_PREFIX}${eventId}` : eventId;
+}
+
+function toExternalEventId(provider: CalendarProvider, eventId: string): string {
+  return provider === "outlook" ? `${OUTLOOK_EVENT_PREFIX}${eventId}` : eventId;
+}
+
+async function refreshGoogleAccessToken(
   refreshToken: string,
   clientId: string,
   clientSecret: string,
@@ -145,11 +184,41 @@ async function refreshAccessToken(
   };
 }
 
-async function fetchEvents(
+async function refreshOutlookAccessToken(
+  refreshToken: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<{ accessToken: string; expiresInSeconds: number }> {
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: OUTLOOK_SCOPES,
+  });
+  const response = await fetch(MICROSOFT_TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  if (!response.ok) {
+    throw new Error(`Microsoft token refresh failed (${response.status})`);
+  }
+  const data = await response.json();
+  if (!data.access_token) {
+    throw new Error("Microsoft token refresh returned no access_token");
+  }
+  return {
+    accessToken: data.access_token,
+    expiresInSeconds: data.expires_in ?? 3600,
+  };
+}
+
+async function fetchGoogleEvents(
   accessToken: string,
   asOf: Date,
 ): Promise<Response> {
-  return fetch(buildEventsUrl(asOf), {
+  return fetch(buildGoogleEventsUrl(asOf), {
     method: "GET",
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -158,8 +227,183 @@ async function fetchEvents(
   });
 }
 
+async function fetchOutlookEvents(
+  accessToken: string,
+  asOf: Date,
+): Promise<Response> {
+  return fetch(buildOutlookCalendarViewUrl(asOf), {
+    method: "GET",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      accept: "application/json",
+      prefer: 'outlook.timezone="UTC"',
+    },
+  });
+}
+
+async function persistSnapshot(
+  supabase: any,
+  provider: CalendarProvider,
+  ownerId: string,
+  events: RawCalendarEvent[],
+): Promise<{ status: "ok" | "error"; error?: string }> {
+  if (events.length > 0) {
+    const signalRows = events.map((e) => ({
+      owner_id: ownerId,
+      event_id: toSignalEventId(provider, e.id),
+      title: e.title,
+      start: e.start,
+      end: e.end,
+      is_all_day: e.isAllDay,
+    }));
+    const { error: upErr } = await supabase
+      .from("inferred_signal_calendar")
+      .upsert(signalRows, { onConflict: "owner_id,event_id" });
+    if (upErr) {
+      return { status: "error", error: `upsert: ${upErr.message ?? String(upErr)}` };
+    }
+
+    const eventRows = events.map((e) => ({
+      owner_id: ownerId,
+      external_event_id: toExternalEventId(provider, e.id),
+      source: provider,
+      title: e.title,
+      start: e.start,
+      end: e.end,
+      is_all_day: e.isAllDay,
+      location: e.location,
+    }));
+    const { error: evErr } = await supabase
+      .from("events")
+      .upsert(eventRows, { onConflict: "owner_id,external_event_id" });
+    if (evErr) {
+      return {
+        status: "error",
+        error: `events upsert: ${evErr.message ?? String(evErr)}`,
+      };
+    }
+
+    const allEmails = Array.from(
+      new Set(events.flatMap((e) => e.attendeeEmails)),
+    );
+    let emailToContactId = new Map<string, string>();
+    if (allEmails.length > 0) {
+      const { data: contactRows } = await supabase
+        .from("contacts")
+        .select("id, email")
+        .eq("owner_id", ownerId)
+        .in("email", allEmails);
+      emailToContactId = new Map(
+        ((contactRows ?? []) as Array<{ id: string; email: string | null }>)
+          .filter((c) => c.email)
+          .map((c) => [c.email!.toLowerCase(), c.id]),
+      );
+    }
+
+    const externalIds = events.map((e) => toExternalEventId(provider, e.id));
+    const { data: eventIdRows } = await supabase
+      .from("events")
+      .select("id, external_event_id")
+      .eq("owner_id", ownerId)
+      .in("external_event_id", externalIds);
+    const externalToEventId = new Map(
+      ((eventIdRows ?? []) as Array<{
+        id: string;
+        external_event_id: string;
+      }>).map((r) => [r.external_event_id, r.id]),
+    );
+
+    const touchedEventIds = Array.from(externalToEventId.values());
+    if (touchedEventIds.length > 0) {
+      await supabase
+        .from("event_attendees")
+        .delete()
+        .in("event_id", touchedEventIds);
+
+      const links: Array<{ event_id: string; contact_id: string }> = [];
+      for (const e of events) {
+        const eventId = externalToEventId.get(
+          toExternalEventId(provider, e.id),
+        );
+        if (!eventId) continue;
+        for (const email of e.attendeeEmails) {
+          const cid = emailToContactId.get(email);
+          if (cid) links.push({ event_id: eventId, contact_id: cid });
+        }
+      }
+      if (links.length > 0) {
+        await supabase.from("event_attendees").insert(links);
+      }
+    }
+  }
+
+  const keepList = events
+    .map((e) => toSignalEventId(provider, e.id))
+    .join(",");
+  const externalKeepList = events
+    .map((e) => toExternalEventId(provider, e.id))
+    .join(",");
+
+  if (provider === "google") {
+    if (events.length > 0) {
+      await supabase
+        .from("inferred_signal_calendar")
+        .delete()
+        .eq("owner_id", ownerId)
+        .not("event_id", "in", `(${keepList})`)
+        .not("event_id", "like", `${OUTLOOK_EVENT_PREFIX}%`);
+      await supabase
+        .from("events")
+        .delete()
+        .eq("owner_id", ownerId)
+        .eq("source", "google")
+        .not("external_event_id", "in", `(${externalKeepList})`);
+    } else {
+      await supabase
+        .from("inferred_signal_calendar")
+        .delete()
+        .eq("owner_id", ownerId)
+        .not("event_id", "like", `${OUTLOOK_EVENT_PREFIX}%`);
+      await supabase
+        .from("events")
+        .delete()
+        .eq("owner_id", ownerId)
+        .eq("source", "google");
+    }
+  } else {
+    if (events.length > 0) {
+      await supabase
+        .from("inferred_signal_calendar")
+        .delete()
+        .eq("owner_id", ownerId)
+        .like("event_id", `${OUTLOOK_EVENT_PREFIX}%`)
+        .not("event_id", "in", `(${keepList})`);
+      await supabase
+        .from("events")
+        .delete()
+        .eq("owner_id", ownerId)
+        .eq("source", "outlook")
+        .not("external_event_id", "in", `(${externalKeepList})`);
+    } else {
+      await supabase
+        .from("inferred_signal_calendar")
+        .delete()
+        .eq("owner_id", ownerId)
+        .like("event_id", `${OUTLOOK_EVENT_PREFIX}%`);
+      await supabase
+        .from("events")
+        .delete()
+        .eq("owner_id", ownerId)
+        .eq("source", "outlook");
+    }
+  }
+
+  return { status: "ok" };
+}
+
 async function collectForOwner(
   supabase: any,
+  provider: CalendarProvider,
   tokenRow: {
     owner_id: string;
     access_token: string;
@@ -173,25 +417,35 @@ async function collectForOwner(
   windowEnd.setUTCDate(windowEnd.getUTCDate() + CALENDAR_WINDOW_DAYS);
   const baseSummary = {
     ownerId: tokenRow.owner_id,
+    provider,
     windowEnd: windowEnd.toISOString(),
     eventsWritten: 0,
   };
 
   let accessToken = tokenRow.access_token;
-  let response = await fetchEvents(accessToken, asOf);
+  let response =
+    provider === "google"
+      ? await fetchGoogleEvents(accessToken, asOf)
+      : await fetchOutlookEvents(accessToken, asOf);
 
   if (response.status === 401) {
     if (!tokenRow.refresh_token) {
       return { ...baseSummary, status: "needs_reconsent" };
     }
     try {
-      const refresh = await refreshAccessToken(
-        tokenRow.refresh_token,
-        clientId,
-        clientSecret,
-      );
+      const refresh =
+        provider === "google"
+          ? await refreshGoogleAccessToken(
+            tokenRow.refresh_token,
+            clientId,
+            clientSecret,
+          )
+          : await refreshOutlookAccessToken(
+            tokenRow.refresh_token,
+            clientId,
+            clientSecret,
+          );
       accessToken = refresh.accessToken;
-      // Persist the new token back. Empty refresh_token? Keep the old one.
       const newExpires = new Date(
         Date.now() + refresh.expiresInSeconds * 1000,
       ).toISOString();
@@ -199,8 +453,11 @@ async function collectForOwner(
         .from("user_provider_tokens")
         .update({ access_token: accessToken, expires_at: newExpires })
         .eq("owner_id", tokenRow.owner_id)
-        .eq("provider", "google");
-      response = await fetchEvents(accessToken, asOf);
+        .eq("provider", provider);
+      response =
+        provider === "google"
+          ? await fetchGoogleEvents(accessToken, asOf)
+          : await fetchOutlookEvents(accessToken, asOf);
     } catch (err) {
       return {
         ...baseSummary,
@@ -211,151 +468,32 @@ async function collectForOwner(
   }
 
   if (!response.ok) {
+    const apiName = provider === "google" ? "Google Calendar API" : "Microsoft Graph";
     return {
       ...baseSummary,
       status: "error",
-      error: `Google Calendar API ${response.status}`,
+      error: `${apiName} ${response.status}`,
     };
   }
 
   const data = await response.json();
-  const events = ((data.items ?? []) as GoogleEvent[])
-    .map(mapEvent)
-    .filter((e): e is RawCalendarEvent => e !== null);
+  const events =
+    provider === "google"
+      ? ((data.items ?? []) as Parameters<typeof mapGoogleEvent>[0][])
+        .map(mapGoogleEvent)
+        .filter((e): e is RawCalendarEvent => e !== null)
+      : ((data.value ?? []) as Parameters<typeof mapOutlookEvent>[0][])
+        .map(mapOutlookEvent)
+        .filter((e): e is RawCalendarEvent => e !== null);
 
-  if (events.length > 0) {
-    // 1) Keep populating inferred_signal_calendar — the calendarDensity
-    //    signal (UserContextBuilder) still reads from there.
-    const signalRows = events.map((e) => ({
-      owner_id: tokenRow.owner_id,
-      event_id: e.id,
-      title: e.title,
-      start: e.start,
-      end: e.end,
-      is_all_day: e.isAllDay,
-    }));
-    const { error: upErr } = await supabase
-      .from("inferred_signal_calendar")
-      .upsert(signalRows, { onConflict: "owner_id,event_id" });
-    if (upErr) {
-      return {
-        ...baseSummary,
-        status: "error",
-        error: `upsert: ${upErr.message ?? String(upErr)}`,
-      };
-    }
-
-    // 2) Materialize into the user-facing `events` table per ADR-0010.
-    //    Only Google-owned columns are in the payload; on conflict the
-    //    user-owned columns (aim, required_prep, status, type) are left
-    //    untouched because they aren't named in the update set.
-    const eventRows = events.map((e) => ({
-      owner_id: tokenRow.owner_id,
-      external_event_id: e.id,
-      source: "google" as const,
-      title: e.title,
-      start: e.start,
-      end: e.end,
-      is_all_day: e.isAllDay,
-      location: e.location,
-    }));
-    const { error: evErr } = await supabase
-      .from("events")
-      .upsert(eventRows, { onConflict: "owner_id,external_event_id" });
-    if (evErr) {
-      return {
-        ...baseSummary,
-        status: "error",
-        error: `events upsert: ${evErr.message ?? String(evErr)}`,
-      };
-    }
-
-    // 3) Refresh attendee links for synced events. Map Google attendee
-    //    emails → existing contacts by email (case-insensitive match
-    //    already applied in mapEvent). Unmatched emails are dropped in v1.
-    const allEmails = Array.from(
-      new Set(events.flatMap((e) => e.attendeeEmails)),
-    );
-    let emailToContactId = new Map<string, string>();
-    if (allEmails.length > 0) {
-      const { data: contactRows } = await supabase
-        .from("contacts")
-        .select("id, email")
-        .eq("owner_id", tokenRow.owner_id)
-        .in("email", allEmails);
-      emailToContactId = new Map(
-        ((contactRows ?? []) as Array<{ id: string; email: string | null }>)
-          .filter((c) => c.email)
-          .map((c) => [c.email!.toLowerCase(), c.id]),
-      );
-    }
-
-    // We need event UUIDs to write attendee links. The upsert above
-    // doesn't return ids in supabase-js v2 in one call, so re-select.
-    const externalIds = events.map((e) => e.id);
-    const { data: eventIdRows } = await supabase
-      .from("events")
-      .select("id, external_event_id")
-      .eq("owner_id", tokenRow.owner_id)
-      .in("external_event_id", externalIds);
-    const externalToEventId = new Map(
-      ((eventIdRows ?? []) as Array<{
-        id: string;
-        external_event_id: string;
-      }>).map((r) => [r.external_event_id, r.id]),
-    );
-
-    // For idempotency: wipe existing attendee links for the touched
-    // events, then re-insert from the current Google snapshot. This is
-    // also how user-removed attendees vanish on the next sync.
-    const touchedEventIds = Array.from(externalToEventId.values());
-    if (touchedEventIds.length > 0) {
-      await supabase
-        .from("event_attendees")
-        .delete()
-        .in("event_id", touchedEventIds);
-
-      const links: Array<{ event_id: string; contact_id: string }> = [];
-      for (const e of events) {
-        const eventId = externalToEventId.get(e.id);
-        if (!eventId) continue;
-        for (const email of e.attendeeEmails) {
-          const cid = emailToContactId.get(email);
-          if (cid) links.push({ event_id: eventId, contact_id: cid });
-        }
-      }
-      if (links.length > 0) {
-        await supabase.from("event_attendees").insert(links);
-      }
-    }
-  }
-
-  // GC: remove rows for this owner not in the fetched set. Applies to
-  // both signal and events tables — but for `events` only delete rows
-  // with source='google' so manually-created events aren't nuked.
-  if (events.length > 0) {
-    const keepList = events.map((e) => e.id).join(",");
-    await supabase
-      .from("inferred_signal_calendar")
-      .delete()
-      .eq("owner_id", tokenRow.owner_id)
-      .not("event_id", "in", `(${keepList})`);
-    await supabase
-      .from("events")
-      .delete()
-      .eq("owner_id", tokenRow.owner_id)
-      .eq("source", "google")
-      .not("external_event_id", "in", `(${keepList})`);
-  } else {
-    await supabase
-      .from("inferred_signal_calendar")
-      .delete()
-      .eq("owner_id", tokenRow.owner_id);
-    await supabase
-      .from("events")
-      .delete()
-      .eq("owner_id", tokenRow.owner_id)
-      .eq("source", "google");
+  const writeResult = await persistSnapshot(
+    supabase,
+    provider,
+    tokenRow.owner_id,
+    events,
+  );
+  if (writeResult.status === "error") {
+    return { ...baseSummary, status: "error", error: writeResult.error };
   }
 
   return { ...baseSummary, eventsWritten: events.length, status: "ok" };
@@ -363,16 +501,39 @@ async function collectForOwner(
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const CLIENT_ID = Deno.env.get("GOOGLE_OAUTH_CLIENT_ID");
-const CLIENT_SECRET = Deno.env.get("GOOGLE_OAUTH_CLIENT_SECRET");
+const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_OAUTH_CLIENT_ID");
+const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_OAUTH_CLIENT_SECRET");
+const MICROSOFT_CLIENT_ID = Deno.env.get("MICROSOFT_CLIENT_ID");
+const MICROSOFT_CLIENT_SECRET = Deno.env.get("MICROSOFT_CLIENT_SECRET");
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   console.warn("[sync-calendar] SUPABASE_URL / SERVICE_ROLE_KEY missing");
 }
-if (!CLIENT_ID || !CLIENT_SECRET) {
+if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
   console.warn(
-    "[sync-calendar] GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET missing — refresh-on-401 will fail",
+    "[sync-calendar] GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET missing",
   );
+}
+if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CLIENT_SECRET) {
+  console.warn(
+    "[sync-calendar] MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET missing",
+  );
+}
+
+function clientCredsForProvider(provider: CalendarProvider): {
+  clientId: string;
+  clientSecret: string;
+} {
+  if (provider === "google") {
+    return {
+      clientId: GOOGLE_CLIENT_ID ?? "",
+      clientSecret: GOOGLE_CLIENT_SECRET ?? "",
+    };
+  }
+  return {
+    clientId: MICROSOFT_CLIENT_ID ?? "",
+    clientSecret: MICROSOFT_CLIENT_SECRET ?? "",
+  };
 }
 
 Deno.serve(async (req) => {
@@ -405,45 +566,41 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL ?? "", SERVICE_ROLE_KEY ?? "");
 
   try {
-    let tokens: Array<{
+    let query = supabase
+      .from("user_provider_tokens")
+      .select("owner_id, provider, access_token, refresh_token")
+      .in("provider", CALENDAR_PROVIDERS);
+    if (body.ownerId) {
+      query = query.eq("owner_id", body.ownerId);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const tokens = (data ?? []) as Array<{
       owner_id: string;
+      provider: CalendarProvider;
       access_token: string;
       refresh_token: string | null;
     }>;
-    if (body.ownerId) {
-      const { data, error } = await supabase
-        .from("user_provider_tokens")
-        .select("owner_id, access_token, refresh_token")
-        .eq("provider", "google")
-        .eq("owner_id", body.ownerId);
-      if (error) throw error;
-      tokens = (data ?? []) as typeof tokens;
-    } else {
-      const { data, error } = await supabase
-        .from("user_provider_tokens")
-        .select("owner_id, access_token, refresh_token")
-        .eq("provider", "google");
-      if (error) throw error;
-      tokens = (data ?? []) as typeof tokens;
-    }
 
     const summaries: CalendarCollectionSummary[] = [];
     for (const t of tokens) {
+      const creds = clientCredsForProvider(t.provider);
       summaries.push(
         await collectForOwner(
           supabase,
+          t.provider,
           t,
           asOf,
-          CLIENT_ID ?? "",
-          CLIENT_SECRET ?? "",
+          creds.clientId,
+          creds.clientSecret,
         ),
       );
     }
 
-    return new Response(
-      JSON.stringify({ provider: "google", summaries }),
-      { headers: { "content-type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ summaries }), {
+      headers: { "content-type": "application/json" },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return new Response(JSON.stringify({ error: message }), {

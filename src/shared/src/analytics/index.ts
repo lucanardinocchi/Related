@@ -10,3 +10,16 @@ export type {
 
 export { commitmentAnalytics } from "./commitmentAnalytics";
 export type { CommitmentAnalytics } from "./commitmentAnalytics";
+
+export {
+  peopleAddedPerWeek,
+  groupsAddedPerWeek,
+  interactionsPerWeekByRelationshipAge,
+  averageInteractionsAmongTopContacts,
+} from "./relationshipIndexAnalytics";
+export type {
+  WeeklyCountBucket,
+  WeeklyInteractionsByAgeBucket,
+  RelationshipAgeBand,
+  TopContactsAverage,
+} from "./relationshipIndexAnalytics";

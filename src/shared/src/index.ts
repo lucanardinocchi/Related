@@ -56,6 +56,10 @@ export {
   calendarAnalytics,
   eventsPerDay,
   commitmentAnalytics,
+  peopleAddedPerWeek,
+  groupsAddedPerWeek,
+  interactionsPerWeekByRelationshipAge,
+  averageInteractionsAmongTopContacts,
 } from "./analytics";
 export type {
   RelationshipAnalytics,
@@ -63,6 +67,10 @@ export type {
   DailyBucket,
   EventsPerDayInput,
   CommitmentAnalytics,
+  WeeklyCountBucket,
+  WeeklyInteractionsByAgeBucket,
+  RelationshipAgeBand,
+  TopContactsAverage,
 } from "./analytics";
 
 export { GroupsClient } from "./groups/GroupsClient";
@@ -264,9 +272,18 @@ export {
   tokenHasCalendarAccess,
 } from "./integrations/google/googleScopes";
 
+export {
+  OUTLOOK_SCOPE_CALENDARS_READ,
+  OUTLOOK_SCOPE_OFFLINE_ACCESS,
+  OUTLOOK_SCOPE_USER_READ,
+  OUTLOOK_CALENDAR_SCOPES,
+  tokenHasOutlookCalendarAccess,
+} from "./integrations/outlook/outlookScopes";
+
 export { GmailClient } from "./integrations/GmailClient";
 export type {
   GmailMessageSummary,
+  GmailMessageDetail,
   ListGmailForContactInput,
   SendGmailInput,
   GmailContactStatus,
@@ -347,6 +364,8 @@ export type {
   WhatsAppContactStatus,
 } from "./integrations/WhatsAppClient";
 
+export { OutlookClient } from "./integrations/OutlookClient";
+
 export {
   fetchGoogleCalendarEvents,
   refreshGoogleAccessToken,
@@ -357,6 +376,19 @@ export type {
   RefreshGoogleAccessTokenInput,
   RefreshGoogleAccessTokenResult,
 } from "./integrations/google/GoogleCalendarFetcher";
+
+export {
+  fetchOutlookCalendarEvents,
+  refreshOutlookAccessToken,
+  mapOutlookEvent,
+} from "./integrations/outlook/OutlookCalendarFetcher";
+export type {
+  FetchOutlookCalendarEventsInput,
+  FetchOutlookCalendarEventsResult,
+  RefreshOutlookAccessTokenInput,
+  RefreshOutlookAccessTokenResult,
+  RawOutlookCalendarEvent,
+} from "./integrations/outlook/OutlookCalendarFetcher";
 
 export type { SessionWithProviderTokens } from "./auth/AuthClient";
 
@@ -398,6 +430,26 @@ export type {
   LinkThreadInput,
   SendMessageInput,
 } from "./messages/MessagesClient";
+
+export {
+  fromCommsPlatformMessage,
+  fromGmailMessage,
+  fromImessageMessage,
+  fromInstagramMessage,
+  fromTikTokMessage,
+  fromTikTokRow,
+  fromWhatsAppMessage,
+  fromWhatsAppRow,
+  fromXMessage,
+  mergeCommsTimelineItems,
+  COMMS_PLATFORM_LABELS,
+} from "./comms/relationshipCommsTimeline";
+export type {
+  CommsDirection,
+  CommsPlatform,
+  CommsPlatformMessageRow,
+  CommsTimelineItem,
+} from "./comms/relationshipCommsTimeline";
 
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {

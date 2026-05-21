@@ -22,8 +22,10 @@ export default function SignUpPage() {
     setError(null);
     setLoading(true);
     try {
-      await getBrowserDeps().auth.signUp(email, password);
-      router.replace("/settings");
+      const { auth, onboarding } = getBrowserDeps();
+      await auth.signUp(email, password);
+      await onboarding.startIfNeeded();
+      router.replace("/onboarding");
       router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sign up failed");

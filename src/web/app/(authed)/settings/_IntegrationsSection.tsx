@@ -12,11 +12,13 @@ import {
   tokenHasXAccess,
   tokenHasWhatsAppAccess,
   tokenHasTikTokAccess,
+  tokenHasOutlookCalendarAccess,
   generateCodeVerifier,
   generateCodeChallenge,
 } from "@related/shared";
 import { Button, Card, Section } from "@/components/ui";
 import { getBrowserDeps } from "@/lib/deps/client";
+import { setOAuthReturnPath } from "@/lib/integrations/oauthReturn";
 
 const OAUTH_INTENT_KEY = "related.google-oauth-intent";
 const INSTAGRAM_OAUTH_STATE_KEY = "related.instagram-oauth-state";
@@ -24,6 +26,8 @@ const X_OAUTH_STATE_KEY = "related.x-oauth-state";
 const X_CODE_VERIFIER_KEY = "related.x-oauth-code-verifier";
 const TIKTOK_OAUTH_STATE_KEY = "related.tiktok-oauth-state";
 const WHATSAPP_OAUTH_STATE_KEY = "related.whatsapp-oauth-state";
+const OUTLOOK_OAUTH_STATE_KEY = "related.outlook-oauth-state";
+const OUTLOOK_CODE_VERIFIER_KEY = "related.outlook-oauth-code-verifier";
 
 interface Props {
   initialCalendarConnected: boolean;
@@ -32,10 +36,12 @@ interface Props {
   initialXConnected: boolean;
   initialWhatsAppConnected: boolean;
   initialTikTokConnected: boolean;
+  initialOutlookCalendarConnected: boolean;
   instagramAppId: string | null;
   xClientId: string | null;
   whatsappAppId: string | null;
   tiktokClientKey: string | null;
+  microsoftClientId: string | null;
 }
 
 export function IntegrationsSection({
@@ -45,10 +51,12 @@ export function IntegrationsSection({
   initialXConnected,
   initialWhatsAppConnected,
   initialTikTokConnected,
+  initialOutlookCalendarConnected,
   instagramAppId,
   xClientId,
   whatsappAppId,
   tiktokClientKey,
+  microsoftClientId,
 }: Props) {
   const [calendarConnected, setCalendarConnected] = useState(
     initialCalendarConnected,
@@ -62,8 +70,18 @@ export function IntegrationsSection({
     initialWhatsAppConnected,
   );
   const [tiktokConnected, setTiktokConnected] = useState(initialTikTokConnected);
+  const [outlookCalendarConnected, setOutlookCalendarConnected] = useState(
+    initialOutlookCalendarConnected,
+  );
   const [working, setWorking] = useState<
-    "calendar" | "gmail" | "instagram" | "x" | "whatsapp" | "tiktok" | null
+    | "calendar"
+    | "outlook"
+    | "gmail"
+    | "instagram"
+    | "x"
+    | "whatsapp"
+    | "tiktok"
+    | null
   >(null);
   const [error, setError] = useState<string | null>(null);
   const captureRunning = useRef(false);
@@ -151,12 +169,22 @@ export function IntegrationsSection({
     setTiktokConnected(token !== null && tokenHasTikTokAccess(token.scopes));
   }, []);
 
+  const refreshOutlookConnection = useCallback(async () => {
+    const { userProviderTokens } = getBrowserDeps();
+    const token = await userProviderTokens.getForProvider("outlook");
+    setOutlookCalendarConnected(
+      token !== null && tokenHasOutlookCalendarAccess(token.scopes),
+    );
+  }, []);
+
   useEffect(() => {
+    setOAuthReturnPath("/settings");
     captureProviderTokens();
     void refreshInstagramConnection();
     void refreshXConnection();
     void refreshWhatsAppConnection();
     void refreshTikTokConnection();
+    void refreshOutlookConnection();
     const { auth } = getBrowserDeps();
     const unsubscribe = auth.onAuthStateChange(() => {
       captureProviderTokens();
@@ -168,6 +196,7 @@ export function IntegrationsSection({
     refreshXConnection,
     refreshWhatsAppConnection,
     refreshTikTokConnection,
+    refreshOutlookConnection,
   ]);
 
   async function connectCalendar() {
@@ -183,6 +212,34 @@ export function IntegrationsSection({
       window.location.href = url;
     } catch (e) {
       sessionStorage.removeItem(OAUTH_INTENT_KEY);
+      setWorking(null);
+      setError(e instanceof Error ? e.message : "Failed to start OAuth");
+    }
+  }
+
+  async function connectOutlookCalendar() {
+    if (working || !microsoftClientId) return;
+    setError(null);
+    setWorking("outlook");
+    const redirectUri =
+      window.location.origin + "/settings/outlook/callback";
+    const state = crypto.randomUUID();
+    const codeVerifier = generateCodeVerifier();
+    sessionStorage.setItem(OUTLOOK_CODE_VERIFIER_KEY, codeVerifier);
+    sessionStorage.setItem(OUTLOOK_OAUTH_STATE_KEY, state);
+    try {
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const { auth } = getBrowserDeps();
+      const url = auth.buildOutlookOAuthUrl({
+        clientId: microsoftClientId,
+        redirectUri,
+        codeChallenge,
+        state,
+      });
+      window.location.href = url;
+    } catch (e) {
+      sessionStorage.removeItem(OUTLOOK_CODE_VERIFIER_KEY);
+      sessionStorage.removeItem(OUTLOOK_OAUTH_STATE_KEY);
       setWorking(null);
       setError(e instanceof Error ? e.message : "Failed to start OAuth");
     }
@@ -330,6 +387,47 @@ export function IntegrationsSection({
                   onClick={() => void connectCalendar()}
                 >
                   Connect Google Calendar
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start gap-3">
+            <Calendar size={18} className="mt-0.5 shrink-0 text-fg-subtle" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div>
+                <p className="text-[14px] font-medium text-fg">
+                  Outlook Calendar
+                </p>
+                <p className="mt-0.5 text-[13px] text-fg-muted">
+                  Read-only access to your Outlook calendar for the same
+                  week-density signal as Google Calendar.
+                </p>
+              </div>
+              {outlookCalendarConnected ? (
+                <p className="text-[13px] text-fg-muted">
+                  <span aria-hidden="true">✓ </span>
+                  Connected
+                </p>
+              ) : !microsoftClientId ? (
+                <p className="text-[13px] text-fg-muted">
+                  Set{" "}
+                  <code className="text-[12px]">
+                    NEXT_PUBLIC_MICROSOFT_CLIENT_ID
+                  </code>{" "}
+                  to enable Outlook connect.
+                </p>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={working === "outlook"}
+                  disabled={working !== null}
+                  onClick={() => void connectOutlookCalendar()}
+                >
+                  Connect Outlook Calendar
                 </Button>
               )}
             </div>

@@ -11,6 +11,15 @@ export interface GmailMessageSummary {
   direction: "sent" | "received";
 }
 
+export interface GmailMessageDetail {
+  id: string;
+  subject: string;
+  from: string;
+  to: string;
+  date: string;
+  body: string;
+}
+
 export interface ListGmailForContactInput {
   contactEmail: string;
   maxResults?: number;
@@ -32,6 +41,7 @@ export type GmailContactStatus =
 interface GmailContactResponse {
   status?: GmailContactStatus;
   messages?: GmailMessageSummary[];
+  message?: GmailMessageDetail;
   messageId?: string;
   error?: string;
 }
@@ -58,6 +68,16 @@ export class GmailClient {
     return {
       status: data.status ?? "error",
       messageId: data.messageId ?? null,
+    };
+  }
+
+  async getMessage(
+    messageId: string,
+  ): Promise<{ status: GmailContactStatus; message: GmailMessageDetail | null }> {
+    const data = await this.invoke({ action: "get", messageId });
+    return {
+      status: data.status ?? "error",
+      message: data.message ?? null,
     };
   }
 

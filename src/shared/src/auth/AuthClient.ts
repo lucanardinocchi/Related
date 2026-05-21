@@ -12,6 +12,7 @@ import { INSTAGRAM_INTEGRATION_SCOPES } from "../integrations/instagram/instagra
 import { X_INTEGRATION_SCOPES } from "../integrations/x/xScopes";
 import { WHATSAPP_INTEGRATION_SCOPES } from "../integrations/whatsapp/whatsappScopes";
 import { TIKTOK_INTEGRATION_SCOPES } from "../integrations/tiktok/tiktokScopes";
+import { OUTLOOK_CALENDAR_SCOPES } from "../integrations/outlook/outlookScopes";
 
 export interface AuthClientConfig {
   supabaseUrl: string;
@@ -207,6 +208,29 @@ export class AuthClient {
       state: input.state,
     });
     return `https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`;
+  }
+
+  /**
+   * Builds the Microsoft OAuth 2.0 PKCE authorization URL for Outlook
+   * Calendar. Token exchange happens in the outlook-oauth Edge Function.
+   */
+  buildOutlookOAuthUrl(input: {
+    clientId: string;
+    redirectUri: string;
+    codeChallenge: string;
+    state: string;
+  }): string {
+    const params = new URLSearchParams({
+      client_id: input.clientId,
+      response_type: "code",
+      redirect_uri: input.redirectUri,
+      response_mode: "query",
+      scope: OUTLOOK_CALENDAR_SCOPES,
+      state: input.state,
+      code_challenge: input.codeChallenge,
+      code_challenge_method: "S256",
+    });
+    return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
   }
 
   private async linkGoogleWithScopes(

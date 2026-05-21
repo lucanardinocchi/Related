@@ -5,9 +5,9 @@ import { getBrowserDeps } from "@/lib/deps/client";
 import { OAuthReturnLink } from "@/components/integrations/OAuthReturnLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-const X_CODE_VERIFIER_KEY = "related.x-oauth-code-verifier";
+const OUTLOOK_CODE_VERIFIER_KEY = "related.outlook-oauth-code-verifier";
 
-export default function XCallbackPage() {
+export default function OutlookCallbackPage() {
   const [status, setStatus] = useState<"working" | "ok" | "error">("working");
   const [error, setError] = useState<string | null>(null);
 
@@ -16,10 +16,11 @@ export default function XCallbackPage() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
       const oauthError = params.get("error");
+      const oauthErrorDescription = params.get("error_description");
 
       if (oauthError) {
         setStatus("error");
-        setError(oauthError);
+        setError(oauthErrorDescription ?? oauthError);
         return;
       }
       if (!code) {
@@ -28,32 +29,38 @@ export default function XCallbackPage() {
         return;
       }
 
-      const codeVerifier = sessionStorage.getItem(X_CODE_VERIFIER_KEY);
+      const codeVerifier = sessionStorage.getItem(OUTLOOK_CODE_VERIFIER_KEY);
       if (!codeVerifier) {
         setStatus("error");
-        setError("Missing PKCE verifier — try connecting again from Settings.");
+        setError(
+          "Missing PKCE verifier — try connecting again.",
+        );
         return;
       }
 
       try {
-        const { x } = getBrowserDeps();
-        const redirectUri = window.location.origin + "/settings/x/callback";
-        const result = await x.exchangeOAuthCode({
+        const { outlook, onboarding } = getBrowserDeps();
+        const redirectUri =
+          window.location.origin + "/settings/outlook/callback";
+        const result = await outlook.exchangeOAuthCode({
           code,
           redirectUri,
           codeVerifier,
         });
         if (result.status !== "ok") {
           setStatus("error");
-          setError(result.error ?? "Could not connect X");
+          setError(result.error ?? "Could not connect Outlook Calendar");
           return;
         }
-        sessionStorage.removeItem(X_CODE_VERIFIER_KEY);
-        sessionStorage.removeItem("related.x-oauth-state");
+        sessionStorage.removeItem(OUTLOOK_CODE_VERIFIER_KEY);
+        sessionStorage.removeItem("related.outlook-oauth-state");
+        await onboarding.completeStep("calendar");
         setStatus("ok");
       } catch (e) {
         setStatus("error");
-        setError(e instanceof Error ? e.message : "Could not connect X");
+        setError(
+          e instanceof Error ? e.message : "Could not connect Outlook Calendar",
+        );
       }
     }
 
@@ -62,16 +69,16 @@ export default function XCallbackPage() {
 
   return (
     <>
-      <PageHeader title="X" subtitle="Connecting your account…" />
+      <PageHeader title="Outlook Calendar" subtitle="Connecting your account…" />
       <div className="py-6">
         {status === "working" ? (
-          <p className="text-[13px] text-fg-muted">Finishing X connect…</p>
+          <p className="text-[13px] text-fg-muted">Finishing Outlook connect…</p>
         ) : null}
         {status === "ok" ? (
           <div className="space-y-3">
             <p className="text-[13px] text-fg">
-              X connected. You can now view and send DMs from relationship and
-              group pages.
+              Outlook Calendar connected. Related will read your week&apos;s
+              density for catch-up timing.
             </p>
             <OAuthReturnLink />
           </div>
@@ -79,7 +86,7 @@ export default function XCallbackPage() {
         {status === "error" ? (
           <div className="space-y-3">
             <p className="text-[13px] text-danger" role="alert">
-              {error ?? "Could not connect X"}
+              {error ?? "Could not connect Outlook Calendar"}
             </p>
             <OAuthReturnLink />
           </div>

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { User, Users, Plus } from "lucide-react";
 import { getServerDeps } from "@/lib/deps/server";
 import { NewRelationshipModal } from "./_NewRelationshipModal";
+import { RelationshipsIndexCharts } from "./_RelationshipsIndexCharts";
 import {
   Display,
   Body,
@@ -106,6 +107,20 @@ export default async function RelationshipsIndexPage() {
     (t) => t.direction === "me_owes_them" && t.closedAt === null,
   ).length;
 
+  const peopleCreatedAts = contactRels
+    .filter((r) => r.contact != null)
+    .map((r) => r.contact.createdAt);
+
+  const groupCreatedAts = groupRels
+    .filter((r) => r.group != null)
+    .map((r) => r.group.createdAt);
+
+  const relationshipCreatedAtByContactId = Object.fromEntries(
+    contactRels
+      .filter((r) => r.contact != null)
+      .map((r) => [r.contact.id, r.createdAt] as const),
+  );
+
   const columns: DataGridColumn<RelationshipRow>[] = [
     {
       key: "name",
@@ -183,6 +198,19 @@ export default async function RelationshipsIndexPage() {
           }
         />
       </AnalyticsRow>
+
+      {(peopleCreatedAts.length > 0 ||
+        groupCreatedAts.length > 0 ||
+        allInteractions.length > 0) && (
+        <RelationshipsIndexCharts
+          peopleCreatedAts={peopleCreatedAts}
+          groupCreatedAts={groupCreatedAts}
+          interactions={allInteractions}
+          relationshipCreatedAtByContactId={
+            relationshipCreatedAtByContactId
+          }
+        />
+      )}
 
       <DataGrid
         columns={columns}

@@ -46,6 +46,17 @@ export interface CalendarEventsGoogleRow {
   location: string | null;
 }
 
+export interface CalendarEventsOutlookRow {
+  owner_id: string;
+  external_event_id: string;
+  source: "outlook";
+  title: string | null;
+  start: string;
+  end: string;
+  is_all_day: boolean;
+  location: string | null;
+}
+
 export function toSignalRow(
   ownerId: string,
   event: RawCalendarEvent,
@@ -74,4 +85,24 @@ export function toEventsGoogleRow(
     is_all_day: event.isAllDay,
     location: event.location ?? null,
   };
+}
+
+export function toEventsOutlookRow(
+  ownerId: string,
+  event: RawCalendarEvent & { location?: string | null },
+): CalendarEventsOutlookRow {
+  return {
+    owner_id: ownerId,
+    external_event_id: `outlook:${event.id}`,
+    source: "outlook",
+    title: event.title ?? null,
+    start: event.start,
+    end: event.end,
+    is_all_day: event.isAllDay,
+    location: event.location ?? null,
+  };
+}
+
+export function toOutlookSignalEventId(graphEventId: string): string {
+  return `outlook:${graphEventId}`;
 }

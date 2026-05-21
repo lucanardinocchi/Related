@@ -1,5 +1,4 @@
 import { getServerDeps } from "@/lib/deps/server";
-import { calendarAnalytics } from "@related/shared";
 import { CalendarView } from "./_CalendarView";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +16,5 @@ export default async function CalendarPage() {
     to: to.toISOString(),
   });
 
-  const analytics = calendarAnalytics({ events: allEvents });
-
-  return <CalendarView events={allEvents} analytics={analytics} />;
+  return <CalendarView events={allEvents} />;
 }

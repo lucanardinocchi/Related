@@ -3,22 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import type {
-  CalendarAnalytics,
-  Event,
-  EventStatus,
-  EventType,
-} from "@related/shared";
+import type { Event, EventStatus, EventType } from "@related/shared";
 import {
-  AnalyticTile,
-  AnalyticsRow,
   Badge,
   Button,
   DataGrid,
   Display,
   EmptyState,
   Eyebrow,
-  Mono,
   Pill,
   Section,
 } from "@/components/ui";
@@ -27,7 +19,6 @@ import { EventsBarChart } from "./_EventsBarChart";
 
 interface Props {
   events: Event[];
-  analytics: CalendarAnalytics;
 }
 
 type StatusFilter = "all" | EventStatus;
@@ -151,7 +142,7 @@ const COLUMNS: DataGridColumn<Event>[] = [
   },
 ];
 
-export function CalendarView({ events, analytics }: Props) {
+export function CalendarView({ events }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const now = useMemo(() => new Date(), []);
@@ -182,33 +173,6 @@ export function CalendarView({ events, analytics }: Props) {
           </Button>
         </Link>
       </header>
-
-      <AnalyticsRow>
-        <AnalyticTile
-          label="Total"
-          value={<Mono>{analytics.totalEntries}</Mono>}
-        />
-        <AnalyticTile
-          label="Planned"
-          value={<Mono>{analytics.statusCounts.planned}</Mono>}
-        />
-        <AnalyticTile
-          label="Attended"
-          value={<Mono>{analytics.statusCounts.attended}</Mono>}
-        />
-        <AnalyticTile
-          label="Occurred"
-          value={<Mono>{analytics.statusCounts.occurred}</Mono>}
-        />
-        <AnalyticTile
-          label="Meetings"
-          value={<Mono>{analytics.typeCounts.meeting}</Mono>}
-        />
-        <AnalyticTile
-          label="Days w/ entries"
-          value={<Mono>{analytics.daysWithEntries}</Mono>}
-        />
-      </AnalyticsRow>
 
       <EventsBarChart events={events} now={now} />
 

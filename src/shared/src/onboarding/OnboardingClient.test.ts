@@ -44,3 +44,35 @@ describe("OnboardingClient.nextStep", () => {
     expect(OnboardingClient.nextStep(state)).toBeNull();
   });
 });
+
+describe("OnboardingClient.finishOnboarding", () => {
+  it("marks every canonical step complete and sets isFinished", async () => {
+    const upsert = jest.fn().mockResolvedValue({
+      data: {
+        completed_steps: [...ONBOARDING_STEPS],
+        finished_at: "2026-05-21T00:00:00.000Z",
+      },
+      error: null,
+    });
+    const resolveOwnerId = jest.fn().mockResolvedValue("user-1");
+    const client = {
+      from: jest.fn().mockReturnValue({
+        upsert: jest.fn().mockReturnValue({
+          select: jest.fn().mockReturnValue({
+            single: upsert,
+          }),
+        }),
+      }),
+    };
+
+    const onboarding = new OnboardingClient(
+      client as never,
+      resolveOwnerId,
+    );
+    const result = await onboarding.finishOnboarding();
+
+    expect(result.isFinished).toBe(true);
+    expect(result.completedSteps).toEqual(ONBOARDING_STEPS);
+    expect(result.finishedAt).toBe("2026-05-21T00:00:00.000Z");
+  });
+});

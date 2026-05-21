@@ -6,7 +6,8 @@ export type ProviderName =
   | "instagram"
   | "x"
   | "whatsapp"
-  | "tiktok";
+  | "tiktok"
+  | "outlook";
 
 export interface UserProviderToken {
   ownerId: string;

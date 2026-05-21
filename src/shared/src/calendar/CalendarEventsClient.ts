@@ -8,7 +8,7 @@ import {
  * inferred_signal_calendar). Future sources (Outlook, iCloud) would extend
  * the union without breaking the unified web /calendar timeline.
  */
-export type CalendarEventSource = "google";
+export type CalendarEventSource = "google" | "outlook";
 
 /**
  * A single external calendar event the agent has ingested as an Inferred
