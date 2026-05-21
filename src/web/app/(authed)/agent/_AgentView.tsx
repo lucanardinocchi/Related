@@ -7,8 +7,6 @@ import {
   ChevronRight,
   Loader2,
   Mic,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   SendHorizontal,
   Square,
@@ -43,7 +41,11 @@ interface ToastMsg {
   text: string;
 }
 
-const CHATS_RAIL_COLLAPSED_KEY = "related.agent.chats-rail.collapsed";
+// Mirrors src/web/components/Sidebar.tsx — we read the same key so the
+// Agent panel can anchor flush against the app sidebar regardless of its
+// collapsed state. (Layout applies a max-w wrapper to constrained pages;
+// the Agent escapes it with fixed positioning.)
+const APP_SIDEBAR_COLLAPSED_KEY = "related.sidebar.collapsed";
 
 /**
  * Two-pane Conversational Intelligence shell, fully wired.
@@ -80,8 +82,8 @@ export function AgentView({ initialChats }: AgentViewProps) {
   const [toast, setToast] = useState<ToastMsg | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const voiceHandleRef = useRef<MicCaptureHandle | null>(null);
-  const [chatsRailCollapsed, toggleChatsRail] = usePersistedBoolean(
-    CHATS_RAIL_COLLAPSED_KEY,
+  const [appSidebarCollapsed] = usePersistedBoolean(
+    APP_SIDEBAR_COLLAPSED_KEY,
   );
 
   const selectedChat = useMemo(
@@ -399,111 +401,69 @@ export function AgentView({ initialChats }: AgentViewProps) {
   };
 
   return (
-    <div className="-my-8 -mx-10 flex h-screen flex-row bg-bg">
-      {/* Chat list rail — collapsible like the app nav sidebar */}
-      <aside
-        data-collapsed={chatsRailCollapsed ? "true" : "false"}
-        className={cn(
-          "flex h-full shrink-0 flex-col border-r border-border bg-surface",
-          "transition-[width] duration-150 ease-out motion-reduce:transition-none",
-          chatsRailCollapsed ? "w-12" : "w-[260px]",
-        )}
-      >
-        <div
-          className={cn(
-            "flex items-center pt-5 pb-3",
-            chatsRailCollapsed
-              ? "flex-col gap-2 px-1"
-              : "justify-between px-3",
-          )}
-        >
-          {chatsRailCollapsed ? null : (
-            <span className="px-1.5 text-[13px] font-medium text-fg">
-              Chats
-            </span>
-          )}
-          <div
-            className={cn(
-              "flex items-center",
-              chatsRailCollapsed ? "flex-col gap-1" : "gap-0.5",
-            )}
+    <div
+      className="fixed inset-y-0 right-0 z-0 flex flex-row bg-bg"
+      style={{ left: appSidebarCollapsed ? "56px" : "240px" }}
+    >
+      {/* Chat list rail */}
+      <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-border bg-surface">
+        <div className="flex items-center justify-between pt-5 pb-3 px-3">
+          <span className="px-1.5 text-[13px] font-medium text-fg">Chats</span>
+          <button
+            type="button"
+            onClick={handleNewChat}
+            disabled={working}
+            aria-label="New chat"
+            title="New chat"
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-hover hover:text-fg disabled:opacity-50"
           >
-            <button
-              type="button"
-              onClick={handleNewChat}
-              disabled={working}
-              aria-label="New chat"
-              title="New chat"
-              className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-hover hover:text-fg disabled:opacity-50"
-            >
-              <Plus size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={toggleChatsRail}
-              aria-label={
-                chatsRailCollapsed ? "Expand chat list" : "Collapse chat list"
-              }
-              aria-expanded={!chatsRailCollapsed}
-              title={
-                chatsRailCollapsed ? "Expand chat list" : "Collapse chat list"
-              }
-              className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-hover hover:text-fg"
-            >
-              {chatsRailCollapsed ? (
-                <PanelLeftOpen size={16} />
-              ) : (
-                <PanelLeftClose size={16} />
-              )}
-            </button>
-          </div>
+            <Plus size={16} />
+          </button>
         </div>
-        {chatsRailCollapsed ? null : (
-          <div className="flex-1 overflow-y-auto px-2 pb-3">
-            {chats.length === 0 ? (
-              <div className="px-2 py-2 text-[12px] text-fg-subtle">
-                No chats yet.
-              </div>
-            ) : (
-              <ul className="space-y-0.5">
-                {chats.map((chat) => (
-                  <li key={chat.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(chat.id)}
-                      className={cn(
-                        "w-full rounded-md px-2.5 py-2 text-left transition-colors",
-                        chat.id === selectedId
-                          ? "bg-active text-fg"
-                          : "text-fg-muted hover:bg-hover hover:text-fg",
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-[13px] font-medium leading-[18px]">
-                          {chat.title ?? "Untitled chat"}
+        <div className="flex-1 overflow-y-auto px-2 pb-3">
+          {chats.length === 0 ? (
+            <div className="px-2 py-2 text-[12px] text-fg-subtle">
+              No chats yet.
+            </div>
+          ) : (
+            <ul className="space-y-0.5">
+              {chats.map((chat) => (
+                <li key={chat.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(chat.id)}
+                    className={cn(
+                      "w-full rounded-md px-2.5 py-2 text-left transition-colors",
+                      chat.id === selectedId
+                        ? "bg-active text-fg"
+                        : "text-fg-muted hover:bg-hover hover:text-fg",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[13px] font-medium leading-[18px]">
+                        {chat.title ?? "Untitled chat"}
+                      </span>
+                      {chat.closedAt ? (
+                        <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
+                          {chat.extractedAt ? "extracted" : "closed"}
                         </span>
-                        {chat.closedAt ? (
-                          <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
-                            {chat.extractedAt ? "extracted" : "closed"}
-                          </span>
-                        ) : null}
-                      </div>
-                      {chat.lastMessagePreview ? (
-                        <div className="mt-1 truncate text-[12px] leading-[16px] text-fg-subtle">
-                          {chat.lastMessagePreview}
-                        </div>
                       ) : null}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+                    </div>
+                    {chat.lastMessagePreview ? (
+                      <div className="mt-1 truncate text-[12px] leading-[16px] text-fg-subtle">
+                        {chat.lastMessagePreview}
+                      </div>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </aside>
 
       {/* Thread + composer */}
-      <section className="flex h-full min-w-0 flex-1 flex-col bg-bg">
+      <section className="flex min-w-0 flex-1 flex-col bg-bg">
         {selectedChat ? (
           <>
             <header className="flex items-center justify-between gap-3 border-b border-divider px-6 pt-5 pb-3">
@@ -617,7 +577,7 @@ export function AgentView({ initialChats }: AgentViewProps) {
             ) : null}
           </>
         ) : (
-          <div className="flex h-full items-center justify-center px-6">
+          <div className="flex flex-1 items-center justify-center px-6">
             <EmptyState
               title="No chats yet"
               description="Start a Chat to ask the agent about your Relationships, Commitments, or Calendar. It reads your data — it doesn't write to it."
