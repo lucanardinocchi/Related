@@ -3,7 +3,6 @@
 import {
   AgentService,
   AuthClient,
-  CalendarEventsClient,
   CandidatesClient,
   ChatsClient,
   ElevenLabsTTSAdapter,
@@ -59,7 +58,6 @@ function build() {
     relationships: new RelationshipsClient(supabase),
     openThreads: new OpenThreadsClient(supabase),
     interactions: new InteractionsClient(supabase),
-    calendarEvents: new CalendarEventsClient(supabase),
     events: new EventsClient(supabase),
     groups: new GroupsClient(supabase),
     candidates: new CandidatesClient(supabase),

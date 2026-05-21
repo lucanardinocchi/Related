@@ -1,5 +1,19 @@
 // Daily Calendar density collector — Edge Function.
 //
+// DUAL-WRITE INVARIANT (ADR-0010) — keep in sync with
+// src/shared/src/signals/calendarSyncDualWrite.ts:
+//
+//   inferred_signal_calendar          events (source='google')
+//   ─────────────────────────         ─────────────────────────
+//   Agent density input only          User-facing /calendar surface
+//   Upsert key: (owner_id, event_id)  Upsert key: (owner_id, external_event_id)
+//   Columns: title, start, end,       Google-owned (overwritten on sync):
+//            is_all_day                 title, start, end, is_all_day, location
+//   Full replace per 7-day window     User-owned (preserved on upsert):
+//                                       aim, required_prep, status, type
+//   GC: delete rows not in fetch       GC: delete google rows not in fetch
+//                                       (manual events untouched)
+//
 // Per ADR-0006, this iterates over every User who has a row in
 // `user_provider_tokens` for provider='google', pulls their next 7 days
 // of Calendar events from Google's API using their stored access token,

@@ -19,9 +19,9 @@ export default async function AuthedLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar userEmail={user.email} />
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[var(--layout-content-max-w)] px-10 py-8">
           {children}
         </div>

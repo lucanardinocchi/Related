@@ -30,6 +30,7 @@ export type {
   OpenThreadsClientConfig,
 } from "./open-threads/OpenThreadsClient";
 
+/** @deprecated ADR-0010 — prefer EventsClient for /calendar; retained for signal reads. */
 export { CalendarEventsClient } from "./calendar/CalendarEventsClient";
 export type {
   CalendarEvent,
@@ -265,6 +266,18 @@ export type {
   ChatRespondEvent,
   ExtractionResult,
 } from "./chats/ChatsClient";
+
+export {
+  createStreamingPlaceholder,
+  reduceMessagesForRespondEvent,
+  applyRespondEventUpdater,
+  consumeRespondStream,
+} from "./chats/conversationalChatState";
+export type {
+  ToolCallSummary,
+  SetMessagesFn,
+  ConsumeRespondStreamParams,
+} from "./chats/conversationalChatState";
 
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
