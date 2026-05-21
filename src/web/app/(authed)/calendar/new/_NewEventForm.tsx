@@ -8,12 +8,17 @@ import { getBrowserDeps } from "@/lib/deps/client";
 import {
   Badge,
   Button,
+  DateTimeFields,
   Display,
   Eyebrow,
   Input,
   Section,
   Select,
   Textarea,
+  dateTimeToIso,
+  isoToDateInput,
+  isoToTimeInput,
+  localDateTimeToIso,
 } from "@/components/ui";
 
 interface ContactOption {
@@ -25,29 +30,34 @@ interface Props {
   allContacts: ContactOption[];
 }
 
-function defaultStart(): string {
-  // Snap to the next half-hour in local time.
+function defaultStartParts(): { date: string; time: string } {
   const d = new Date();
   d.setSeconds(0, 0);
   d.setMinutes(d.getMinutes() < 30 ? 30 : 60);
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const iso = d.toISOString();
+  return { date: isoToDateInput(iso), time: isoToTimeInput(iso) };
 }
 
-function addHour(local: string): string {
-  const d = new Date(local);
+function addHourParts(date: string, time: string): { date: string; time: string } {
+  const iso = dateTimeToIso(date, time);
+  const d = new Date(iso);
   d.setHours(d.getHours() + 1);
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const nextIso = d.toISOString();
+  return { date: isoToDateInput(nextIso), time: isoToTimeInput(nextIso) };
 }
 
 export function NewEventForm({ allContacts }: Props) {
   const router = useRouter();
   const deps = getBrowserDeps();
 
+  const initialStart = defaultStartParts();
+  const initialEnd = addHourParts(initialStart.date, initialStart.time);
+
   const [title, setTitle] = useState("");
-  const [start, setStart] = useState(defaultStart());
-  const [end, setEnd] = useState(addHour(defaultStart()));
+  const [startDate, setStartDate] = useState(initialStart.date);
+  const [startTime, setStartTime] = useState(initialStart.time);
+  const [endDate, setEndDate] = useState(initialEnd.date);
+  const [endTime, setEndTime] = useState(initialEnd.time);
   const [isAllDay, setIsAllDay] = useState(false);
   const [location, setLocation] = useState("");
   const [aim, setAim] = useState("");
@@ -72,10 +82,12 @@ export function NewEventForm({ allContacts }: Props) {
     .slice(0, 8);
 
   async function submit() {
-    if (!start || !end) {
+    if (!startDate || !endDate) {
       setError("Start and end are required.");
       return;
     }
+    const start = localDateTimeToIso(startDate, startTime, isAllDay);
+    const end = localDateTimeToIso(endDate, endTime, isAllDay);
     if (new Date(end) <= new Date(start)) {
       setError("End must be after start.");
       return;
@@ -85,8 +97,8 @@ export function NewEventForm({ allContacts }: Props) {
     try {
       const id = await deps.events.createEvent({
         title: title.trim() === "" ? null : title.trim(),
-        start: new Date(start).toISOString(),
-        end: new Date(end).toISOString(),
+        start,
+        end,
         isAllDay,
         location: location.trim() === "" ? null : location.trim(),
         aim: aim.trim() === "" ? null : aim.trim(),
@@ -120,18 +132,22 @@ export function NewEventForm({ allContacts }: Props) {
         </div>
         <div className="grid grid-cols-[160px_1fr] gap-3 py-1.5">
           <label className="pt-1.5 text-[13px] text-fg-muted">Start</label>
-          <Input
-            type="datetime-local"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
+          <DateTimeFields
+            date={startDate}
+            time={startTime}
+            isAllDay={isAllDay}
+            onDateChange={setStartDate}
+            onTimeChange={setStartTime}
           />
         </div>
         <div className="grid grid-cols-[160px_1fr] gap-3 py-1.5">
           <label className="pt-1.5 text-[13px] text-fg-muted">End</label>
-          <Input
-            type="datetime-local"
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
+          <DateTimeFields
+            date={endDate}
+            time={endTime}
+            isAllDay={isAllDay}
+            onDateChange={setEndDate}
+            onTimeChange={setEndTime}
           />
         </div>
         <div className="grid grid-cols-[160px_1fr] gap-3 py-1.5">

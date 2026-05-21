@@ -12,8 +12,8 @@ import { getBrowserDeps } from "@/lib/deps/client";
 import {
   Badge,
   Button,
-  Eyebrow,
-  H1,
+  DateTimePropertyRow,
+  Micro,
   PropertyRow,
   Section,
   Select,
@@ -54,33 +54,6 @@ interface Props {
   allContacts: ContactOption[];
 }
 
-/**
- * Convert an ISO timestamp to the value form a <input type="datetime-local">
- * expects (YYYY-MM-DDTHH:mm, in the browser's local timezone). Round-trips
- * via Date so the stored ISO can be in any timezone.
- */
-function isoToLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function localInputToIso(local: string): string {
-  // new Date('YYYY-MM-DDTHH:mm') is interpreted as local time.
-  return new Date(local).toISOString();
-}
-
-function fmtDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export function EventDetailView({ event: initial, allContacts }: Props) {
   const router = useRouter();
   const deps = getBrowserDeps();
@@ -106,13 +79,11 @@ export function EventDetailView({ event: initial, allContacts }: Props) {
   async function savePrep(next: string) {
     await patch({ requiredPrep: next.trim() === "" ? null : next.trim() });
   }
-  async function saveStart(next: string) {
-    if (!next) return;
-    await patch({ start: localInputToIso(next) });
+  async function saveStart(iso: string) {
+    await patch({ start: iso });
   }
-  async function saveEnd(next: string) {
-    if (!next) return;
-    await patch({ end: localInputToIso(next) });
+  async function saveEnd(iso: string) {
+    await patch({ end: iso });
   }
 
   async function saveType(next: EventType) {
@@ -173,49 +144,57 @@ export function EventDetailView({ event: initial, allContacts }: Props) {
     .slice(0, 8);
 
   return (
-    <div className="space-y-2">
-      <header className="mt-2 pb-4">
-        <Eyebrow>Event</Eyebrow>
-        <H1 className="mt-1">{event.title ?? "(untitled event)"}</H1>
-        <div className="mt-2 flex items-center gap-2">
+    <div className="space-y-1">
+      <header className="flex items-center justify-between gap-2 pb-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone={STATUS_TONE[event.status]}>{event.status}</Badge>
           <Badge tone={event.source === "google" ? "info" : "approved"}>
             {event.source === "google" ? "Google" : "Manual"}
           </Badge>
-          <span className="text-[13px] text-fg-muted">
-            {fmtDateTime(event.start)} → {fmtDateTime(event.end)}
-          </span>
         </div>
-        {event.source === "google" && (
-          <p className="mt-2 text-[12px] text-fg-subtle">
-            Synced from Google. Title, start, end, location, and attendees may
-            be overwritten on the next sync. Aim, prep, status, and type are
-            yours to edit and are preserved.
-          </p>
-        )}
+        <Button
+          variant="danger"
+          size="sm"
+          leading={<Trash2 size={12} />}
+          onClick={deleteEvent}
+          loading={deleting}
+        >
+          Delete
+        </Button>
       </header>
 
-      <Section title="Details" fixed>
+      {event.source === "google" && (
+        <Micro className="block pb-1">
+          Google sync may overwrite title, times, location, and attendees. Aim,
+          prep, status, and type are preserved.
+        </Micro>
+      )}
+
+      <Section title="Details" fixed className="py-3 [&_header]:mb-2">
         <PropertyRow
           label="Title"
           value={event.title ?? ""}
           placeholder="Add a title"
           onSave={saveTitle}
+          className="py-1"
         />
-        <PropertyRow
+        <DateTimePropertyRow
           label="Start"
-          value={fmtDateTime(event.start)}
-          editValue={isoToLocalInput(event.start)}
+          iso={event.start}
+          isAllDay={event.isAllDay}
           onSave={saveStart}
+          className="py-1"
         />
-        <PropertyRow
+        <DateTimePropertyRow
           label="End"
-          value={fmtDateTime(event.end)}
-          editValue={isoToLocalInput(event.end)}
+          iso={event.end}
+          isAllDay={event.isAllDay}
           onSave={saveEnd}
+          className="py-1"
         />
         <PropertyRow
           label="All-day"
+          className="py-1"
           value={
             <button
               type="button"
@@ -228,6 +207,7 @@ export function EventDetailView({ event: initial, allContacts }: Props) {
         />
         <PropertyRow
           label="Type"
+          className="py-1"
           value={
             <Select
               value={event.type}
@@ -244,6 +224,7 @@ export function EventDetailView({ event: initial, allContacts }: Props) {
         />
         <PropertyRow
           label="Status"
+          className="py-1"
           value={
             <Select
               value={event.status}
@@ -263,90 +244,84 @@ export function EventDetailView({ event: initial, allContacts }: Props) {
           value={event.location ?? ""}
           placeholder="Add a location"
           onSave={saveLocation}
+          className="py-1"
         />
-        <PropertyRow
-          label="Source"
-          value={event.source === "google" ? "Google Calendar" : "Manually created"}
-        />
-      </Section>
-
-      <Section title="Aim" fixed>
         <PropertyRow
           label="What for"
           value={event.aim ?? ""}
           placeholder="Why this event exists — the outcome you want"
           onSave={saveAim}
+          className="py-1"
         />
         <PropertyRow
           label="Required prep"
           value={event.requiredPrep ?? ""}
           placeholder="What to do before this happens"
           onSave={savePrep}
+          className="py-1"
         />
-      </Section>
+        <PropertyRow
+          label="Attendees"
+          className="py-1"
+          value={
+            event.attendees.length === 0 ? (
+              <span className="text-fg-subtle italic">No attendees yet</span>
+            ) : (
+              <ul className="flex flex-wrap gap-1.5">
+                {event.attendees.map((a) => (
+                  <li
+                    key={a.id}
+                    className="inline-flex items-center gap-1 rounded-md border border-divider bg-surface px-1.5 py-0.5 text-[13px]"
+                  >
+                    <span>{a.name || "(unnamed)"}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttendee(a.id)}
+                      className="rounded p-0.5 text-fg-muted hover:bg-hover hover:text-fg"
+                      aria-label={`Remove ${a.name}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          }
+        />
 
-      <Section
-        title="Attendees"
-        meta={`${event.attendees.length}`}
-        fixed
-        actions={
+        <div className="mt-1 flex justify-end">
           <Button
             variant="secondary"
             size="sm"
             leading={<Plus size={12} />}
             onClick={() => setShowAttendeePicker((v) => !v)}
           >
-            Add
+            Add attendee
           </Button>
-        }
-      >
-        {event.attendees.length === 0 ? (
-          <p className="py-2 text-[14px] italic text-fg-subtle">
-            No attendees yet.
-          </p>
-        ) : (
-          <ul className="flex flex-wrap gap-2 py-2">
-            {event.attendees.map((a) => (
-              <li
-                key={a.id}
-                className="inline-flex items-center gap-1.5 rounded-md border border-divider bg-surface px-2 py-1 text-[13px]"
-              >
-                <span>{a.name || "(unnamed)"}</span>
-                <button
-                  type="button"
-                  onClick={() => removeAttendee(a.id)}
-                  className="rounded p-0.5 text-fg-muted hover:bg-hover hover:text-fg"
-                  aria-label={`Remove ${a.name}`}
-                >
-                  <X size={12} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        </div>
 
         {showAttendeePicker && (
-          <div className="mt-2 rounded-md border border-divider p-2">
+          <div className="mt-1 rounded-md border border-divider p-2">
             <input
               autoFocus
               type="text"
               value={attendeeSearch}
               onChange={(e) => setAttendeeSearch(e.target.value)}
               placeholder="Search contacts"
-              className="mb-2 h-8 w-full rounded border border-border bg-bg px-2 text-[14px] text-fg placeholder:text-fg-subtle focus-visible:border-accent focus-visible:outline-none"
+              className="mb-1.5 h-8 w-full rounded border border-border bg-bg px-2 text-[14px] text-fg placeholder:text-fg-subtle focus-visible:border-accent focus-visible:outline-none"
             />
             {availableContacts.length === 0 ? (
-              <p className="px-2 py-1 text-[13px] italic text-fg-subtle">
+              <p className="px-2 py-0.5 text-[13px] italic text-fg-subtle">
                 No matching contacts.
               </p>
             ) : (
-              <ul className="max-h-60 overflow-auto">
+              <ul className="max-h-48 overflow-auto">
                 {availableContacts.map((c) => (
                   <li key={c.id}>
                     <button
                       type="button"
                       onClick={() => addAttendee(c.id)}
-                      className="block w-full rounded px-2 py-1 text-left text-[14px] hover:bg-hover"
+                      className="block w-full rounded px-2 py-0.5 text-left text-[14px] hover:bg-hover"
                     >
                       {c.name}
                     </button>
@@ -356,20 +331,6 @@ export function EventDetailView({ event: initial, allContacts }: Props) {
             )}
           </div>
         )}
-      </Section>
-
-      <Section title="Danger zone" fixed>
-        <div className="py-2">
-          <Button
-            variant="danger"
-            size="sm"
-            leading={<Trash2 size={12} />}
-            onClick={deleteEvent}
-            loading={deleting}
-          >
-            Delete event
-          </Button>
-        </div>
       </Section>
     </div>
   );
