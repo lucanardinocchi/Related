@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import {
   act,
   fireEvent,
@@ -5,6 +6,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import type {
   ChatMessage,
   ChatRespondEvent,
@@ -74,6 +76,17 @@ async function* streamOf(events: ChatRespondEvent[]) {
   for (const e of events) yield e;
 }
 
+const SAFE_AREA = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 0, left: 0, right: 0, bottom: 0 },
+};
+
+function renderChat(ui: ReactElement) {
+  return render(
+    <SafeAreaProvider initialMetrics={SAFE_AREA}>{ui}</SafeAreaProvider>,
+  );
+}
+
 describe("<MobileChatScreen />", () => {
   it("sends a user turn and renders the streamed assistant reply", async () => {
     const chats = makeChatsMock();
@@ -100,7 +113,7 @@ describe("<MobileChatScreen />", () => {
       ]),
     );
 
-    render(
+    renderChat(
       <MobileChatScreen
         chatsClient={chats as unknown as ChatsClient}
       />,
@@ -158,7 +171,7 @@ describe("<MobileChatScreen />", () => {
       stop: jest.fn(),
     };
 
-    render(
+    renderChat(
       <MobileChatScreen
         chatsClient={chats as unknown as ChatsClient}
         ttsPlayback={ttsPlayback}
@@ -203,7 +216,7 @@ describe("<MobileChatScreen />", () => {
       },
     };
 
-    render(
+    renderChat(
       <MobileChatScreen
         chatsClient={chats as unknown as ChatsClient}
         startMicCapture={startMicCapture}

@@ -36,9 +36,9 @@ describe("<SignInScreen />", () => {
       />,
     );
 
-    expect(screen.getByPlaceholderText(/email/i)).toBeTruthy();
+    expect(screen.getByPlaceholderText(/you@example.com/i)).toBeTruthy();
     expect(screen.getByPlaceholderText(/password/i)).toBeTruthy();
-    expect(screen.getByText(/sign in/i)).toBeTruthy();
+    expect(screen.getByLabelText("Sign in")).toBeTruthy();
   });
 
   it("calls authClient.signIn with the typed values and notifies the caller on success", async () => {
@@ -57,9 +57,12 @@ describe("<SignInScreen />", () => {
         onOAuthSignIn={jest.fn()}
       />,
     );
-    fireEvent.changeText(screen.getByPlaceholderText(/email/i), "alice@anywhere.com");
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/you@example.com/i),
+      "alice@anywhere.com",
+    );
     fireEvent.changeText(screen.getByPlaceholderText(/password/i), "secret");
-    fireEvent.press(screen.getByText(/sign in/i));
+    fireEvent.press(screen.getByLabelText("Sign in"));
 
     await waitFor(() =>
       expect(authClient.signIn).toHaveBeenCalledWith("alice@anywhere.com", "secret"),
@@ -85,9 +88,12 @@ describe("<SignInScreen />", () => {
         onOAuthSignIn={jest.fn()}
       />,
     );
-    fireEvent.changeText(screen.getByPlaceholderText(/email/i), "alice@anywhere.com");
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/you@example.com/i),
+      "alice@anywhere.com",
+    );
     fireEvent.changeText(screen.getByPlaceholderText(/password/i), "wrong");
-    fireEvent.press(screen.getByText(/sign in/i));
+    fireEvent.press(screen.getByLabelText("Sign in"));
 
     expect(await screen.findByText(/invalid login credentials/i)).toBeTruthy();
     expect(onSignedIn).not.toHaveBeenCalled();
@@ -104,13 +110,11 @@ describe("<SignInScreen />", () => {
       />,
     );
 
-    // Default mode is sign-in; primary action says "Sign in", toggle offers sign-up.
-    expect(screen.getByText(/^sign in$/i)).toBeTruthy();
+    expect(screen.getByLabelText("Sign in")).toBeTruthy();
     expect(screen.getByText(/new here\?/i)).toBeTruthy();
 
-    // After tapping the toggle, the primary action switches to "Sign up".
-    fireEvent.press(screen.getByText(/new here\?/i));
-    expect(screen.getByText(/^sign up$/i)).toBeTruthy();
+    fireEvent.press(screen.getByText(/create an account/i));
+    expect(screen.getByLabelText("Sign up")).toBeTruthy();
     expect(screen.getByText(/already have an account\?/i)).toBeTruthy();
   });
 
@@ -130,10 +134,13 @@ describe("<SignInScreen />", () => {
         onOAuthSignIn={jest.fn()}
       />,
     );
-    fireEvent.press(screen.getByText(/new here\?/i));
-    fireEvent.changeText(screen.getByPlaceholderText(/email/i), "newbie@elsewhere.com");
+    fireEvent.press(screen.getByText(/create an account/i));
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/you@example.com/i),
+      "newbie@elsewhere.com",
+    );
     fireEvent.changeText(screen.getByPlaceholderText(/password/i), "strong-pw");
-    fireEvent.press(screen.getByText(/^sign up$/i));
+    fireEvent.press(screen.getByLabelText("Sign up"));
 
     await waitFor(() =>
       expect(authClient.signUp).toHaveBeenCalledWith(
@@ -163,8 +170,11 @@ describe("<SignInScreen />", () => {
       />,
     );
     fireEvent.press(screen.getByText(/forgot password\?/i));
-    fireEvent.changeText(screen.getByPlaceholderText(/email/i), "alice@anywhere.com");
-    fireEvent.press(screen.getByText(/send reset link/i));
+    fireEvent.changeText(
+      screen.getByPlaceholderText(/you@example.com/i),
+      "alice@anywhere.com",
+    );
+    fireEvent.press(screen.getByLabelText("Send reset link"));
 
     await waitFor(() =>
       expect(authClient.requestPasswordReset).toHaveBeenCalledWith(

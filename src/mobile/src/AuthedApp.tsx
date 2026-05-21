@@ -21,6 +21,7 @@ import type {
   VoiceSessionManager,
 } from "@related/shared";
 import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
+import type { StreamingAudioPlayer } from "./voice/createMobileStreamingAudioPlayer";
 import { AddContactScreen } from "./AddContactScreen";
 import { AgentScreen } from "./AgentScreen";
 import { CalendarScreen } from "./CalendarScreen";
@@ -55,6 +56,7 @@ export interface AuthedAppProps {
   chatTTSPlayback?: TTSPlayback;
   /** Optional voice pipeline — surfaces the Mic toggle in AgentScreen. */
   voiceSessionManager?: VoiceSessionManager;
+  agentStreamingPlayerFactory?: () => StreamingAudioPlayer;
   onSignOut: () => void;
 }
 
@@ -92,6 +94,8 @@ function RelationshipsStack({
   candidatesClient,
   agentService,
   voiceSessionManager,
+  chatStartMicCapture,
+  agentStreamingPlayerFactory,
 }: {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
@@ -100,6 +104,8 @@ function RelationshipsStack({
   candidatesClient: CandidatesClient;
   agentService: AgentService;
   voiceSessionManager?: VoiceSessionManager;
+  chatStartMicCapture?: () => Promise<AudioCaptureHandle>;
+  agentStreamingPlayerFactory?: () => StreamingAudioPlayer;
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -159,6 +165,8 @@ function RelationshipsStack({
             relationship={route.params.relationship}
             agentService={agentService}
             voiceSessionManager={voiceSessionManager}
+            startMicCapture={chatStartMicCapture}
+            createStreamingPlayer={agentStreamingPlayerFactory}
             onBack={() => navigation.goBack()}
           />
         )}
@@ -245,6 +253,7 @@ export function AuthedApp({
   chatSttAdapter,
   chatTTSPlayback,
   voiceSessionManager,
+  agentStreamingPlayerFactory,
   onSignOut,
 }: AuthedAppProps) {
   return (
@@ -291,6 +300,8 @@ export function AuthedApp({
               candidatesClient={candidatesClient}
               agentService={agentService}
               voiceSessionManager={voiceSessionManager}
+              chatStartMicCapture={chatStartMicCapture}
+              agentStreamingPlayerFactory={agentStreamingPlayerFactory}
             />
           )}
         </Tab.Screen>

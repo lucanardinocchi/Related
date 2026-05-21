@@ -160,7 +160,7 @@ describe("<AuthGate />", () => {
       />,
     );
 
-    expect(await screen.findByPlaceholderText(/email/i)).toBeTruthy();
+    expect(await screen.findByPlaceholderText(/you@example.com/i)).toBeTruthy();
     expect(screen.queryByText(/^threads closed$/i)).toBeNull();
   });
 
@@ -192,7 +192,7 @@ describe("<AuthGate />", () => {
     );
 
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
-    expect(screen.queryByPlaceholderText(/email/i)).toBeNull();
+    expect(screen.queryByPlaceholderText(/you@example.com/i)).toBeNull();
   });
 
   it("transitions from sign-in to Home after a successful sign-in", async () => {
@@ -222,9 +222,9 @@ describe("<AuthGate />", () => {
         navigate={jest.fn()}
       />,
     );
-    fireEvent.changeText(await screen.findByPlaceholderText(/email/i), "a@b.com");
+    fireEvent.changeText(await screen.findByPlaceholderText(/you@example.com/i), "a@b.com");
     fireEvent.changeText(screen.getByPlaceholderText(/password/i), "secret");
-    fireEvent.press(screen.getByText(/sign in/i));
+    fireEvent.press(screen.getByLabelText("Sign in"));
 
     expect(await screen.findByText(/^threads closed$/i)).toBeTruthy();
   });
@@ -271,7 +271,7 @@ describe("<AuthGate />", () => {
     });
 
     expect(authClient.signOut).toHaveBeenCalled();
-    expect(await screen.findByPlaceholderText(/email/i)).toBeTruthy();
+    expect(await screen.findByPlaceholderText(/you@example.com/i)).toBeTruthy();
   });
 
   it("subscribes to auth state changes and returns to sign-in on sign-out", async () => {
@@ -312,6 +312,6 @@ describe("<AuthGate />", () => {
       capturedCallback!(null);
     });
 
-    expect(await screen.findByPlaceholderText(/email/i)).toBeTruthy();
+    expect(await screen.findByPlaceholderText(/you@example.com/i)).toBeTruthy();
   });
 });

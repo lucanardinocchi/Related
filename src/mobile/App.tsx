@@ -1,5 +1,6 @@
 import { Linking, Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
   useFonts,
   InterTight_400Regular,
@@ -37,6 +38,7 @@ import {
 import type { OAuthSignInProvider } from "@related/shared";
 import { createMobileAudioPlayer } from "./src/voice/createMobileAudioPlayer";
 import { createMobileMicCapture } from "./src/voice/createMobileMicCapture";
+import { createMobileStreamingAudioPlayer } from "./src/voice/createMobileStreamingAudioPlayer";
 import {
   iosHealthKitSleepAdapter,
   requestPermissionAsync as requestHealthKitPermission,
@@ -119,6 +121,9 @@ const mobileTTSPlayback = isNative
     })
   : undefined;
 const mobileMicCapture = isNative ? createMobileMicCapture : undefined;
+const agentStreamingPlayerFactory = isNative
+  ? createMobileStreamingAudioPlayer
+  : undefined;
 
 // Where Supabase sends the User back after OAuth consent.
 // Web: same origin (Vercel URL or localhost during dev).
@@ -186,7 +191,7 @@ export default function App() {
   if (!fontsLoaded) return null;
 
   return (
-    <>
+    <SafeAreaProvider>
       <AuthGate
         authClient={authClient}
         relationshipsClient={relationshipsClient}
@@ -202,6 +207,7 @@ export default function App() {
         chatSttAdapter={isNative ? sttAdapter : undefined}
         chatTTSPlayback={mobileTTSPlayback}
         voiceSessionManager={voiceSessionManager}
+        agentStreamingPlayerFactory={agentStreamingPlayerFactory}
         userProviderTokensClient={userProviderTokensClient}
         oauthRedirectTo={oauthRedirectTo}
         passwordResetRedirectTo={passwordResetRedirectTo}
@@ -210,6 +216,6 @@ export default function App() {
         requestHealthKit={requestHealthKit}
       />
       <StatusBar style="auto" />
-    </>
+    </SafeAreaProvider>
   );
 }

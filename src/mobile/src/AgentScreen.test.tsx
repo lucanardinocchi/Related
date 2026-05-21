@@ -12,6 +12,7 @@ import type {
   SessionHandle,
   VoiceSessionManager,
 } from "@related/shared";
+import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
 import { AgentScreen } from "./AgentScreen";
 
 function fixtureRelationship(over: Partial<Relationship["contact"]> = {}): Relationship {
@@ -93,7 +94,7 @@ describe("<AgentScreen />", () => {
     );
 
     fireEvent.changeText(
-      screen.getByPlaceholderText(/say something to Claude/i),
+      screen.getByPlaceholderText(/message the agent/i),
       "what should I do about Sam",
     );
     fireEvent.press(screen.getByText(/^Send$/));
@@ -149,7 +150,7 @@ describe("<AgentScreen />", () => {
     );
 
     fireEvent.changeText(
-      screen.getByPlaceholderText(/say something to Claude/i),
+      screen.getByPlaceholderText(/message the agent/i),
       "hey",
     );
     fireEvent.press(screen.getByText(/^Send$/));
@@ -201,7 +202,7 @@ describe("<AgentScreen />", () => {
     );
 
     fireEvent.changeText(
-      screen.getByPlaceholderText(/say something to Claude/i),
+      screen.getByPlaceholderText(/message the agent/i),
       "hi",
     );
     fireEvent.press(screen.getByText(/^Send$/));
@@ -262,7 +263,7 @@ describe("<AgentScreen />", () => {
       />,
     );
     fireEvent.changeText(
-      screen.getByPlaceholderText(/say something to Claude/i),
+      screen.getByPlaceholderText(/message the agent/i),
       "hi",
     );
     fireEvent.press(screen.getByText(/^Send$/));
@@ -318,7 +319,7 @@ describe("<AgentScreen />", () => {
       />,
     );
     fireEvent.changeText(
-      screen.getByPlaceholderText(/say something to Claude/i),
+      screen.getByPlaceholderText(/message the agent/i),
       "hi",
     );
     fireEvent.press(screen.getByText(/^Send$/));
@@ -374,7 +375,7 @@ describe("<AgentScreen />", () => {
     );
 
     fireEvent.changeText(
-      screen.getByPlaceholderText(/say something to Claude/i),
+      screen.getByPlaceholderText(/message the agent/i),
       "hi",
     );
     fireEvent.press(screen.getByText(/^Send$/));
@@ -429,7 +430,7 @@ describe("<AgentScreen />", () => {
       />,
     );
     fireEvent.changeText(
-      screen.getByPlaceholderText(/say something to Claude/i),
+      screen.getByPlaceholderText(/message the agent/i),
       "I want to plan my birthday",
     );
     fireEvent.press(screen.getByText(/^Send$/));
@@ -471,7 +472,7 @@ describe("<AgentScreen />", () => {
       />,
     );
     fireEvent.changeText(
-      screen.getByPlaceholderText(/say something to Claude/i),
+      screen.getByPlaceholderText(/message the agent/i),
       "I want to plan my birthday",
     );
     fireEvent.press(screen.getByText(/^Send$/));
@@ -536,6 +537,23 @@ function makeFakeVoiceManager(): {
   return { manager, startSession, fakeHandle: handle };
 }
 
+function makeFakeMicCapture(): jest.Mock<
+  Promise<AudioCaptureHandle>,
+  []
+> {
+  let stopCallback: (() => void) | null = null;
+  const handle: AudioCaptureHandle = {
+    audio: (async function* () {
+      await new Promise<void>((resolve) => {
+        stopCallback = resolve;
+      });
+      yield new Uint8Array([0x01]);
+    })(),
+    stop: () => stopCallback?.(),
+  };
+  return jest.fn().mockResolvedValue(handle);
+}
+
 describe("<AgentScreen /> voice toggle", () => {
   it("renders a Mic button next to Send when a voiceSessionManager is provided", () => {
     const service = makeService();
@@ -566,11 +584,13 @@ describe("<AgentScreen /> voice toggle", () => {
   it("tap Mic → startSession is invoked with the focused Relationship and a turn is started", async () => {
     const service = makeService();
     const { manager, startSession, fakeHandle } = makeFakeVoiceManager();
+    const startMicCapture = makeFakeMicCapture();
     render(
       <AgentScreen
         relationship={fixtureRelationship()}
         agentService={service as unknown as AgentService}
         voiceSessionManager={manager}
+        startMicCapture={startMicCapture}
         onBack={jest.fn()}
       />,
     );
@@ -583,8 +603,7 @@ describe("<AgentScreen /> voice toggle", () => {
     await waitFor(() => {
       expect((fakeHandle.onUserTurn as jest.Mock)).toHaveBeenCalled();
     });
-    // After tap, mic label flips to indicate active state.
-    expect(screen.getByLabelText(/stop voice/i)).toBeTruthy();
+    expect(screen.getByLabelText(/stop recording/i)).toBeTruthy();
   });
 
   it("when the voice turn resolves, the Candidate Set is rendered just like text mode", async () => {
@@ -595,6 +614,7 @@ describe("<AgentScreen /> voice toggle", () => {
         relationship={fixtureRelationship()}
         agentService={service as unknown as AgentService}
         voiceSessionManager={manager}
+        startMicCapture={makeFakeMicCapture()}
         onBack={jest.fn()}
       />,
     );
@@ -603,6 +623,8 @@ describe("<AgentScreen /> voice toggle", () => {
     await waitFor(() =>
       expect((fakeHandle.onUserTurn as jest.Mock)).toHaveBeenCalled(),
     );
+
+    fireEvent.press(screen.getByLabelText(/stop recording/i));
 
     fakeHandle.resolveTurn({
       text: "Suggest coffee with Sam",
@@ -639,7 +661,7 @@ describe("<AgentScreen /> voice toggle", () => {
     expect(screen.getByText("live voice intent")).toBeTruthy();
   });
 
-  it("tapping Mic a second time during the turn fires interrupt() (barge-in)", async () => {
+  it("tapping Mic while thinking fires interrupt() (barge-in)", async () => {
     const service = makeService();
     const { manager, fakeHandle } = makeFakeVoiceManager();
     render(
@@ -647,6 +669,7 @@ describe("<AgentScreen /> voice toggle", () => {
         relationship={fixtureRelationship()}
         agentService={service as unknown as AgentService}
         voiceSessionManager={manager}
+        startMicCapture={makeFakeMicCapture()}
         onBack={jest.fn()}
       />,
     );
@@ -656,7 +679,12 @@ describe("<AgentScreen /> voice toggle", () => {
       expect((fakeHandle.onUserTurn as jest.Mock)).toHaveBeenCalled(),
     );
 
-    fireEvent.press(screen.getByLabelText(/stop voice/i));
+    fireEvent.press(screen.getByLabelText(/stop recording/i));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/cancel voice/i)).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByLabelText(/cancel voice/i));
     expect(fakeHandle.interrupt).toHaveBeenCalled();
   });
 
@@ -668,6 +696,7 @@ describe("<AgentScreen /> voice toggle", () => {
         relationship={fixtureRelationship()}
         agentService={service as unknown as AgentService}
         voiceSessionManager={manager}
+        startMicCapture={makeFakeMicCapture()}
         onBack={jest.fn()}
       />,
     );
@@ -676,7 +705,12 @@ describe("<AgentScreen /> voice toggle", () => {
       expect((fakeHandle.onUserTurn as jest.Mock)).toHaveBeenCalled(),
     );
 
-    fireEvent.press(screen.getByLabelText(/stop voice/i));
+    fireEvent.press(screen.getByLabelText(/stop recording/i));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/cancel voice/i)).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByLabelText(/cancel voice/i));
     const interruptError = new Error("voice session turn interrupted");
     interruptError.name = "InterruptedError";
     fakeHandle.rejectTurn(interruptError);

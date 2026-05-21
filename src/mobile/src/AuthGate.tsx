@@ -47,6 +47,7 @@ export interface AuthGateProps {
    * Mic toggle renders. Omitted in tests that don't exercise voice.
    */
   voiceSessionManager?: VoiceSessionManager;
+  agentStreamingPlayerFactory?: () => import("./voice/createMobileStreamingAudioPlayer").StreamingAudioPlayer;
   userProviderTokensClient: UserProviderTokensClient;
   /** URL Supabase Auth redirects back to after OAuth; web: window.location.origin. */
   oauthRedirectTo: string;
@@ -78,6 +79,7 @@ export function AuthGate({
   chatSttAdapter,
   chatTTSPlayback,
   voiceSessionManager,
+  agentStreamingPlayerFactory,
   userProviderTokensClient,
   oauthRedirectTo,
   passwordResetRedirectTo,
@@ -167,6 +169,7 @@ export function AuthGate({
       chatSttAdapter={chatSttAdapter}
       chatTTSPlayback={chatTTSPlayback}
       voiceSessionManager={voiceSessionManager}
+      agentStreamingPlayerFactory={agentStreamingPlayerFactory}
       onSignOut={() => {
         void authClient.signOut();
       }}

@@ -1,6 +1,15 @@
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import type { AuthClient, OAuthSignInProvider, Session } from "@related/shared";
+import { colors, fonts, fontSizes, lineHeights, radii } from "./ui/tokens";
 
 export interface SignInScreenProps {
   authClient: AuthClient;
@@ -12,13 +21,6 @@ export interface SignInScreenProps {
 }
 
 type Mode = "sign-in" | "sign-up" | "forgot-password";
-
-const STRAVA_ORANGE = "#FC4C02";
-const FONT_REGULAR = "InterTight_400Regular";
-const FONT_MEDIUM = "InterTight_500Medium";
-const FONT_SEMIBOLD = "InterTight_600SemiBold";
-const FONT_BOLD = "InterTight_700Bold";
-const FONT_BLACK = "InterTight_900Black";
 
 const showAppleSignIn =
   Platform.OS === "ios" ||
@@ -46,6 +48,20 @@ export function SignInScreen({
       : mode === "sign-up"
         ? "Sign up"
         : "Send reset link";
+
+  const heading =
+    mode === "sign-in"
+      ? "Sign in"
+      : mode === "sign-up"
+        ? "Create your account"
+        : "Reset password";
+
+  const subtitle =
+    mode === "sign-in"
+      ? "Welcome back to Related."
+      : mode === "sign-up"
+        ? "Start building your relationship context."
+        : "We'll email you a link to choose a new password.";
 
   async function handleSubmit() {
     if (submitting) return;
@@ -92,215 +108,262 @@ export function SignInScreen({
   }
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.brand}>Related</Text>
-      <Text style={styles.heading}>
-        {mode === "sign-in"
-          ? "Welcome back"
-          : mode === "sign-up"
-            ? "Create your account"
-            : "Reset password"}
-      </Text>
+    <ScrollView
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={styles.root}>
+        <Text style={styles.heading}>{heading}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
 
-      {resetEmailSent ? (
-        <Text style={styles.success}>
-          Check your email for a link to set a new password. Open the link in
-          your browser to continue.
-        </Text>
-      ) : mode !== "forgot-password" ? (
-        <>
-          <Pressable
-            accessibilityRole="button"
-            style={[styles.oauthButton, oauthLoading === "google" && styles.oauthButtonDisabled]}
-            onPress={() => void handleOAuth("google")}
-            disabled={submitting || oauthLoading !== null}
-          >
-            <Text style={styles.oauthButtonLabel}>Continue with Google</Text>
-          </Pressable>
-          {showAppleSignIn ? (
-            <Pressable
-              accessibilityRole="button"
-              style={[styles.oauthButton, oauthLoading === "apple" && styles.oauthButtonDisabled]}
-              onPress={() => void handleOAuth("apple")}
-              disabled={submitting || oauthLoading !== null}
-            >
-              <Text style={styles.oauthButtonLabel}>Continue with Apple</Text>
-            </Pressable>
-          ) : null}
-          <Text style={styles.divider}>or continue with email</Text>
-        </>
-      ) : null}
+        {resetEmailSent ? (
+          <Text style={styles.success}>
+            Check your email for a link to set a new password. Open the link in
+            your browser to continue.
+          </Text>
+        ) : (
+          <View style={styles.card}>
+            {mode !== "forgot-password" ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  style={[
+                    styles.oauthButton,
+                    oauthLoading === "google" && styles.oauthButtonDisabled,
+                  ]}
+                  onPress={() => void handleOAuth("google")}
+                  disabled={submitting || oauthLoading !== null}
+                >
+                  <Text style={styles.oauthButtonLabel}>
+                    Continue with Google
+                  </Text>
+                </Pressable>
+                {showAppleSignIn ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    style={[
+                      styles.oauthButton,
+                      oauthLoading === "apple" && styles.oauthButtonDisabled,
+                    ]}
+                    onPress={() => void handleOAuth("apple")}
+                    disabled={submitting || oauthLoading !== null}
+                  >
+                    <Text style={styles.oauthButtonLabel}>
+                      Continue with Apple
+                    </Text>
+                  </Pressable>
+                ) : null}
+                <Text style={styles.divider}>or continue with email</Text>
+              </>
+            ) : null}
 
-      {resetEmailSent ? null : (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#9ca3af"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          {mode !== "forgot-password" ? (
+            <Text style={styles.fieldLabel}>Email</Text>
             <TextInput
               style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#9ca3af"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
+              placeholder="you@example.com"
+              placeholderTextColor={colors.fgSubtle}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
             />
-          ) : null}
 
+            {mode !== "forgot-password" ? (
+              <>
+                <Text style={styles.fieldLabel}>Password</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor={colors.fgSubtle}
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                />
+              </>
+            ) : null}
+
+            {mode === "sign-in" ? (
+              <Pressable
+                accessibilityRole="button"
+                style={styles.forgotLink}
+                onPress={() => setAuthMode("forgot-password")}
+              >
+                <Text style={styles.forgotLinkLabel}>Forgot password?</Text>
+              </Pressable>
+            ) : null}
+
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={primaryLabel}
+              style={[
+                styles.primaryButton,
+                submitting && styles.primaryButtonDisabled,
+              ]}
+              onPress={handleSubmit}
+              disabled={submitting}
+            >
+              <Text style={styles.primaryButtonLabel}>{primaryLabel}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {mode === "forgot-password" ? (
           <Pressable
             accessibilityRole="button"
-            style={[styles.primaryButton, submitting && styles.primaryButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={submitting}
+            style={styles.footerLink}
+            onPress={() => setAuthMode("sign-in")}
           >
-            <Text style={styles.primaryButtonLabel}>{primaryLabel}</Text>
+            <Text style={styles.footerText}>
+              Back to{" "}
+              <Text style={styles.footerAction}>sign in</Text>
+            </Text>
           </Pressable>
-        </>
-      )}
-
-      {mode === "sign-in" ? (
-        <Pressable
-          accessibilityRole="button"
-          style={styles.toggle}
-          onPress={() => setAuthMode("forgot-password")}
-        >
-          <Text style={styles.toggleLabel}>Forgot password?</Text>
-        </Pressable>
-      ) : null}
-
-      {mode === "forgot-password" ? (
-        <Pressable
-          accessibilityRole="button"
-          style={styles.toggle}
-          onPress={() => setAuthMode("sign-in")}
-        >
-          <Text style={styles.toggleLabel}>Back to sign in</Text>
-        </Pressable>
-      ) : (
-        <Pressable
-          accessibilityRole="button"
-          style={styles.toggle}
-          onPress={() =>
-            setAuthMode(mode === "sign-in" ? "sign-up" : "sign-in")
-          }
-        >
-          <Text style={styles.toggleLabel}>
-            {mode === "sign-in"
-              ? "New here? Sign up"
-              : "Already have an account? Sign in"}
-          </Text>
-        </Pressable>
-      )}
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-    </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            style={styles.footerLink}
+            onPress={() =>
+              setAuthMode(mode === "sign-in" ? "sign-up" : "sign-in")
+            }
+          >
+            <Text style={styles.footerText}>
+              {mode === "sign-in" ? "New here? " : "Already have an account? "}
+              <Text style={styles.footerAction}>
+                {mode === "sign-in" ? "Create an account" : "Sign in"}
+              </Text>
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scrollContent: {
+    flexGrow: 1,
+    backgroundColor: colors.bg,
+  },
   root: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    maxWidth: 448,
+    width: "100%",
+    alignSelf: "center",
     paddingHorizontal: 24,
-    paddingTop: 96,
-  },
-  brand: {
-    fontSize: 11,
-    fontFamily: FONT_BLACK,
-    fontWeight: "900",
-    color: STRAVA_ORANGE,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    marginBottom: 12,
+    paddingVertical: 48,
+    justifyContent: "center",
   },
   heading: {
-    fontSize: 28,
-    fontFamily: FONT_BLACK,
-    fontWeight: "900",
-    color: "#000",
-    letterSpacing: -0.5,
-    marginBottom: 32,
+    fontSize: fontSizes.h1,
+    lineHeight: lineHeights.h1,
+    fontFamily: fonts.sansBold,
+    color: colors.fg,
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: fontSizes.small,
+    lineHeight: lineHeights.small,
+    fontFamily: fonts.sans,
+    color: colors.fgMuted,
+    marginBottom: 24,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: 16,
+    gap: 12,
+  },
+  fieldLabel: {
+    fontSize: fontSizes.small,
+    lineHeight: lineHeights.small,
+    fontFamily: fonts.sansMedium,
+    color: colors.fg,
+    marginBottom: -4,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: FONT_REGULAR,
-    color: "#000",
-    marginBottom: 12,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: fontSizes.body,
+    fontFamily: fonts.sans,
+    color: colors.fg,
+    backgroundColor: colors.bg,
   },
   primaryButton: {
-    backgroundColor: STRAVA_ORANGE,
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: colors.fg,
+    borderRadius: radii.md,
+    paddingVertical: 12,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 4,
   },
   primaryButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   primaryButtonLabel: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontFamily: FONT_BLACK,
-    fontWeight: "900",
-    letterSpacing: -0.2,
+    color: colors.fgOnAccent,
+    fontSize: fontSizes.body,
+    fontFamily: fonts.sansMedium,
   },
-  toggle: {
-    marginTop: 16,
+  forgotLink: {
+    alignSelf: "flex-end",
+    marginTop: -4,
+  },
+  forgotLinkLabel: {
+    color: colors.fgMuted,
+    fontSize: fontSizes.small,
+    fontFamily: fonts.sans,
+    textDecorationLine: "underline",
+  },
+  footerLink: {
+    marginTop: 24,
     alignSelf: "center",
   },
-  toggleLabel: {
-    color: "#6b7280",
-    fontSize: 13,
-    fontFamily: FONT_SEMIBOLD,
-    fontWeight: "600",
+  footerText: {
+    color: colors.fgMuted,
+    fontSize: fontSizes.small,
+    fontFamily: fonts.sans,
+    textAlign: "center",
+  },
+  footerAction: {
+    color: colors.fg,
+    textDecorationLine: "underline",
   },
   error: {
-    marginTop: 16,
-    color: "#dc2626",
-    fontSize: 14,
-    fontFamily: FONT_MEDIUM,
-    fontWeight: "500",
+    color: colors.danger,
+    fontSize: fontSizes.small,
+    fontFamily: fonts.sans,
   },
   success: {
-    color: "#374151",
-    fontSize: 15,
-    fontFamily: FONT_REGULAR,
-    lineHeight: 22,
+    color: colors.fg,
+    fontSize: fontSizes.body,
+    lineHeight: lineHeights.body,
+    fontFamily: fonts.sans,
   },
   oauthButton: {
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingVertical: 12,
     alignItems: "center",
-    marginBottom: 10,
+    backgroundColor: colors.bg,
   },
   oauthButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   oauthButtonLabel: {
-    fontSize: 15,
-    fontFamily: FONT_SEMIBOLD,
-    fontWeight: "600",
-    color: "#000",
+    fontSize: fontSizes.body,
+    fontFamily: fonts.sansMedium,
+    color: colors.fg,
   },
   divider: {
     textAlign: "center",
-    color: "#9ca3af",
-    fontSize: 12,
-    fontFamily: FONT_REGULAR,
-    marginBottom: 16,
-    marginTop: 4,
+    color: colors.fgSubtle,
+    fontSize: fontSizes.micro,
+    fontFamily: fonts.sans,
+    marginVertical: 4,
   },
 });
