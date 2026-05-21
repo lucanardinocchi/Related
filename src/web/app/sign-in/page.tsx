@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { AuthDivider, OAuthButtons } from "@/components/auth/OAuthButtons";
 import { getBrowserDeps } from "@/lib/deps/client";
 
 export default function SignInPage() {
@@ -22,6 +23,8 @@ function SignInForm() {
   const router = useRouter();
   const search = useSearchParams();
   const next = search.get("next") ?? "/context";
+  const passwordUpdated = search.get("reset") === "success";
+  const authCallbackError = search.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,7 +49,23 @@ function SignInForm() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
       <PageHeader title="Sign in" subtitle="Welcome back to Related." />
 
-      <Card>
+      {passwordUpdated && (
+        <p className="mb-4 text-sm text-muted">
+          Your password was updated. Sign in with your new password.
+        </p>
+      )}
+
+      {authCallbackError && (
+        <p className="mb-4 text-sm text-danger">
+          Sign-in link expired or was invalid. Try again with Google or Apple, or
+          use email and password.
+        </p>
+      )}
+
+      <Card className="space-y-4">
+        <OAuthButtons nextPath={next} />
+        <AuthDivider />
+
         <form className="space-y-4" onSubmit={onSubmit}>
           <FormField label="Email" htmlFor="email">
             <Input
@@ -69,6 +88,15 @@ function SignInForm() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </FormField>
+
+          <p className="-mt-1 text-right text-sm">
+            <Link
+              href="/forgot-password"
+              className="text-muted underline underline-offset-4"
+            >
+              Forgot password?
+            </Link>
+          </p>
 
           {error && <p className="text-sm text-danger">{error}</p>}
 

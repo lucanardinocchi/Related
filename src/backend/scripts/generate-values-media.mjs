@@ -13,6 +13,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { createJiti } from "jiti";
 import { spawnSync } from "node:child_process";
 import {
   createWriteStream,
@@ -34,6 +35,11 @@ const SEED_PATH = join(SHARED_VALUES, "valuesSeedData.json");
 const LAUNCH_PATH = join(SHARED_VALUES, "valuesLaunchCharacters.json");
 const MANIFEST_PATH = join(SHARED_VALUES, "valuesMediaManifest.json");
 const CACHE_DIR = join(__dirname, "../.cache/values-media");
+
+const jiti = createJiti(import.meta.url);
+const { buildVideoPrompt } = jiti(
+  join(REPO_ROOT, "src/shared/src/values/valuesMediaVibes.ts"),
+);
 
 const BUCKET = "values-media";
 /** PixVerse V6 — top-tier character emotion + native 9:16 on Replicate (May 2026). */
@@ -132,7 +138,8 @@ function requireFfmpeg() {
   }
 }
 
-function hashString(input) {
+/** Must match src/shared/src/values/deterministicHash.ts */
+function deterministicHash(input) {
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
     hash = input.charCodeAt(i) + ((hash << 5) - hash);
@@ -227,21 +234,8 @@ function pickLicensedTrack(character) {
     track.moods.includes(mood),
   );
   const candidates = pool.length > 0 ? pool : LICENSED_MUSIC_TRACKS;
-  const hash = hashString(`${character.id}:${mood}`);
+  const hash = deterministicHash(`${character.id}:${mood}`);
   return candidates[hash % candidates.length];
-}
-
-function buildVideoPrompt(character) {
-  const mood = inferCharacterMood(character);
-  const themes = character.values.slice(0, 3).join(", ");
-  return [
-    `Portrait 9:16 video of ${character.name} from "${character.source}".`,
-    `Show the actual recognizable character — face and upper body, Tinder-style swipe-card framing, centered subject.`,
-    `Match ${character.name}'s iconic appearance, wardrobe, and energy from ${character.source}.`,
-    `Mood: ${mood}. Evoke ${themes}.`,
-    "Subtle natural motion: slight expression shift, breath, or soft camera push-in.",
-    "Cinematic lighting, shallow depth of field, no on-screen text or logos.",
-  ].join(" ");
 }
 
 function buildModelInput(model, prompt, duration) {

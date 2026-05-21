@@ -23,7 +23,7 @@ import type {
  * Voice mode notes for this slice:
  * - Real microphone capture is **web-only** in this slice. On web we use
  *   `MediaRecorder` to capture an `audio/webm` blob, feed it as a single
- *   async-iterable chunk to the session, and let `OpenAIWhisperSTTAdapter`
+ *   async-iterable chunk to the session, and let `WisprFlowSTTAdapter`
  *   ship it to the `voice-stt` Edge Function.
  * - On native (iOS / Android) the AgentScreen still renders the Mic
  *   toggle when a `voiceSessionManager` is provided so the UX stays
@@ -337,7 +337,7 @@ export function AgentScreen({
  * Begins mic capture on web via `MediaRecorder` and returns an
  * async-iterable that yields the recorded audio bytes after the
  * recorder stops. The current iterable yields exactly one chunk (the
- * full blob). v1's `OpenAIWhisperSTTAdapter` accumulates chunks before
+ * full blob). v1's `WisprFlowSTTAdapter` accumulates chunks before
  * POSTing anyway, so partial yields would not change behaviour.
  *
  * On non-web platforms this is a no-op that yields nothing; mic

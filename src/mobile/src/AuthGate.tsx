@@ -6,6 +6,7 @@ import type {
   ChatsClient,
   GroupsClient,
   InteractionsClient,
+  OAuthSignInProvider,
   OnboardingClient,
   OpenThreadsClient,
   RelationshipsClient,
@@ -49,6 +50,9 @@ export interface AuthGateProps {
   userProviderTokensClient: UserProviderTokensClient;
   /** URL Supabase Auth redirects back to after OAuth; web: window.location.origin. */
   oauthRedirectTo: string;
+  /** Where password-reset emails send the User (web callback → reset page). */
+  passwordResetRedirectTo: string;
+  onOAuthSignIn: (provider: OAuthSignInProvider) => Promise<void>;
   /** Open a URL — `(url) => { window.location.href = url; }` on web. */
   navigate: (url: string) => void;
   /**
@@ -76,6 +80,8 @@ export function AuthGate({
   voiceSessionManager,
   userProviderTokensClient,
   oauthRedirectTo,
+  passwordResetRedirectTo,
+  onOAuthSignIn,
   navigate,
   requestHealthKit,
 }: AuthGateProps) {
@@ -119,7 +125,14 @@ export function AuthGate({
   if (!loaded) return null;
 
   if (!session) {
-    return <SignInScreen authClient={authClient} onSignedIn={setSession} />;
+    return (
+      <SignInScreen
+        authClient={authClient}
+        onSignedIn={setSession}
+        passwordResetRedirectTo={passwordResetRedirectTo}
+        onOAuthSignIn={onOAuthSignIn}
+      />
+    );
   }
 
   // Block on onboarding-state load so we don't briefly flash Home before

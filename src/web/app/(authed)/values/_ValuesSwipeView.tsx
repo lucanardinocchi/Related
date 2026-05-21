@@ -19,9 +19,9 @@ import {
   Users,
 } from "lucide-react";
 import {
-  ValuesAlignmentClient,
   appendUniqueQueue,
   buildSeedQueue,
+  buildSuggestCharactersPayload,
   mergeCharacterRegistry,
   toValuesCharacter,
   QUEUE_LOW_WATER,
@@ -83,41 +83,17 @@ export function ValuesSwipeView({
     [alignments],
   );
 
-  const buildSuggestPayload = useCallback(() => {
-    const aligned: ReturnType<
-      typeof ValuesAlignmentClient.buildInferencePayload
-    >["aligned"] = [];
-    const rejected: ReturnType<
-      typeof ValuesAlignmentClient.buildInferencePayload
-    >["rejected"] = [];
-
-    for (const character of registry) {
-      const decision = alignments[character.id];
-      if (decision === undefined) continue;
-      const entry = {
-        characterId: character.id,
-        name: character.name,
-        source: character.source,
-        values: character.values,
-      };
-      if (decision) aligned.push(entry);
-      else rejected.push(entry);
-    }
-
-    return {
-      aligned,
-      rejected,
-      excludeIds: [...seenIds],
-    };
-  }, [alignments, registry, seenIds]);
-
   const refillQueue = useCallback(async () => {
     if (refillLock.current) return;
     refillLock.current = true;
     setRefilling(true);
 
     try {
-      const payload = buildSuggestPayload();
+      const payload = buildSuggestCharactersPayload(
+        alignments,
+        registry,
+        seenIds,
+      );
 
       if (payload.aligned.length > 0) {
         const drafts = await getBrowserDeps().valuesAlignment.suggestCharacters(
@@ -143,7 +119,7 @@ export function ValuesSwipeView({
       setRefilling(false);
       refillLock.current = false;
     }
-  }, [alignments, buildSuggestPayload, seedCharacters, seenIds]);
+  }, [alignments, registry, seedCharacters, seenIds]);
 
   useEffect(() => {
     if (queue.length > QUEUE_LOW_WATER || refilling) return;

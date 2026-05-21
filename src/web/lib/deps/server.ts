@@ -6,6 +6,7 @@ import {
   GroupsClient,
   InteractionsClient,
   OnboardingClient,
+  SubscriptionsClient,
   OpenThreadsClient,
   RelationshipsClient,
   UserContextClient,
@@ -43,6 +44,7 @@ export async function getServerDeps() {
     userContext: new UserContextClient(supabase, resolveOwnerId),
     valuesAlignment: new ValuesAlignmentClient(supabase, resolveOwnerId),
     onboarding: new OnboardingClient(supabase, resolveOwnerId),
+    subscriptions: new SubscriptionsClient(supabase),
     userProviderTokens: new UserProviderTokensClient(supabase, resolveOwnerId),
     messages: new MessagesClient(supabase),
   };

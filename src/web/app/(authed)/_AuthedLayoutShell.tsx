@@ -1,6 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { AmbientIntelligenceRunner } from "@/components/ambient/AmbientIntelligenceRunner";
+import { AmbientBillingProvider } from "@/components/billing/AmbientBillingProvider";
 import { Sidebar } from "@/components/Sidebar";
 
 interface Props {
@@ -23,13 +25,16 @@ export function AuthedLayoutShell({ userEmail, children }: Props) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar userEmail={userEmail} />
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[var(--layout-content-max-w)] px-10 py-8">
-          {children}
-        </div>
-      </main>
-    </div>
+    <AmbientBillingProvider>
+      <AmbientIntelligenceRunner />
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar userEmail={userEmail} />
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[var(--layout-content-max-w)] px-10 py-8">
+            {children}
+          </div>
+        </main>
+      </div>
+    </AmbientBillingProvider>
   );
 }

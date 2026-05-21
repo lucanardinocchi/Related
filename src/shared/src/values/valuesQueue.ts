@@ -1,4 +1,18 @@
 import type { ValuesCharacter } from "./valuesCharacters";
+import launchIds from "./valuesLaunchCharacters.json";
+
+/** Minimum aligned characters before the User can rank them most-to-least. */
+export const MIN_ALIGNED_FOR_RANKING = 10;
+
+/** Maximum characters kept in the drag-rank list; overflow is reachable via "…". */
+export const MAX_RANKED_ALIGNMENTS = 5;
+
+/** Characters with generated swipe clips — shown first on /values in this order. */
+export const VALUES_LAUNCH_CHARACTER_IDS: readonly string[] = launchIds;
+
+export function isLaunchCharacter(id: string): boolean {
+  return (VALUES_LAUNCH_CHARACTER_IDS as string[]).includes(id);
+}
 
 export const QUEUE_LOW_WATER = 6;
 export const SUGGEST_BATCH_SIZE = 8;

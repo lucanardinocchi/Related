@@ -13,6 +13,7 @@ import { X_INTEGRATION_SCOPES } from "../integrations/x/xScopes";
 import { WHATSAPP_INTEGRATION_SCOPES } from "../integrations/whatsapp/whatsappScopes";
 import { TIKTOK_INTEGRATION_SCOPES } from "../integrations/tiktok/tiktokScopes";
 import { OUTLOOK_CALENDAR_SCOPES } from "../integrations/outlook/outlookScopes";
+import type { OAuthSignInProvider } from "./oauthProviders";
 
 export interface AuthClientConfig {
   supabaseUrl: string;
@@ -45,13 +46,22 @@ export interface SessionWithProviderTokens {
 
 export type Unsubscribe = () => void;
 
-function toSession(sbSession: SbSession, sbUser: SbUser): Session {
-  if (!sbUser.email) {
+function resolveEmail(sbUser: SbUser): string {
+  const email =
+    sbUser.email ??
+    (typeof sbUser.user_metadata?.email === "string"
+      ? sbUser.user_metadata.email
+      : undefined);
+  if (!email) {
     throw new Error("Supabase user is missing an email address.");
   }
+  return email;
+}
+
+function toSession(sbSession: SbSession, sbUser: SbUser): Session {
   return {
     access_token: sbSession.access_token,
-    user: { id: sbUser.id, email: sbUser.email },
+    user: { id: sbUser.id, email: resolveEmail(sbUser) },
   };
 }
 
@@ -98,6 +108,54 @@ export class AuthClient {
 
   async signOut(): Promise<void> {
     const { error } = await this.client.auth.signOut();
+    if (error) throw error;
+  }
+
+  /**
+   * Starts Google or Apple OAuth sign-in. Returns the provider URL — the
+   * caller navigates to it (web: full redirect; native: in-app browser).
+   * `redirectTo` must be allow-listed in Supabase (e.g. `/auth/callback`
+   * on web or `related://auth-callback` on native).
+   */
+  async signInWithOAuth(
+    provider: OAuthSignInProvider,
+    redirectTo: string,
+  ): Promise<{ url: string }> {
+    const { data, error } = await this.client.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo,
+        ...(provider === "google"
+          ? {
+              queryParams: {
+                access_type: "online",
+                prompt: "select_account",
+              },
+            }
+          : {}),
+      },
+    });
+    if (error) throw error;
+    if (!data?.url) {
+      throw new Error("signInWithOAuth returned no OAuth URL");
+    }
+    return { url: data.url };
+  }
+
+  /**
+   * Sends a password-reset email. The link redirects to `redirectTo`
+   * (typically `/auth/callback?next=/reset-password` on web).
+   */
+  async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
+    const { error } = await this.client.auth.resetPasswordForEmail(email, {
+      redirectTo,
+    });
+    if (error) throw error;
+  }
+
+  /** Sets a new password for the currently signed-in User (recovery session). */
+  async updatePassword(newPassword: string): Promise<void> {
+    const { error } = await this.client.auth.updateUser({ password: newPassword });
     if (error) throw error;
   }
 

@@ -10,7 +10,8 @@ import {
   GroupsClient,
   InteractionsClient,
   OnboardingClient,
-  OpenAIWhisperSTTAdapter,
+  SubscriptionsClient,
+  WisprFlowSTTAdapter,
   OpenThreadsClient,
   RelationshipsClient,
   SystemLinkingComposer,
@@ -51,7 +52,7 @@ function build() {
   });
 
   const agentService = new AgentService({ supabase, messageComposer });
-  const sttAdapter = new OpenAIWhisperSTTAdapter({ supabase });
+  const sttAdapter = new WisprFlowSTTAdapter({ supabase });
   const ttsAdapter = new ElevenLabsTTSAdapter({ supabase });
   const voiceSessionManager = new VoiceSessionManager({
     sttAdapter,
@@ -73,6 +74,7 @@ function build() {
     userContext: new UserContextClient(supabase, resolveOwnerId),
     valuesAlignment: new ValuesAlignmentClient(supabase, resolveOwnerId),
     onboarding: new OnboardingClient(supabase, resolveOwnerId),
+    subscriptions: new SubscriptionsClient(supabase),
     userProviderTokens: new UserProviderTokensClient(supabase, resolveOwnerId),
     gmail: new GmailClient(supabase),
     instagram: new InstagramClient(supabase),

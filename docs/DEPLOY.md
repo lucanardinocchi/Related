@@ -45,7 +45,7 @@ First deploy takes ~3 minutes (Next.js compile + npm install for the workspace).
 
 Open the Vercel URL. You'll land on `/sign-in`. Create an account via `/sign-up`. You'll be redirected through `/onboarding` (where you can skip Calendar for now) to `/context`. Add a Goal, save Situational State.
 
-**What works at Tier 0:** sign-up / sign-in, the User Context editor (Goals & Values + Situational State), navigation between `/context` / `/talk` / `/onboarding` in the sidebar.
+**What works at Tier 0:** sign-up / sign-in (email/password and Google/Apple OAuth once providers are configured in §2.2–2.3), the User Context editor (Goals & Values + Situational State), navigation between `/context` / `/talk` / `/onboarding` in the sidebar.
 
 **What's broken:**
 - `/talk` — the agent calls the `engaged-pass` Edge Function which isn't deployed yet. Move to Tier 1.
@@ -82,9 +82,35 @@ Voice requires Tier 3 secrets too — without them the STT/TTS adapters error. I
 
 Dashboard → Authentication → Providers → Google → toggle on. Paste Client ID + Secret. Save.
 
+The same Google OAuth client powers **sign-in with Google** (basic profile/email scopes) and **Connect Calendar** during onboarding (`linkIdentity` with `calendar.readonly`). You do not need a second client.
+
+### 2.2a Sign in with Apple
+
+1. [Apple Developer](https://developer.apple.com/account) → Certificates, Identifiers & Profiles.
+2. **App ID** (iOS): enable **Sign in with Apple**.
+3. **Services ID** (for web + Supabase): create a Services ID, enable Sign in with Apple, configure:
+   - **Domains:** your Vercel hostname (and `127.0.0.1` for local web testing if needed).
+   - **Return URLs:** `https://<your-supabase-ref>.supabase.co/auth/v1/callback`
+4. Create a **Sign in with Apple** key (.p8), note Key ID and Team ID.
+5. Supabase Dashboard → Authentication → Providers → Apple → enable. Paste Services ID as Client ID; generate the Apple client secret (JWT) per [Supabase Apple docs](https://supabase.com/docs/guides/auth/social-login/auth-apple) and paste as Secret.
+
 ### 2.3 Auth URL Configuration
 
-Dashboard → Authentication → URL Configuration → Redirect URLs → add your Vercel URL (production + preview).
+Dashboard → Authentication → URL Configuration → Redirect URLs → add:
+
+- Your Vercel URL (production + preview), e.g. `https://your-app.vercel.app/auth/callback`
+- Same with query params used by the app: `.../auth/callback?next=/onboarding`, `.../auth/callback?next=/reset-password`
+- Mobile deep link: `related://auth-callback` (after `scheme: related` in `src/mobile/app.json`)
+
+Local Supabase (`src/backend/supabase/config.toml`) already allow-lists `http://127.0.0.1:3000/auth/callback` and `related://auth-callback`. Set provider secrets via env when running locally:
+
+```sh
+# In src/backend/.env or your shell before `supabase start`
+SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=...
+SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=...
+SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID=...   # Services ID
+SUPABASE_AUTH_EXTERNAL_APPLE_SECRET=...    # generated JWT secret
+```
 
 ### 2.4 Deploy `sync-calendar` Edge Function
 
@@ -99,13 +125,13 @@ Refresh. Now `/onboarding` → Connect Calendar works end-to-end; the daily cron
 ## Tier 3 — Voice (~15 min)
 
 ```sh
-supabase secrets set OPENAI_API_KEY=sk-…
+supabase secrets set WISPRFLOW_API_KEY=<from platform.wisprflow.ai>
 supabase secrets set ELEVENLABS_API_KEY=<from elevenlabs.io>
 supabase secrets set ELEVENLABS_DEFAULT_VOICE_ID=21m00Tcm4TlvDq8ikWAM
 supabase functions deploy voice-stt voice-tts
 ```
 
-`/talk` mic now works end-to-end (browser `MediaRecorder` → Whisper STT → Claude (Sonnet, via `engaged-pass`) → ElevenLabs TTS). The same `voice-stt` is also used by the `/agent` Conversational Intelligence composer (Tier 3.1).
+`/talk` mic now works end-to-end (browser `MediaRecorder` → Wispr Flow STT → Claude (Sonnet, via `engaged-pass`) → ElevenLabs TTS). The same `voice-stt` is also used by the `/agent` Conversational Intelligence composer (Tier 3.1).
 
 ## Tier 3.1 — Conversational Intelligence + Extraction Pass (~5 min)
 

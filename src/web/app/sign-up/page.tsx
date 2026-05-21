@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { AuthDivider, OAuthButtons } from "@/components/auth/OAuthButtons";
 import { getBrowserDeps } from "@/lib/deps/client";
 
 export default function SignUpPage() {
@@ -37,7 +38,10 @@ export default function SignUpPage() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
       <PageHeader title="Create account" subtitle="Get started with Related." />
 
-      <Card>
+      <Card className="space-y-4">
+        <OAuthButtons nextPath="/onboarding" />
+        <AuthDivider />
+
         <form className="space-y-4" onSubmit={onSubmit}>
           <FormField label="Email" htmlFor="email">
             <Input

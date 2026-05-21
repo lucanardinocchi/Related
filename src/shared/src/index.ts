@@ -5,6 +5,8 @@ export type {
   AuthUser,
   Unsubscribe,
 } from "./auth/AuthClient";
+export type { OAuthSignInProvider } from "./auth/oauthProviders";
+export { isRecentlyCreatedAuthUser } from "./auth/isRecentlyCreatedAuthUser";
 
 export {
   placeFromContactLocation,
@@ -163,13 +165,12 @@ export {
   getValuesCharacter,
 } from "./values/valuesCharacters";
 export type { ValuesCharacter } from "./values/valuesCharacters";
-export { MIN_ALIGNED_FOR_RANKING } from "./values/valuesConstants";
-export {
-  VALUES_LAUNCH_CHARACTER_IDS,
-  isLaunchCharacter,
-} from "./values/valuesLaunchCharacters";
 export { VALUES_SEED_COUNT } from "./values/valuesSeedData";
 export {
+  MIN_ALIGNED_FOR_RANKING,
+  MAX_RANKED_ALIGNMENTS,
+  VALUES_LAUNCH_CHARACTER_IDS,
+  isLaunchCharacter,
   QUEUE_LOW_WATER,
   SUGGEST_BATCH_SIZE,
   buildSeedQueue,
@@ -181,15 +182,31 @@ export {
   mergeCharacterRegistry,
 } from "./values/valuesCharacters";
 export type { ValuesCharacterDraft } from "./values/valuesCharacters";
+export { deterministicHash } from "./values/deterministicHash";
+export { buildVideoPrompt } from "./values/valuesMediaVibes";
 
 export { ValuesAlignmentClient } from "./values/ValuesAlignmentClient";
 export type {
   CharacterValuesAlignment,
-  InferenceCharacter,
-  InferencePayload,
-  SuggestCharactersPayload,
   ValuesAlignmentClientConfig,
 } from "./values/ValuesAlignmentClient";
+export { ValuesAlignmentStore } from "./values/valuesAlignmentStore";
+export {
+  alignmentToInferenceCharacter,
+  buildInferencePayload,
+  buildInferencePayloadFromRows,
+  buildRankedInferencePayloadFromRows,
+  buildSuggestCharactersPayload,
+  resolveCharactersFromAlignments,
+} from "./values/valuesAlignmentPayload";
+export type {
+  InferenceCharacter,
+  InferencePayload,
+  ProposedValuesProfile,
+  RankedInferenceCharacter,
+  RankedInferencePayload,
+  SuggestCharactersPayload,
+} from "./values/valuesAlignmentPayload";
 
 export {
   tryUpdateSituationalState,
@@ -277,6 +294,33 @@ export type {
   NotificationPreferencesRow,
   NotificationsClientConfig,
 } from "./notifications/NotificationsClient";
+
+export {
+  SubscriptionsClient,
+  SUBSCRIPTION_PRICE_LABEL,
+  ACTIVE_SUBSCRIPTION_STATUSES,
+  isActiveSubscriptionStatus,
+} from "./billing/SubscriptionsClient";
+export type {
+  SubscriptionStatus,
+  SubscriptionState,
+} from "./billing/SubscriptionsClient";
+
+export {
+  AMBIENT_PASS_MODES,
+  canRunAmbientIntelligence,
+  isAmbientPassMode,
+} from "./billing/ambientAccess";
+export type { AmbientPassMode } from "./billing/ambientAccess";
+
+export {
+  AMBIENT_BILLING_MODAL_SESSION_KEY,
+  hasShownAmbientBillingModalThisSession,
+  markAmbientBillingModalShownThisSession,
+} from "./billing/ambientSession";
+
+export { AmbientIntelligenceClient } from "./agent/AmbientIntelligenceClient";
+export type { ScheduledAmbientPass } from "./agent/AmbientIntelligenceClient";
 
 export {
   OnboardingClient,
@@ -526,8 +570,8 @@ export { FakeSTTAdapter } from "./voice/FakeSTTAdapter";
 export type { FakeSTTAdapterOptions } from "./voice/FakeSTTAdapter";
 export { FakeTTSAdapter } from "./voice/FakeTTSAdapter";
 export type { FakeTTSAdapterOptions } from "./voice/FakeTTSAdapter";
-export { OpenAIWhisperSTTAdapter } from "./voice/OpenAIWhisperSTTAdapter";
-export type { OpenAIWhisperSTTAdapterOptions } from "./voice/OpenAIWhisperSTTAdapter";
+export { WisprFlowSTTAdapter } from "./voice/WisprFlowSTTAdapter";
+export type { WisprFlowSTTAdapterOptions } from "./voice/WisprFlowSTTAdapter";
 export { ElevenLabsTTSAdapter } from "./voice/ElevenLabsTTSAdapter";
 export type { ElevenLabsTTSAdapterOptions } from "./voice/ElevenLabsTTSAdapter";
 

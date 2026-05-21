@@ -27,7 +27,7 @@ export default async function ValuesRankPage() {
     <>
       <PageHeader
         title="Rank your alignments"
-        subtitle="Order the characters you resonate with most — top is strongest."
+        subtitle="Pick and order your top 5 — strongest resonance at the top."
       />
       <ValuesRankView
         characters={allCharacters}

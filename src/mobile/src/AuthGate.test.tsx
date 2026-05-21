@@ -23,6 +23,9 @@ function makeMockAuthClient(): MockedAuthClient {
     signUp: jest.fn(),
     signIn: jest.fn(),
     signOut: jest.fn(),
+    signInWithOAuth: jest.fn(),
+    requestPasswordReset: jest.fn(),
+    updatePassword: jest.fn(),
     getSession: jest.fn(),
     onAuthStateChange: jest.fn(() => () => {}),
     linkGoogleCalendar: jest.fn(),
@@ -151,6 +154,8 @@ describe("<AuthGate />", () => {
         chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
+        passwordResetRedirectTo="https://app.example/auth/callback?next=/reset-password"
+        onOAuthSignIn={jest.fn()}
         navigate={jest.fn()}
       />,
     );
@@ -180,6 +185,8 @@ describe("<AuthGate />", () => {
         chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
+        passwordResetRedirectTo="https://app.example/auth/callback?next=/reset-password"
+        onOAuthSignIn={jest.fn()}
         navigate={jest.fn()}
       />,
     );
@@ -210,6 +217,8 @@ describe("<AuthGate />", () => {
         chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
+        passwordResetRedirectTo="https://app.example/auth/callback?next=/reset-password"
+        onOAuthSignIn={jest.fn()}
         navigate={jest.fn()}
       />,
     );
@@ -250,6 +259,8 @@ describe("<AuthGate />", () => {
         chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
+        passwordResetRedirectTo="https://app.example/auth/callback?next=/reset-password"
+        onOAuthSignIn={jest.fn()}
         navigate={jest.fn()}
       />,
     );
@@ -289,6 +300,8 @@ describe("<AuthGate />", () => {
         chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
+        passwordResetRedirectTo="https://app.example/auth/callback?next=/reset-password"
+        onOAuthSignIn={jest.fn()}
         navigate={jest.fn()}
       />,
     );

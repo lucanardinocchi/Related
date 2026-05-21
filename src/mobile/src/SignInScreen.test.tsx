@@ -6,11 +6,17 @@ type MockedAuthClient = {
   [K in keyof AuthClient]: jest.Mock;
 };
 
+const PASSWORD_RESET_REDIRECT =
+  "http://127.0.0.1:3000/auth/callback?next=/reset-password";
+
 function makeMockAuthClient(): MockedAuthClient {
   return {
     signUp: jest.fn(),
     signIn: jest.fn(),
     signOut: jest.fn(),
+    signInWithOAuth: jest.fn(),
+    requestPasswordReset: jest.fn(),
+    updatePassword: jest.fn(),
     getSession: jest.fn(),
     onAuthStateChange: jest.fn(),
     linkGoogleCalendar: jest.fn(),
@@ -25,6 +31,8 @@ describe("<SignInScreen />", () => {
       <SignInScreen
         authClient={authClient as unknown as AuthClient}
         onSignedIn={jest.fn()}
+        passwordResetRedirectTo={PASSWORD_RESET_REDIRECT}
+        onOAuthSignIn={jest.fn()}
       />,
     );
 
@@ -45,6 +53,8 @@ describe("<SignInScreen />", () => {
       <SignInScreen
         authClient={authClient as unknown as AuthClient}
         onSignedIn={onSignedIn}
+        passwordResetRedirectTo={PASSWORD_RESET_REDIRECT}
+        onOAuthSignIn={jest.fn()}
       />,
     );
     fireEvent.changeText(screen.getByPlaceholderText(/email/i), "alice@anywhere.com");
@@ -71,6 +81,8 @@ describe("<SignInScreen />", () => {
       <SignInScreen
         authClient={authClient as unknown as AuthClient}
         onSignedIn={onSignedIn}
+        passwordResetRedirectTo={PASSWORD_RESET_REDIRECT}
+        onOAuthSignIn={jest.fn()}
       />,
     );
     fireEvent.changeText(screen.getByPlaceholderText(/email/i), "alice@anywhere.com");
@@ -87,6 +99,8 @@ describe("<SignInScreen />", () => {
       <SignInScreen
         authClient={authClient as unknown as AuthClient}
         onSignedIn={jest.fn()}
+        passwordResetRedirectTo={PASSWORD_RESET_REDIRECT}
+        onOAuthSignIn={jest.fn()}
       />,
     );
 
@@ -112,6 +126,8 @@ describe("<SignInScreen />", () => {
       <SignInScreen
         authClient={authClient as unknown as AuthClient}
         onSignedIn={onSignedIn}
+        passwordResetRedirectTo={PASSWORD_RESET_REDIRECT}
+        onOAuthSignIn={jest.fn()}
       />,
     );
     fireEvent.press(screen.getByText(/new here\?/i));
@@ -132,5 +148,49 @@ describe("<SignInScreen />", () => {
       }),
     );
     expect(authClient.signIn).not.toHaveBeenCalled();
+  });
+
+  it("sends a password reset email in forgot-password mode", async () => {
+    const authClient = makeMockAuthClient();
+    authClient.requestPasswordReset.mockResolvedValue(undefined);
+
+    render(
+      <SignInScreen
+        authClient={authClient as unknown as AuthClient}
+        onSignedIn={jest.fn()}
+        passwordResetRedirectTo={PASSWORD_RESET_REDIRECT}
+        onOAuthSignIn={jest.fn()}
+      />,
+    );
+    fireEvent.press(screen.getByText(/forgot password\?/i));
+    fireEvent.changeText(screen.getByPlaceholderText(/email/i), "alice@anywhere.com");
+    fireEvent.press(screen.getByText(/send reset link/i));
+
+    await waitFor(() =>
+      expect(authClient.requestPasswordReset).toHaveBeenCalledWith(
+        "alice@anywhere.com",
+        PASSWORD_RESET_REDIRECT,
+      ),
+    );
+    expect(
+      await screen.findByText(/check your email for a link/i),
+    ).toBeTruthy();
+  });
+
+  it("calls onOAuthSignIn when Continue with Google is pressed", async () => {
+    const authClient = makeMockAuthClient();
+    const onOAuthSignIn = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <SignInScreen
+        authClient={authClient as unknown as AuthClient}
+        onSignedIn={jest.fn()}
+        passwordResetRedirectTo={PASSWORD_RESET_REDIRECT}
+        onOAuthSignIn={onOAuthSignIn}
+      />,
+    );
+    fireEvent.press(screen.getByText(/continue with google/i));
+
+    await waitFor(() => expect(onOAuthSignIn).toHaveBeenCalledWith("google"));
   });
 });

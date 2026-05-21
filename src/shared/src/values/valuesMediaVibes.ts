@@ -1,3 +1,4 @@
+import { deterministicHash } from "./deterministicHash";
 import {
   LICENSED_MUSIC_TRACKS,
   type LicensedMusicTrack,
@@ -32,14 +33,6 @@ const VALUE_MOOD_HINTS: Record<string, ValuesMediaMood> = {
   wonder: "ambient",
 };
 
-function hashString(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    hash = input.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash);
-}
-
 export function inferCharacterMood(character: {
   values: string[];
 }): ValuesMediaMood {
@@ -65,7 +58,7 @@ export function pickLicensedTrack(character: {
     track.moods.includes(mood),
   );
   const candidates = pool.length > 0 ? pool : LICENSED_MUSIC_TRACKS;
-  const hash = hashString(`${character.id}:${mood}`);
+  const hash = deterministicHash(`${character.id}:${mood}`);
   return candidates[hash % candidates.length]!;
 }
 

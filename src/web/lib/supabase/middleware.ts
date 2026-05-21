@@ -1,7 +1,13 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/auth"];
+const PUBLIC_PATHS = [
+  "/sign-in",
+  "/sign-up",
+  "/forgot-password",
+  "/reset-password",
+  "/auth",
+];
 
 /** OAuth callbacks and onboarding must stay reachable while setup is incomplete. */
 function isOnboardingExempt(path: string): boolean {
@@ -54,7 +60,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && (path === "/sign-in" || path === "/sign-up")) {
+  if (
+    user &&
+    (path === "/sign-in" ||
+      path === "/sign-up" ||
+      path === "/forgot-password")
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = await resolvePostAuthPath(supabase);
     url.searchParams.delete("next");

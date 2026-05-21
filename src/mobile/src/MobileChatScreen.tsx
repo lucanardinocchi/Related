@@ -30,7 +30,7 @@ export interface MobileChatScreenProps {
   /**
    * Voice-input dependencies. Both must be supplied together for the
    * mic button to render. Tests inject fakes; production wires
-   * `startExpoAudioCapture(...)` + `OpenAIWhisperSTTAdapter`.
+   * `startExpoAudioCapture(...)` + `WisprFlowSTTAdapter`.
    */
   startMicCapture?: () => Promise<AudioCaptureHandle>;
   sttAdapter?: STTAdapter;

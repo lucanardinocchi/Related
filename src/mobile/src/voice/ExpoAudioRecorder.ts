@@ -1,7 +1,7 @@
 /**
  * Native (and Expo Web) audio capture adapter — produces the same
  * `{ audio: AsyncIterable<Uint8Array>, stop }` interface that the
- * `OpenAIWhisperSTTAdapter` and the web `_recorder.ts` consume, but
+ * `WisprFlowSTTAdapter` and the web `_recorder.ts` consume, but
  * powered by `expo-av` so it works on iOS and Android devices (where
  * `MediaRecorder` is not available).
  *
@@ -58,7 +58,7 @@ export interface StartExpoAudioCaptureDeps {
  * Start a recording. Returns a handle whose `audio` iterable yields
  * exactly one `Uint8Array` chunk after `stop()` is called — matching
  * the web `MicCaptureHandle` shape so callers (and the
- * `OpenAIWhisperSTTAdapter`, which accumulates anyway) are
+ * `WisprFlowSTTAdapter`, which accumulates anyway) are
  * platform-agnostic.
  */
 export async function startExpoAudioCapture(

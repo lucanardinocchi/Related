@@ -31,6 +31,7 @@ export function getValuesCharacter(id: string): ValuesCharacter | undefined {
   return characterById.get(id);
 }
 
+/** CANONICAL — Deno edge function suggest-values-characters duplicates this; keep in sync. */
 export function slugifyCharacterId(name: string): string {
   return name
     .toLowerCase()

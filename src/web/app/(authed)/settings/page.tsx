@@ -9,13 +9,15 @@ import {
 } from "@related/shared";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { getServerDeps } from "@/lib/deps/server";
+import { BillingSection } from "./_BillingSection";
 import { IntegrationsSection } from "./_IntegrationsSection";
 import { RelaySection } from "./_RelaySection";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const { userProviderTokens } = await getServerDeps();
+  const { userProviderTokens, subscriptions } = await getServerDeps();
+  const subscription = await subscriptions.getState();
   const googleToken = await userProviderTokens.getForProvider("google");
   const instagramToken = await userProviderTokens.getForProvider("instagram");
   const xToken = await userProviderTokens.getForProvider("x");
@@ -32,7 +34,14 @@ export default async function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Connect external accounts and manage integrations."
+        subtitle="Subscription, integrations, and account connections."
+      />
+      <BillingSection
+        initialIsActive={subscription.isActive}
+        initialStatus={subscription.status}
+        initialCurrentPeriodEnd={subscription.currentPeriodEnd}
+        initialCancelAtPeriodEnd={subscription.cancelAtPeriodEnd}
+        initialHasCustomer={subscription.stripeCustomerId !== null}
       />
       <IntegrationsSection
         initialCalendarConnected={tokenHasCalendarAccess(googleToken?.scopes)}

@@ -57,7 +57,8 @@ function jsonError(status: number, message: string): Response {
   });
 }
 
-function slugify(name: string): string {
+// Duplicate of slugifyCharacterId in src/shared/src/values/valuesCharacters.ts — keep in sync.
+function slugifyCharacterId(name: string): string {
   return name
     .toLowerCase()
     .normalize("NFKD")
@@ -99,7 +100,7 @@ function parseCharacters(text: string, excludeIds: Set<string>): SuggestCharacte
     const id =
       typeof item.id === "string" && item.id.trim()
         ? item.id.trim()
-        : slugify(name);
+        : slugifyCharacterId(name);
     if (excludeIds.has(id) || seen.has(id)) continue;
 
     const valuesRaw = item.values;

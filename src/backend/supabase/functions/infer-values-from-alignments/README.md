@@ -1,6 +1,6 @@
 # infer-values-from-alignments
 
-Read-only AI inference for Values Discovery. Proposes first-person Goals & Values from the User's align/reject swipes on media characters. **Does not write to the database** — the User confirms proposals in the UI before they are added to Context via `userContext.addGoal`.
+Read-only AI inference for Values Discovery. Proposes a **common value set**, **personality & attitude**, and first-person **goal statements** from the User's **top 5 ranked** character alignments. **Does not write to the database** — the User confirms proposals in the UI before they are added to Context via `userContext.addGoal`.
 
 ## Deploy
 
@@ -15,12 +15,13 @@ POST. `Authorization: Bearer <user_jwt>`. Body:
 
 ```json
 {
-  "aligned": [
+  "rankedTop": [
     {
       "characterId": "ted-lasso",
       "name": "Ted Lasso",
       "source": "Ted Lasso",
-      "values": ["Kindness", "Curiosity", "Belief", "Teamwork"]
+      "values": ["Kindness", "Curiosity", "Belief", "Teamwork"],
+      "rank": 1
     }
   ],
   "rejected": [
@@ -34,12 +35,14 @@ POST. `Authorization: Bearer <user_jwt>`. Body:
 }
 ```
 
-Requires at least 10 reviewed characters total (`aligned.length + rejected.length >= 10`).
+Requires at least 5 ranked characters in `rankedTop`.
 
 ## Response
 
 ```json
 {
+  "proposedValueSet": ["Kindness", "Belief", "Teamwork", "Curiosity"],
+  "proposedAttitude": "You lead with warmth and genuine curiosity about people, staying optimistic even when things get hard.",
   "proposedGoals": [
     "Lead with kindness even when the stakes are high",
     "Stay curious about people instead of judging them quickly"
@@ -47,10 +50,8 @@ Requires at least 10 reviewed characters total (`aligned.length + rejected.lengt
 }
 ```
 
-Returns 3–5 first-person goal/value statements.
-
 ## Failure modes
 
 - Missing or invalid auth → 401
-- Fewer than 10 reviewed characters → 400
+- Fewer than 5 ranked characters → 400
 - Anthropic / parse errors → 502

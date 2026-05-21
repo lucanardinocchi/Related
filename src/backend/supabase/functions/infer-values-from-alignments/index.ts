@@ -1,6 +1,6 @@
 // infer-values-from-alignments Edge Function — read-only AI inference for
-// Values Discovery. Proposes first-person Goals & Values from the User's
-// align/reject swipes on media characters. Does NOT write to the database.
+// Values Discovery. Proposes a value set, attitude, and goals from the User's
+// top-ranked character alignments. Does NOT write to the database.
 //
 // Deploy:
 //   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
@@ -12,21 +12,25 @@ import Anthropic from "npm:@anthropic-ai/sdk@^0.96.0";
 import { createClient } from "npm:@supabase/supabase-js@^2.45.0";
 
 const MODEL = "claude-sonnet-4-6";
-const MAX_TOKENS = 1024;
+const MAX_TOKENS = 1536;
+const MIN_RANKED_TOP = 5;
 
 const SYSTEM_PROMPT = `You are the Values Discovery inference step for Related — a relationship-intelligence app.
 
-The User swiped through famous media characters, indicating which characters' values align with who they want to be (aligned) vs which do not (rejected).
+The User swiped through famous media characters and ranked their top 5 alignments (rank 1 = strongest resonance). Each character has four short value-trait words.
 
-Your job: analyze the patterns in who they aligned with vs rejected, and propose 3–5 concise first-person goal/value statements the User might want to live by.
+Your job: analyze patterns across the ranked top 5 to propose:
+1. **proposedValueSet** — 4–6 concise value labels that capture what these characters share (single words or very short phrases, e.g. "Loyalty", "Protective courage").
+2. **proposedAttitude** — 1–2 sentences describing how the User wants to show up in relationships and life. Frame as aspirational self-narrative ("You lead with…", "You show up as…"), not a clinical personality test or diagnosis.
+3. **proposedGoals** — 3–5 first-person goal statements derived from the value set and attitude (e.g. "Stand up for the people I choose, even when it's costly").
 
 Rules:
-- Write as first-person goals, like "Be fiercely loyal to the people I choose" or "Protect the people I love, even when it's hard".
-- Synthesize themes across aligned characters — don't just restate individual character trait lists.
-- Use rejections as contrast: what they rejected helps clarify what they are NOT optimizing for.
-- Each statement is one sentence. No numbering, no bullet characters in the strings themselves.
-- Return ONLY valid JSON in this exact shape: { "proposedGoals": ["...", "..."] }
-- proposedGoals must contain 3–5 strings.`;
+- Weight rank 1 highest and rank 5 lowest when synthesizing themes.
+- Use rejected characters (if provided) as contrast — what they are NOT optimizing for.
+- Do not restate individual character trait lists verbatim; synthesize across the set.
+- Return ONLY valid JSON in this exact shape:
+  { "proposedValueSet": ["...", "..."], "proposedAttitude": "...", "proposedGoals": ["...", "..."] }
+- proposedValueSet must contain 4–6 strings; proposedAttitude must be non-empty; proposedGoals must contain 3–5 strings.`;
 
 interface InferenceCharacter {
   characterId: string;
@@ -35,8 +39,12 @@ interface InferenceCharacter {
   values: string[];
 }
 
-interface InferencePayload {
-  aligned: InferenceCharacter[];
+interface RankedInferenceCharacter extends InferenceCharacter {
+  rank: number;
+}
+
+interface RankedInferencePayload {
+  rankedTop: RankedInferenceCharacter[];
   rejected: InferenceCharacter[];
 }
 
@@ -57,6 +65,18 @@ function jsonError(status: number, message: string): Response {
   });
 }
 
+function formatRankedList(characters: RankedInferenceCharacter[]): string {
+  if (characters.length === 0) return "(none)";
+  return characters
+    .slice()
+    .sort((a, b) => a.rank - b.rank)
+    .map(
+      (c) =>
+        `- #${c.rank} ${c.name} (${c.source}): ${c.values.join(", ")} [id=${c.characterId}]`,
+    )
+    .join("\n");
+}
+
 function formatCharacterList(characters: InferenceCharacter[]): string {
   if (characters.length === 0) return "(none)";
   return characters
@@ -67,22 +87,53 @@ function formatCharacterList(characters: InferenceCharacter[]): string {
     .join("\n");
 }
 
-function parseProposedGoals(text: string): string[] {
+function parseProposedProfile(text: string): {
+  proposedValueSet: string[];
+  proposedAttitude: string;
+  proposedGoals: string[];
+} {
   const trimmed = text.trim();
   const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
   const jsonText = jsonMatch ? jsonMatch[0] : trimmed;
-  const parsed = JSON.parse(jsonText) as { proposedGoals?: unknown };
+  const parsed = JSON.parse(jsonText) as {
+    proposedValueSet?: unknown;
+    proposedAttitude?: unknown;
+    proposedGoals?: unknown;
+  };
+
+  if (!Array.isArray(parsed.proposedValueSet)) {
+    throw new Error("response missing proposedValueSet array");
+  }
+  const proposedValueSet = parsed.proposedValueSet
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  if (proposedValueSet.length < 4) {
+    throw new Error("proposedValueSet must contain at least 4 values");
+  }
+
+  if (typeof parsed.proposedAttitude !== "string") {
+    throw new Error("response missing proposedAttitude string");
+  }
+  const proposedAttitude = parsed.proposedAttitude.trim();
+  if (!proposedAttitude) {
+    throw new Error("proposedAttitude was empty");
+  }
+
   if (!Array.isArray(parsed.proposedGoals)) {
     throw new Error("response missing proposedGoals array");
   }
-  const goals = parsed.proposedGoals
-    .filter((g): g is string => typeof g === "string")
-    .map((g) => g.trim())
-    .filter(Boolean);
-  if (goals.length === 0) {
-    throw new Error("proposedGoals array was empty");
+  const proposedGoals = parsed.proposedGoals
+    .filter((goal): goal is string => typeof goal === "string")
+    .map((goal) => goal.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  if (proposedGoals.length < 3) {
+    throw new Error("proposedGoals must contain at least 3 goals");
   }
-  return goals.slice(0, 5);
+
+  return { proposedValueSet, proposedAttitude, proposedGoals };
 }
 
 Deno.serve(async (req) => {
@@ -97,17 +148,17 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return jsonError(401, "missing Authorization header");
 
-  let body: Partial<InferencePayload>;
+  let body: Partial<RankedInferencePayload>;
   try {
     body = await req.json();
   } catch {
     return jsonError(400, "invalid JSON body");
   }
 
-  const aligned = Array.isArray(body.aligned) ? body.aligned : null;
-  const rejected = Array.isArray(body.rejected) ? body.rejected : null;
-  if (!aligned || !rejected) {
-    return jsonError(400, "missing aligned or rejected arrays");
+  const rankedTop = Array.isArray(body.rankedTop) ? body.rankedTop : null;
+  const rejected = Array.isArray(body.rejected) ? body.rejected : [];
+  if (!rankedTop) {
+    return jsonError(400, "missing rankedTop array");
   }
 
   const supabase = createClient(SUPABASE_URL ?? "", SUPABASE_ANON_KEY ?? "", {
@@ -120,24 +171,28 @@ Deno.serve(async (req) => {
     return jsonError(401, "auth failed");
   }
 
-  if (aligned.length + rejected.length < 10) {
+  if (rankedTop.length < MIN_RANKED_TOP) {
     return jsonError(
       400,
-      "need at least 10 reviewed characters before inference",
+      `need at least ${MIN_RANKED_TOP} ranked characters before inference`,
     );
   }
 
-  const userMessage = `Characters the User ALIGNED with (values resonate):
-${formatCharacterList(aligned)}
+  const userMessage = `User's TOP RANKED alignments (rank 1 = strongest resonance):
+${formatRankedList(rankedTop)}
 
 Characters the User REJECTED (values do not resonate):
 ${formatCharacterList(rejected)}
 
-Propose 3–5 first-person goal/value statements based on these patterns. Return JSON only.`;
+From the top 5 ranking, propose a common value set, attitude, and first-person goals. Return JSON only.`;
 
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
-  let proposedGoals: string[];
+  let profile: {
+    proposedValueSet: string[];
+    proposedAttitude: string;
+    proposedGoals: string[];
+  };
   try {
     const resp = await anthropic.messages.create({
       model: MODEL,
@@ -153,7 +208,7 @@ Propose 3–5 first-person goal/value statements based on these patterns. Return
       .trim();
 
     if (!text) throw new Error("empty model response");
-    proposedGoals = parseProposedGoals(text);
+    profile = parseProposedProfile(text);
   } catch (err) {
     return jsonError(
       502,
@@ -161,7 +216,7 @@ Propose 3–5 first-person goal/value statements based on these patterns. Return
     );
   }
 
-  return new Response(JSON.stringify({ proposedGoals }), {
+  return new Response(JSON.stringify(profile), {
     headers: { ...CORS_HEADERS, "content-type": "application/json" },
   });
 });

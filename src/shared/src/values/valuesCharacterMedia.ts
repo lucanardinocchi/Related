@@ -1,4 +1,5 @@
 import mediaManifest from "./valuesMediaManifest.json";
+import { deterministicHash } from "./deterministicHash";
 import { pickLicensedTrack } from "./valuesMediaVibes";
 
 const VIDEOS = [
@@ -11,14 +12,6 @@ const VIDEOS = [
   "https://assets.mixkit.co/videos/preview/mixkit-woman-running-on-the-beach-537-large.mp4",
   "https://assets.mixkit.co/videos/preview/mixkit-clouds-and-blue-sky-2408-large.mp4",
 ] as const;
-
-function hashString(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    hash = input.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash);
-}
 
 const manifest = mediaManifest as Record<string, string>;
 
@@ -41,7 +34,7 @@ export function assignCharacterMedia<
     };
   }
 
-  const hash = hashString(character.id);
+  const hash = deterministicHash(character.id);
   return {
     ...character,
     videoUrl: VIDEOS[hash % VIDEOS.length]!,

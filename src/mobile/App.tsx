@@ -1,4 +1,4 @@
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import {
   useFonts,
@@ -19,7 +19,7 @@ import {
   GroupsClient,
   InteractionsClient,
   OnboardingClient,
-  OpenAIWhisperSTTAdapter,
+  WisprFlowSTTAdapter,
   OpenThreadsClient,
   PlatformSleepFetcher,
   RelationshipsClient,
@@ -28,8 +28,13 @@ import {
   UserProviderTokensClient,
   VoiceSessionManager,
 } from "@related/shared";
-import { Platform } from "react-native";
 import { AuthGate } from "./src/AuthGate";
+import {
+  authOAuthRedirectUri,
+  completeOAuthFromBrowser,
+  ensureOnboardingForNewOAuthUser,
+} from "./src/auth/completeOAuthSession";
+import type { OAuthSignInProvider } from "@related/shared";
 import { createMobileAudioPlayer } from "./src/voice/createMobileAudioPlayer";
 import { createMobileMicCapture } from "./src/voice/createMobileMicCapture";
 import {
@@ -92,7 +97,7 @@ const agentService = new AgentService({ supabase, messageComposer });
 // recorder is now wired through `createMobileMicCapture` (expo-audio +
 // expo-file-system) so the Conversational Chat tab works end-to-end on
 // device, not just web.
-const sttAdapter = new OpenAIWhisperSTTAdapter({ supabase });
+const sttAdapter = new WisprFlowSTTAdapter({ supabase });
 const ttsAdapter = new ElevenLabsTTSAdapter({ supabase });
 const voiceSessionManager = new VoiceSessionManager({
   sttAdapter,
@@ -123,6 +128,13 @@ const oauthRedirectTo =
     ? window.location.origin
     : "related://oauth-callback";
 
+const webAppOrigin =
+  Platform.OS === "web" && typeof window !== "undefined"
+    ? window.location.origin
+    : (process.env.EXPO_PUBLIC_WEB_URL ?? "http://127.0.0.1:3000");
+
+const passwordResetRedirectTo = `${webAppOrigin}/auth/callback?next=/reset-password`;
+
 const navigate = (url: string) => {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     window.location.href = url;
@@ -130,6 +142,23 @@ const navigate = (url: string) => {
     void Linking.openURL(url);
   }
 };
+
+async function handleOAuthSignIn(provider: OAuthSignInProvider) {
+  const redirectTo =
+    Platform.OS === "web" && typeof window !== "undefined"
+      ? `${webAppOrigin}/auth/callback?next=${encodeURIComponent("/onboarding")}`
+      : authOAuthRedirectUri();
+
+  const { url } = await authClient.signInWithOAuth(provider, redirectTo);
+
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    window.location.href = url;
+    return;
+  }
+
+  await completeOAuthFromBrowser(supabase, url);
+  await ensureOnboardingForNewOAuthUser(supabase, onboardingClient);
+}
 
 // Install the iOS HealthKit bridge into the shared library's
 // PlatformSleepFetcher slot. The shared lib is Expo-free by policy —
@@ -175,6 +204,8 @@ export default function App() {
         voiceSessionManager={voiceSessionManager}
         userProviderTokensClient={userProviderTokensClient}
         oauthRedirectTo={oauthRedirectTo}
+        passwordResetRedirectTo={passwordResetRedirectTo}
+        onOAuthSignIn={handleOAuthSignIn}
         navigate={navigate}
         requestHealthKit={requestHealthKit}
       />

@@ -2,6 +2,7 @@
   "expo": {
     "name": "related-tmp",
     "slug": "related-tmp",
+    "scheme": "related",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -34,7 +35,8 @@
         {
           "microphonePermission": "Related uses your microphone so you can talk to the agent and have your context captured automatically."
         }
-      ]
+      ],
+      "expo-web-browser"
     ]
   }
 }

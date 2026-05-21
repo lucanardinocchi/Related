@@ -2,7 +2,7 @@
  * MediaRecorder wrapper that produces an async-iterable of audio bytes.
  *
  * The current iterable yields exactly one chunk (the full recorded blob)
- * once `stop()` is called. The `OpenAIWhisperSTTAdapter` accumulates
+ * once `stop()` is called. The `WisprFlowSTTAdapter` accumulates
  * chunks before POSTing anyway, so partial yields would not change
  * behaviour — this keeps the shape simple and predictable.
  *

@@ -1,17 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { OpenAIWhisperSTTAdapter } from "./OpenAIWhisperSTTAdapter";
+import { WisprFlowSTTAdapter } from "./WisprFlowSTTAdapter";
 
 async function* audioOf(chunks: Uint8Array[]): AsyncIterable<Uint8Array> {
   for (const c of chunks) yield c;
 }
 
-describe("OpenAIWhisperSTTAdapter.transcribeStream", () => {
+describe("WisprFlowSTTAdapter.transcribeStream", () => {
   it("accumulates audio chunks, POSTs them to the voice-stt Edge Function, and yields a final + endOfSpeech event with the transcript", async () => {
     const invoke = jest
       .fn()
       .mockResolvedValue({ data: { text: "what's up with Sam" }, error: null });
     const supa = { functions: { invoke } } as unknown as SupabaseClient;
-    const adapter = new OpenAIWhisperSTTAdapter({ supabase: supa });
+    const adapter = new WisprFlowSTTAdapter({ supabase: supa });
 
     const chunks = [
       new Uint8Array([1, 2, 3]),
@@ -25,9 +25,6 @@ describe("OpenAIWhisperSTTAdapter.transcribeStream", () => {
     expect(invoke).toHaveBeenCalledTimes(1);
     const [name, opts] = invoke.mock.calls[0];
     expect(name).toBe("voice-stt");
-    // The adapter ships the concatenated audio as the request body so the
-    // Edge Function can hand it straight to OpenAI Whisper. We assert a
-    // Blob/Uint8Array carrying all 6 bytes was sent.
     const body = (opts as { body: unknown }).body;
     const bytes = bodyToBytes(body);
     expect(Array.from(bytes)).toEqual([1, 2, 3, 4, 5, 6]);
@@ -41,7 +38,7 @@ describe("OpenAIWhisperSTTAdapter.transcribeStream", () => {
   it("returns empty final transcript if the function returns null/empty text", async () => {
     const invoke = jest.fn().mockResolvedValue({ data: { text: "" }, error: null });
     const supa = { functions: { invoke } } as unknown as SupabaseClient;
-    const adapter = new OpenAIWhisperSTTAdapter({ supabase: supa });
+    const adapter = new WisprFlowSTTAdapter({ supabase: supa });
 
     const events: Array<{ final?: string; endOfSpeech?: boolean }> = [];
     for await (const ev of adapter.transcribeStream({
@@ -55,9 +52,9 @@ describe("OpenAIWhisperSTTAdapter.transcribeStream", () => {
   it("throws if the Edge Function returns an error", async () => {
     const invoke = jest
       .fn()
-      .mockResolvedValue({ data: null, error: { message: "whisper offline" } });
+      .mockResolvedValue({ data: null, error: { message: "wisprflow offline" } });
     const supa = { functions: { invoke } } as unknown as SupabaseClient;
-    const adapter = new OpenAIWhisperSTTAdapter({ supabase: supa });
+    const adapter = new WisprFlowSTTAdapter({ supabase: supa });
 
     async function consume() {
       for await (const _ev of adapter.transcribeStream({
@@ -66,13 +63,13 @@ describe("OpenAIWhisperSTTAdapter.transcribeStream", () => {
         /* drain */
       }
     }
-    await expect(consume()).rejects.toThrow(/whisper offline/);
+    await expect(consume()).rejects.toThrow(/wisprflow offline/);
   });
 
   it("aborts before invoking when the signal is already aborted", async () => {
     const invoke = jest.fn();
     const supa = { functions: { invoke } } as unknown as SupabaseClient;
-    const adapter = new OpenAIWhisperSTTAdapter({ supabase: supa });
+    const adapter = new WisprFlowSTTAdapter({ supabase: supa });
     const ctrl = new AbortController();
     ctrl.abort();
 
@@ -87,12 +84,12 @@ describe("OpenAIWhisperSTTAdapter.transcribeStream", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("respects mimeType option for the multipart filename hint", async () => {
+  it("respects mimeType option for the audio format hint header", async () => {
     const invoke = jest
       .fn()
       .mockResolvedValue({ data: { text: "hi" }, error: null });
     const supa = { functions: { invoke } } as unknown as SupabaseClient;
-    const adapter = new OpenAIWhisperSTTAdapter({
+    const adapter = new WisprFlowSTTAdapter({
       supabase: supa,
       mimeType: "audio/mp4",
     });

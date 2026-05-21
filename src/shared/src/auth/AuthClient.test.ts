@@ -7,6 +7,9 @@ type MockSupabase = {
     signUp: jest.Mock;
     signInWithPassword: jest.Mock;
     signOut: jest.Mock;
+    signInWithOAuth: jest.Mock;
+    resetPasswordForEmail: jest.Mock;
+    updateUser: jest.Mock;
     getSession: jest.Mock;
     onAuthStateChange: jest.Mock;
     linkIdentity: jest.Mock;
@@ -19,6 +22,9 @@ function makeMockSupabase(): MockSupabase {
       signUp: jest.fn(),
       signInWithPassword: jest.fn(),
       signOut: jest.fn(),
+      signInWithOAuth: jest.fn(),
+      resetPasswordForEmail: jest.fn(),
+      updateUser: jest.fn(),
       getSession: jest.fn(),
       onAuthStateChange: jest.fn(),
       linkIdentity: jest.fn(),
@@ -86,6 +92,100 @@ describe("AuthClient.signIn", () => {
     await expect(
       authClient.signIn("bob@elsewhere.com", "wrong-password"),
     ).rejects.toMatchObject({ message: "Invalid login credentials" });
+  });
+});
+
+describe("AuthClient.signInWithOAuth", () => {
+  it("returns a Google OAuth URL with redirectTo", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.signInWithOAuth.mockResolvedValue({
+      data: { url: "https://accounts.google.com/o/oauth2/auth?..." },
+      error: null,
+    });
+
+    const { url } = await authClient.signInWithOAuth(
+      "google",
+      "https://app.example/auth/callback",
+    );
+
+    expect(mock.auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "google",
+      options: expect.objectContaining({
+        redirectTo: "https://app.example/auth/callback",
+        queryParams: expect.objectContaining({
+          access_type: "online",
+          prompt: "select_account",
+        }),
+      }),
+    });
+    expect(url).toMatch(/accounts\.google\.com/);
+  });
+
+  it("returns an Apple OAuth URL without Google-specific query params", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.signInWithOAuth.mockResolvedValue({
+      data: { url: "https://appleid.apple.com/auth/authorize?..." },
+      error: null,
+    });
+
+    await authClient.signInWithOAuth("apple", "https://app.example/auth/callback");
+
+    expect(mock.auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "apple",
+      options: { redirectTo: "https://app.example/auth/callback" },
+    });
+  });
+});
+
+describe("AuthClient.requestPasswordReset", () => {
+  it("sends a reset email with the given redirect URL", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.resetPasswordForEmail.mockResolvedValue({ error: null });
+
+    await authClient.requestPasswordReset(
+      "alice@anywhere.com",
+      "https://app.example/auth/callback?next=/reset-password",
+    );
+
+    expect(mock.auth.resetPasswordForEmail).toHaveBeenCalledWith(
+      "alice@anywhere.com",
+      { redirectTo: "https://app.example/auth/callback?next=/reset-password" },
+    );
+  });
+
+  it("throws when Supabase reports an error", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.resetPasswordForEmail.mockResolvedValue({
+      error: { name: "AuthApiError", message: "Rate limit exceeded" },
+    });
+
+    await expect(
+      authClient.requestPasswordReset("alice@anywhere.com", "https://app.example"),
+    ).rejects.toMatchObject({ message: "Rate limit exceeded" });
+  });
+});
+
+describe("AuthClient.updatePassword", () => {
+  it("updates the password for the current session", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.updateUser.mockResolvedValue({ error: null });
+
+    await authClient.updatePassword("new-secure-password");
+
+    expect(mock.auth.updateUser).toHaveBeenCalledWith({
+      password: "new-secure-password",
+    });
+  });
+
+  it("throws when Supabase reports an error", async () => {
+    const { mock, authClient } = withMock();
+    mock.auth.updateUser.mockResolvedValue({
+      error: { name: "AuthApiError", message: "Session expired" },
+    });
+
+    await expect(authClient.updatePassword("pw")).rejects.toMatchObject({
+      message: "Session expired",
+    });
   });
 });
 
