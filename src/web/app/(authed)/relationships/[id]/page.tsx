@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { getServerDeps } from "@/lib/deps/server";
-import { relationshipAnalytics } from "@related/shared";
 import { RelationshipDetailView } from "./_RelationshipDetailView";
 
 export const dynamic = "force-dynamic";
@@ -33,11 +32,6 @@ export default async function RelationshipDetailPage({
     groups.listForContact(relationship.contact.id),
   ]);
 
-  const analytics = relationshipAnalytics({
-    interactions: interactionHistory,
-    openThreads: threads,
-  });
-
   return (
     <div className="space-y-2">
       <Link
@@ -56,7 +50,6 @@ export default async function RelationshipDetailPage({
           name: g.group.name,
           relationshipId: g.id,
         }))}
-        analytics={analytics}
       />
     </div>
   );
