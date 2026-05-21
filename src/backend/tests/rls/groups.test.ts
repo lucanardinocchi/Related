@@ -311,6 +311,73 @@ describe("Group RLS", () => {
     ]);
   });
 
+  test("User A can rename their own Group", async () => {
+    // 20260520000003_crud_rls_policies.sql added the UPDATE policy for groups.
+    const { data: aGroup } = await adminClient
+      .from("groups")
+      .insert({ owner_id: userA.id, name: "old name" })
+      .select("id")
+      .single();
+    if (!aGroup) throw new Error("no group");
+
+    const { error: updateErr } = await userA.client
+      .from("groups")
+      .update({ name: "new name" })
+      .eq("id", aGroup.id);
+    expect(updateErr).toBeNull();
+
+    const { data } = await userA.client
+      .from("groups")
+      .select("name")
+      .eq("id", aGroup.id)
+      .single();
+    expect(data).toEqual({ name: "new name" });
+  });
+
+  test("User B cannot rename User A's Group", async () => {
+    const { data: aGroup } = await adminClient
+      .from("groups")
+      .insert({ owner_id: userA.id, name: "untouchable" })
+      .select("id")
+      .single();
+    if (!aGroup) throw new Error("no group");
+
+    const { data: updated } = await userB.client
+      .from("groups")
+      .update({ name: "hijacked" })
+      .eq("id", aGroup.id)
+      .select("id");
+    expect(updated).toEqual([]);
+
+    const { data: view } = await adminClient
+      .from("groups")
+      .select("name")
+      .eq("id", aGroup.id)
+      .single();
+    expect((view as any)?.name).toBe("untouchable");
+  });
+
+  test("User A can delete their own Group", async () => {
+    const { data: aGroup } = await adminClient
+      .from("groups")
+      .insert({ owner_id: userA.id, name: "deletable" })
+      .select("id")
+      .single();
+    if (!aGroup) throw new Error("no group");
+
+    const { error: deleteErr } = await userA.client
+      .from("groups")
+      .delete()
+      .eq("id", aGroup.id);
+    expect(deleteErr).toBeNull();
+
+    const { data } = await userA.client
+      .from("groups")
+      .select("id")
+      .eq("id", aGroup.id);
+    expect(data).toEqual([]);
+  });
+
   test("User B cannot link their own Contact to User A's Group", async () => {
     // User A owns a Group; User B owns a Contact. The composite (id, owner)
     // FK on contact_groups must reject a cross-user link even when each side

@@ -13,6 +13,7 @@ import {
   AgentService,
   AuthClient,
   CandidatesClient,
+  ChatsClient,
   ElevenLabsTTSAdapter,
   GroupsClient,
   InteractionsClient,
@@ -63,6 +64,10 @@ const openThreadsClient = new OpenThreadsClient(supabase);
 const interactionsClient = new InteractionsClient(supabase);
 const groupsClient = new GroupsClient(supabase);
 const candidatesClient = new CandidatesClient(supabase);
+// ChatsClient — Conversational Intelligence on mobile per ADR-0009
+// mobile amendment. Same Supabase client as web, so multi-tenant
+// isolation flows from the same JWT and RLS policies.
+const chatsClient = new ChatsClient(supabase);
 const resolveOwnerId = async () => {
   const { data } = await supabase.auth.getUser();
   if (!data.user) throw new Error("No signed-in user");
@@ -143,6 +148,7 @@ export default function App() {
         userContextClient={userContextClient}
         onboardingClient={onboardingClient}
         agentService={agentService}
+        chatsClient={chatsClient}
         voiceSessionManager={voiceSessionManager}
         userProviderTokensClient={userProviderTokensClient}
         oauthRedirectTo={oauthRedirectTo}

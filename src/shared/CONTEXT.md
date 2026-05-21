@@ -19,7 +19,7 @@ A per-User OAuth-bound external account the agent reads from (Google Calendar) o
 The first-run flow that brings a new User from sign-up to fully configured. v1 steps: (1) Supabase Auth sign-up, (2) **Connect Google Calendar** (OAuth — Calendar density signal), (3) **Grant HealthKit access** (iOS only — Sleep signal), (4) add the first few Contacts. State tracked in `onboarding_state`. Steps 2 and 3 are skippable but degrade the agent's signal coverage.
 
 **Contact**:
-A person the User knows. Identified by name and one or more channels (phone, email, etc.). A Contact is **not** a user of the app — they are a referenced person, not an account.
+A person the User knows. Identified by name and one or more channels (phone, email, etc.), plus optional profile fields the User curates over time: **birthday**, **area** (free-text location, typically a suburb or neighbourhood), **occupation**, **education**. A Contact is **not** a user of the app — they are a referenced person, not an account. The richer profile fields are surfaced on the web Relationship detail page (per ADR-0008) and feed agent reasoning passively.
 _Avoid_: Friend, person, lead, account.
 
 **Relationship**:
@@ -37,8 +37,28 @@ When an Interaction is explicitly linked to a **Group**, it touches both the Gro
 _Avoid_: Event, catch-up, touchpoint, meeting (as standalone nouns — "catch-up" is a valid `kind` value, not a separate type).
 
 **Ambient Intelligence**:
-The project's name for the central agent pattern: continuous, autonomous, high-frequency, low-cost reasoning that runs in the background against each Relationship without User prompting. The User engages on their own schedule and finds fresh thinking already done.
+The project's name for the central agent pattern: continuous, autonomous, high-frequency, low-cost reasoning that runs in the background against each Relationship without User prompting. The User engages on their own schedule and finds fresh thinking already done. One of the three agents in the system (per **ADR-0009**), alongside **Conversational Intelligence** and **Extraction Pass**. Ambient is the only one that emits **Candidate Actions**.
 _Avoid_: Background job, daemon, watcher (as user-facing terms).
+
+**Conversational Intelligence**:
+The chat-surface agent (per **ADR-0009**). The User opens a **Chat** and turn-takes with the model. Conversational reads from app state via tool calls (Relationships, Contacts, Open Threads, Interactions, Calendar, Groups, User Context) but is **strictly read-only on app state** — it cannot create or mutate Interactions, Open Threads, Relationships, Contacts, Groups, or any User Context flavour. Its job is to surface what the User has, ask questions to elicit Transient Intent and Situational State, and reflect back. Reactive only — never speaks first; a new Chat is empty until the User types or speaks.
+
+Available on **two peer surfaces**:
+- **Web** (`/agent`) — text-primary, mic optional. Used for desk-shaped reflective conversations.
+- **Mobile** (Chat tab in `src/mobile/`) — voice-primary, text fallback, TTS-default for assistant turns. Used for in-pocket / on-the-go context capture. **This is mobile's primary purpose** per the ADR-0009 mobile amendment.
+
+Both surfaces back onto the same `chat-respond` Edge Function and same `chats` / `chat_messages` tables — Chats sync across web and mobile for the same User per ADR-0006 multi-tenant rules.
+_Avoid_: Chatbot, copilot (these flatten the read-only invariant).
+
+**Extraction Pass**:
+A post-processing agent (per **ADR-0009**) that runs over the transcript of a closed **Chat** and writes the User's self-narrative content into **User Context**. Triggered exactly once when a Chat closes. Writes only to **Transient Intent** and **Situational State** — never to Goals & Values (which remain User-authored), never to operational entities (Interactions, Open Threads, Relationship state — which remain gated by the Candidate Action invariant). Named "Pass" to parallel **Agent Pass**: same shape (input → reasoning → write), different input type (transcript, not Relationship state). Idempotent on the Chat: a Chat can only be extracted once.
+_Avoid_: Summariser, analyser (Extraction is structured-write, not summarisation).
+
+**Chat**:
+A bounded conversation between the User and **Conversational Intelligence**. First-class domain entity. Not tied to any single Relationship — Chats are free-form and global to the User. The agent's context for any turn is the full message history of **the current Chat only**; cross-Chat history is never sent to the model. Each Chat is the unit of input to one **Extraction Pass**.
+
+Lifecycle is explicit-close (per ADR-0009): a Chat is `open` (writable, agent responds, Extraction not yet run) until the User clicks "New Chat" or archives it, at which point it becomes `closed` (read-only, Extraction runs exactly once). There is no idle close — a User who walks away mid-Chat picks up where they left off. **Transient Intent** extracted from a Chat decays from the Chat's `closed_at` timestamp, not from the underlying message timestamps.
+_Avoid_: Conversation, thread (overloaded — "Open Thread" already means something else), session (overloaded — "session" is used for Engaged Pass voice).
 
 **Agent Pass**:
 One execution of the Ambient Intelligence loop against a single Relationship. Inputs: the Relationship's current state and history + the full **User Context** (all four flavours, with their current salience) + current Open Threads. Output: a refreshed set of Candidate Actions for the User.
@@ -79,8 +99,18 @@ _Avoid_: Todo, task, reminder (those imply User-owned work — an Open Thread is
 Shape:
 - `description` — short text
 - `direction` — exactly one of `me_owes_them` or `they_owe_me`; never mutual
+- `origin` — exactly one of `asked_of_me` or `self_led`, or `null`. Meaningful only when `direction = me_owes_them` (i.e. the thread is a **Commitment** the User has to someone). `asked_of_me` means the other person asked; `self_led` means the User chose to do this themselves. Null on `they_owe_me` threads — origin is undefined there.
+- `communication_status` — exactly one of `not_communicated` or `confirmed`. Whether the User has yet told the other person about this thread (e.g. they made a self-led commitment in their head but haven't told the person — `not_communicated` — versus they've explicitly said "I'll do X for you" — `confirmed`). Defaults to `not_communicated`. Meaningful on `me_owes_them` threads; on `they_owe_me` it's typically `confirmed` (the other person asked, so by definition communicated).
 - `created_at`, `closed_at` (null while open)
 - Links to **one or more Relationships** (one Open Thread can span multiple Relationships, e.g., an introduction between two Contacts; closing it closes it on all)
+
+**Commitments view**:
+The web `/commitments` page (per ADR-0008). Not a separate domain entity — it is a **filtered view over Open Threads** where `direction = me_owes_them`, surfacing the `origin` and `communication_status` axes as primary filters. Used by the User to see at a glance: what have I committed to, asked-of-me vs self-led, and have I told the person yet. Closing a commitment from this view closes the underlying Open Thread.
+_Avoid_: Commitments table, Commitments entity (this is presentation, not a schema concept; the storage is still `open_threads`).
+
+**Calendar (UI)**:
+On web, the `/calendar` page is a **unified timeline** of (a) first-class **Interactions** the User has logged or scheduled, and (b) read-only **external calendar events** sourced from `inferred_signal_calendar` (Google Calendar). Each entry is badged by source. Interactions remain editable through their existing CRUD; external events are read-only mirrors of what the agent sees in its Calendar density signal. The distinction matters: editing an Interaction changes the agent's behaviour on the next Pass; external events change only when the upstream Google Calendar changes and the daily `sync-calendar` cron picks them up.
+_Avoid_: Conflating "Calendar event" with "Interaction". An Interaction is User-curated relationship state; an external Calendar event is observed background context.
 
 ## Relationships
 

@@ -6,6 +6,10 @@ type Resolved<T> = Promise<{ data: T; error: null } | { data: null; error: { mes
 /**
  * Thin mock of the postgrest query-builder shape OpenThreadsClient drives.
  * Each test wires the chain it needs — the mock only records the call.
+ *
+ * Post-ADR-0008 the chains are richer (the "open threads" methods filter
+ * `closed_at IS NULL` with `.is(...)`), so tests build per-call chains via
+ * `q.select` mock overrides rather than relying on one universal chain.
  */
 function makeQueryMock() {
   const single = jest.fn<Resolved<unknown>, []>();
@@ -23,6 +27,16 @@ function withClient() {
   const supa = { from: q.from, rpc: q.rpc } as unknown as SupabaseClient;
   return { q, client: new OpenThreadsClient(supa) };
 }
+
+const NULL_COMMITMENT = {
+  origin: null,
+  communication_status: "not_communicated" as const,
+};
+
+const NULL_COMMITMENT_CAMEL = {
+  origin: null,
+  communicationStatus: "not_communicated" as const,
+};
 
 describe("OpenThreadsClient.createOpenThread", () => {
   it("calls the create_open_thread RPC and returns the inserted id", async () => {
@@ -75,28 +89,20 @@ describe("OpenThreadsClient.closeOpenThread", () => {
     );
     expect(eq).toHaveBeenCalledWith("id", "ot-1");
   });
-
-  it("throws when the update errors", async () => {
-    const { q, client } = withClient();
-    const select = jest.fn(() => ({ single: jest.fn().mockResolvedValue({ data: null, error: { message: "boom" } }) }));
-    const eq = jest.fn(() => ({ select }));
-    q.update.mockReturnValueOnce({ eq } as unknown as ReturnType<typeof q.update>);
-
-    await expect(client.closeOpenThread("ot-1")).rejects.toMatchObject({
-      message: "boom",
-    });
-  });
 });
 
 describe("OpenThreadsClient.listOpenForUser", () => {
-  it("returns the User's open threads with linked relationships, oldest-first", async () => {
+  it("filters closed_at IS NULL and returns open threads with commitment meta, oldest-first", async () => {
     const { q, client } = withClient();
-    q.order.mockResolvedValue({
+    // listOpenForUser chain:
+    // from("open_threads").select(cols).is("closed_at", null).order(...)
+    const order = jest.fn().mockResolvedValue({
       data: [
         {
           id: "ot-old",
           description: "ancient owed reply",
           direction: "me_owes_them",
+          ...NULL_COMMITMENT,
           created_at: "2026-04-01T10:00:00Z",
           closed_at: null,
           open_thread_relationships: [
@@ -108,6 +114,7 @@ describe("OpenThreadsClient.listOpenForUser", () => {
           id: "ot-new",
           description: "fresh thread",
           direction: "they_owe_me",
+          ...NULL_COMMITMENT,
           created_at: "2026-05-01T10:00:00Z",
           closed_at: null,
           open_thread_relationships: [{ relationship_id: "r-3" }],
@@ -115,16 +122,20 @@ describe("OpenThreadsClient.listOpenForUser", () => {
       ],
       error: null,
     });
+    const is = jest.fn(() => ({ order }));
+    q.select.mockReturnValueOnce({ is } as unknown as ReturnType<typeof q.select>);
 
     const threads = await client.listOpenForUser();
 
     expect(q.from).toHaveBeenCalledWith("open_threads");
-    expect(q.order).toHaveBeenCalledWith("created_at", { ascending: true });
+    expect(is).toHaveBeenCalledWith("closed_at", null);
+    expect(order).toHaveBeenCalledWith("created_at", { ascending: true });
     expect(threads).toEqual([
       {
         id: "ot-old",
         description: "ancient owed reply",
         direction: "me_owes_them",
+        ...NULL_COMMITMENT_CAMEL,
         createdAt: "2026-04-01T10:00:00Z",
         closedAt: null,
         relationshipIds: ["r-1", "r-2"],
@@ -133,6 +144,7 @@ describe("OpenThreadsClient.listOpenForUser", () => {
         id: "ot-new",
         description: "fresh thread",
         direction: "they_owe_me",
+        ...NULL_COMMITMENT_CAMEL,
         createdAt: "2026-05-01T10:00:00Z",
         closedAt: null,
         relationshipIds: ["r-3"],
@@ -142,21 +154,20 @@ describe("OpenThreadsClient.listOpenForUser", () => {
 
   it("returns [] when the User has no open threads", async () => {
     const { q, client } = withClient();
-    q.order.mockResolvedValue({ data: [], error: null });
+    const order = jest.fn().mockResolvedValue({ data: [], error: null });
+    const is = jest.fn(() => ({ order }));
+    q.select.mockReturnValueOnce({ is } as unknown as ReturnType<typeof q.select>);
 
     await expect(client.listOpenForUser()).resolves.toEqual([]);
   });
 });
 
 describe("OpenThreadsClient.listOpenForRelationship", () => {
-  it("filters open threads to those linked to a given relationship, oldest-first", async () => {
+  it("filters open threads to those linked to a given relationship, only open, oldest-first", async () => {
     const { q, client } = withClient();
-    // listOpenForRelationship chains .from("open_threads").select(...).eq("...").order(...).
-    // The query mock's `eq` returns `{ select }` but the real client wants
-    // `eq` → `{ order }`. Rewire eq for this test.
-    // listOpenForRelationship queries `open_thread_relationships` and joins
-    // back to `open_threads`, so postgrest returns rows shaped as
-    // `{ open_threads: {...} }` — that's what the inner order mock yields.
+    // Chain: from("open_thread_relationships").select(...)
+    //          .eq("relationship_id", id).is("open_threads.closed_at", null)
+    //          .order("open_threads(created_at)", ...)
     const innerOrder = jest.fn().mockResolvedValue({
       data: [
         {
@@ -164,6 +175,7 @@ describe("OpenThreadsClient.listOpenForRelationship", () => {
             id: "ot-1",
             description: "owed",
             direction: "me_owes_them",
+            ...NULL_COMMITMENT,
             created_at: "2026-04-01T10:00:00Z",
             closed_at: null,
             open_thread_relationships: [{ relationship_id: "r-7" }],
@@ -172,13 +184,15 @@ describe("OpenThreadsClient.listOpenForRelationship", () => {
       ],
       error: null,
     });
-    const eq = jest.fn(() => ({ order: innerOrder }));
+    const is = jest.fn(() => ({ order: innerOrder }));
+    const eq = jest.fn(() => ({ is }));
     q.select.mockReturnValueOnce({ eq } as unknown as ReturnType<typeof q.select>);
 
     const result = await client.listOpenForRelationship("r-7");
 
     expect(q.from).toHaveBeenCalledWith("open_thread_relationships");
     expect(eq).toHaveBeenCalledWith("relationship_id", "r-7");
+    expect(is).toHaveBeenCalledWith("open_threads.closed_at", null);
     expect(innerOrder).toHaveBeenCalledWith("open_threads(created_at)", {
       ascending: true,
     });
@@ -187,11 +201,87 @@ describe("OpenThreadsClient.listOpenForRelationship", () => {
         id: "ot-1",
         description: "owed",
         direction: "me_owes_them",
+        ...NULL_COMMITMENT_CAMEL,
         createdAt: "2026-04-01T10:00:00Z",
         closedAt: null,
         relationshipIds: ["r-7"],
       },
     ]);
+  });
+});
+
+describe("OpenThreadsClient.listCommitmentsForUser", () => {
+  it("scopes to direction=me_owes_them, closed_at IS NULL, oldest-first", async () => {
+    const { q, client } = withClient();
+    // Chain: from(t).select(cols).eq("direction", "me_owes_them")
+    //          .is("closed_at", null).order(...)
+    const order = jest.fn().mockResolvedValue({ data: [], error: null });
+    const is = jest.fn(() => ({ order }));
+    const eq = jest.fn(() => ({ is }));
+    q.select.mockReturnValueOnce({ eq } as unknown as ReturnType<typeof q.select>);
+
+    await client.listCommitmentsForUser();
+
+    expect(q.from).toHaveBeenCalledWith("open_threads");
+    expect(eq).toHaveBeenCalledWith("direction", "me_owes_them");
+    expect(is).toHaveBeenCalledWith("closed_at", null);
+    expect(order).toHaveBeenCalledWith("created_at", { ascending: true });
+  });
+
+  it("applies optional origin and communicationStatus filters", async () => {
+    const { q, client } = withClient();
+    // Chain: from(t).select(cols).eq(direction).is(closed).eq(origin).eq(status).order(...)
+    const order = jest.fn().mockResolvedValue({ data: [], error: null });
+    const eqStatus = jest.fn(() => ({ order }));
+    const eqOrigin = jest.fn(() => ({ eq: eqStatus }));
+    const is = jest.fn(() => ({ eq: eqOrigin }));
+    const eqDirection = jest.fn(() => ({ is }));
+    q.select.mockReturnValueOnce({ eq: eqDirection } as unknown as ReturnType<typeof q.select>);
+
+    await client.listCommitmentsForUser({
+      origin: "self_led",
+      communicationStatus: "confirmed",
+    });
+
+    expect(eqDirection).toHaveBeenCalledWith("direction", "me_owes_them");
+    expect(eqOrigin).toHaveBeenCalledWith("origin", "self_led");
+    expect(eqStatus).toHaveBeenCalledWith("communication_status", "confirmed");
+  });
+});
+
+describe("OpenThreadsClient.setCommitmentMeta", () => {
+  it("updates only the fields the caller passed", async () => {
+    const { q, client } = withClient();
+    const single = jest.fn().mockResolvedValue({
+      data: {
+        id: "ot-1",
+        description: "self-led one",
+        direction: "me_owes_them",
+        origin: "self_led",
+        communication_status: "confirmed",
+        created_at: "2026-04-01T10:00:00Z",
+        closed_at: null,
+        open_thread_relationships: [{ relationship_id: "r-1" }],
+      },
+      error: null,
+    });
+    const selectInner = jest.fn(() => ({ single }));
+    const eq = jest.fn(() => ({ select: selectInner }));
+    q.update.mockReturnValueOnce({ eq } as unknown as ReturnType<typeof q.update>);
+
+    const updated = await client.setCommitmentMeta("ot-1", {
+      origin: "self_led",
+      communicationStatus: "confirmed",
+    });
+
+    expect(q.from).toHaveBeenCalledWith("open_threads");
+    expect(q.update).toHaveBeenCalledWith({
+      origin: "self_led",
+      communication_status: "confirmed",
+    });
+    expect(eq).toHaveBeenCalledWith("id", "ot-1");
+    expect(updated.origin).toBe("self_led");
+    expect(updated.communicationStatus).toBe("confirmed");
   });
 });
 

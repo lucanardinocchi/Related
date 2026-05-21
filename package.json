@@ -10,8 +10,8 @@
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
-    "build:web": "npm run build:web --workspace=@related/mobile",
-    "test:e2e": "npm run build:web && playwright test"
+    "build:web": "npm run build --workspace=@related/web",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0"

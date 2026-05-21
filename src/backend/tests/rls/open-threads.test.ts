@@ -178,6 +178,70 @@ describe("Open Threads — RLS + multi-Relationship semantics", () => {
     expect(error).not.toBeNull();
   });
 
+  test("commitment_status defaults to 'not_communicated' and origin is null on legacy create_open_thread RPC", async () => {
+    // ADR-0008: create_open_thread RPC was not extended for the new columns
+    // — non-commitment thread creation still works and gets sensible defaults.
+    const { data: threadId, error: rpcErr } = await userA.client.rpc(
+      "create_open_thread",
+      {
+        p_description: "vanilla thread",
+        p_direction: "they_owe_me",
+        p_relationship_ids: [aRelationshipId],
+      },
+    );
+    expect(rpcErr).toBeNull();
+
+    const { data, error } = await userA.client
+      .from("open_threads")
+      .select("origin, communication_status")
+      .eq("id", threadId as string)
+      .single();
+    expect(error).toBeNull();
+    expect(data).toEqual({ origin: null, communication_status: "not_communicated" });
+  });
+
+  test("User can flip a me_owes_them thread's communication_status to confirmed", async () => {
+    // The /commitments page uses this update path (setCommitmentMeta in shared).
+    const { data: threadId } = await userA.client.rpc("create_open_thread", {
+      p_description: "self-led commitment",
+      p_direction: "me_owes_them",
+      p_relationship_ids: [aRelationshipId],
+    });
+
+    const { error: updateErr } = await userA.client
+      .from("open_threads")
+      .update({ origin: "self_led", communication_status: "confirmed" })
+      .eq("id", threadId as string);
+    expect(updateErr).toBeNull();
+
+    const { data } = await userA.client
+      .from("open_threads")
+      .select("origin, communication_status")
+      .eq("id", threadId as string)
+      .single();
+    expect(data).toEqual({ origin: "self_led", communication_status: "confirmed" });
+  });
+
+  test("origin CHECK rejects values outside asked_of_me / self_led", async () => {
+    const { error } = await adminClient.from("open_threads").insert({
+      owner_id: userA.id,
+      description: "bogus origin",
+      direction: "me_owes_them",
+      origin: "mystery",
+    });
+    expect(error).not.toBeNull();
+  });
+
+  test("communication_status CHECK rejects values outside not_communicated / confirmed", async () => {
+    const { error } = await adminClient.from("open_threads").insert({
+      owner_id: userA.id,
+      description: "bogus status",
+      direction: "me_owes_them",
+      communication_status: "maybe",
+    });
+    expect(error).not.toBeNull();
+  });
+
   test("User B cannot close User A's Open Thread", async () => {
     const { data: threadId, error: rpcErr } = await userA.client.rpc(
       "create_open_thread",

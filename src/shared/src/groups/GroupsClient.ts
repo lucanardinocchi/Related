@@ -208,4 +208,41 @@ export class GroupsClient {
     });
     if (error) throw error;
   }
+
+  /**
+   * Get a single Group by id. Used by the web /groups/[id] detail page; the
+   * mobile equivalent passes the full Group via nav param so doesn't need
+   * this. RLS hides cross-User rows — `single()` throws if not found.
+   */
+  async getGroup(id: string): Promise<Group> {
+    const { data, error } = await this.client
+      .from("groups")
+      .select("id, name, created_at")
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    return toGroup(data as GroupRow);
+  }
+
+  async updateGroup(
+    id: string,
+    input: { name?: string },
+  ): Promise<Group> {
+    const patch: Record<string, unknown> = {};
+    if (input.name !== undefined) patch.name = input.name;
+
+    const { data, error } = await this.client
+      .from("groups")
+      .update(patch)
+      .eq("id", id)
+      .select("id, name, created_at")
+      .single();
+    if (error) throw error;
+    return toGroup(data as GroupRow);
+  }
+
+  async deleteGroup(id: string): Promise<void> {
+    const { error } = await this.client.from("groups").delete().eq("id", id);
+    if (error) throw error;
+  }
 }

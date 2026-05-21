@@ -3,6 +3,7 @@ import type {
   AgentService,
   AuthClient,
   CandidatesClient,
+  ChatsClient,
   GroupsClient,
   InteractionsClient,
   OnboardingClient,
@@ -27,6 +28,8 @@ export interface AuthGateProps {
   userContextClient: UserContextClient;
   onboardingClient: OnboardingClient;
   agentService: AgentService;
+  /** Conversational Intelligence client (per ADR-0009 mobile amendment). */
+  chatsClient: ChatsClient;
   /**
    * Optional. When provided, threads through into AgentScreen so the
    * Mic toggle renders. Omitted in tests that don't exercise voice.
@@ -55,6 +58,7 @@ export function AuthGate({
   userContextClient,
   onboardingClient,
   agentService,
+  chatsClient,
   voiceSessionManager,
   userProviderTokensClient,
   oauthRedirectTo,
@@ -131,6 +135,7 @@ export function AuthGate({
       candidatesClient={candidatesClient}
       userContextClient={userContextClient}
       agentService={agentService}
+      chatsClient={chatsClient}
       voiceSessionManager={voiceSessionManager}
       onSignOut={() => {
         void authClient.signOut();

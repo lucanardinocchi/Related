@@ -8,6 +8,7 @@ import { StyleSheet, Text, View } from "react-native";
 import type {
   AgentService,
   CandidatesClient,
+  ChatsClient,
   GroupRelationship,
   GroupsClient,
   InteractionsClient,
@@ -24,6 +25,7 @@ import { CreateGroupScreen } from "./CreateGroupScreen";
 import { GroupDetailScreen } from "./GroupDetailScreen";
 import { GroupsListScreen } from "./GroupsListScreen";
 import { HomeScreen } from "./HomeScreen";
+import { MobileChatScreen } from "./MobileChatScreen";
 import { RelationshipDetailScreen } from "./RelationshipDetailScreen";
 import { RelationshipsListScreen } from "./RelationshipsListScreen";
 import { YouScreen } from "./YouScreen";
@@ -36,6 +38,11 @@ export interface AuthedAppProps {
   candidatesClient: CandidatesClient;
   userContextClient: UserContextClient;
   agentService: AgentService;
+  /**
+   * Conversational Intelligence client (per ADR-0009 mobile amendment) —
+   * powers the Chat tab. Same `chats` / `chat_messages` tables as web.
+   */
+  chatsClient: ChatsClient;
   /** Optional voice pipeline — surfaces the Mic toggle in AgentScreen. */
   voiceSessionManager?: VoiceSessionManager;
   onSignOut: () => void;
@@ -56,6 +63,7 @@ type GroupsStackParams = {
 
 type TabParams = {
   Home: undefined;
+  Chat: undefined;
   Relationships: undefined;
   Groups: undefined;
   Calendar: undefined;
@@ -222,6 +230,7 @@ export function AuthedApp({
   candidatesClient,
   userContextClient,
   agentService,
+  chatsClient,
   voiceSessionManager,
   onSignOut,
 }: AuthedAppProps) {
@@ -248,6 +257,9 @@ export function AuthedApp({
               onSignOut={onSignOut}
             />
           )}
+        </Tab.Screen>
+        <Tab.Screen name="Chat">
+          {() => <MobileChatScreen chatsClient={chatsClient} />}
         </Tab.Screen>
         <Tab.Screen name="Relationships">
           {() => (

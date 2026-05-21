@@ -11,6 +11,8 @@ export type {
   Contact,
   Relationship,
   CreateContactInput,
+  UpdateContactInput,
+  UpdateRelationshipInput,
   RelationshipsClientConfig,
 } from "./relationships/RelationshipsClient";
 
@@ -18,11 +20,33 @@ export { OpenThreadsClient } from "./open-threads/OpenThreadsClient";
 export type {
   OpenThread,
   ThreadDirection,
+  CommitmentOrigin,
+  CommitmentCommunicationStatus,
   CreateOpenThreadInput,
+  ListCommitmentsFilter,
+  SetCommitmentMetaInput,
   ClosedPerDayBucket,
   ClosedPerDayWindow,
   OpenThreadsClientConfig,
 } from "./open-threads/OpenThreadsClient";
+
+export { CalendarEventsClient } from "./calendar/CalendarEventsClient";
+export type {
+  CalendarEvent,
+  CalendarEventSource,
+  CalendarEventsClientConfig,
+} from "./calendar/CalendarEventsClient";
+
+export {
+  relationshipAnalytics,
+  calendarAnalytics,
+  commitmentAnalytics,
+} from "./analytics";
+export type {
+  RelationshipAnalytics,
+  CalendarAnalytics,
+  CommitmentAnalytics,
+} from "./analytics";
 
 export { GroupsClient } from "./groups/GroupsClient";
 export type {
@@ -225,6 +249,19 @@ export type {
 
 export type { SessionWithProviderTokens } from "./auth/AuthClient";
 
+export { ChatsClient } from "./chats/ChatsClient";
+export type {
+  Chat,
+  ChatSummary,
+  ChatMessage,
+  MessageRole,
+  AppendMessageInput,
+  ChatsClientConfig,
+  ChatsClientOptions,
+  ChatRespondEvent,
+  ExtractionResult,
+} from "./chats/ChatsClient";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,
@@ -258,3 +295,10 @@ export { OpenAIWhisperSTTAdapter } from "./voice/OpenAIWhisperSTTAdapter";
 export type { OpenAIWhisperSTTAdapterOptions } from "./voice/OpenAIWhisperSTTAdapter";
 export { ElevenLabsTTSAdapter } from "./voice/ElevenLabsTTSAdapter";
 export type { ElevenLabsTTSAdapterOptions } from "./voice/ElevenLabsTTSAdapter";
+
+export { createTTSPlayback } from "./voice/TTSPlayback";
+export type {
+  TTSPlayback,
+  TTSPlaybackDeps,
+  AudioPlayer,
+} from "./voice/TTSPlayback";

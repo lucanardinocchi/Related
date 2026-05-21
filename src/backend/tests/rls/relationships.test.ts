@@ -95,4 +95,84 @@ describe("Relationship RLS + polymorphic target", () => {
     });
     expect(error).not.toBeNull();
   });
+
+  test("User A can update their own Relationship's role and cadence", async () => {
+    // 20260520000003_crud_rls_policies.sql added the UPDATE policy that
+    // ADR-0008's web Relationship detail page needs to land role/cadence
+    // edits (the columns themselves shipped in slice 8 but were unreachable
+    // from authenticated clients before this).
+    const { data: aRel } = await adminClient
+      .from("relationships")
+      .select("id")
+      .eq("owner_id", userA.id)
+      .single();
+    if (!aRel) throw new Error("no relationship");
+
+    const { error: updateErr } = await userA.client
+      .from("relationships")
+      .update({ role: "close friend", cadence: "weekly" })
+      .eq("id", aRel.id);
+    expect(updateErr).toBeNull();
+
+    const { data } = await userA.client
+      .from("relationships")
+      .select("role, cadence")
+      .eq("id", aRel.id)
+      .single();
+    expect(data).toEqual({ role: "close friend", cadence: "weekly" });
+  });
+
+  test("User B cannot update User A's Relationship", async () => {
+    const { data: aRel } = await adminClient
+      .from("relationships")
+      .select("id")
+      .eq("owner_id", userA.id)
+      .single();
+    if (!aRel) throw new Error("no relationship");
+
+    const { data: updated } = await userB.client
+      .from("relationships")
+      .update({ role: "hijacked" })
+      .eq("id", aRel.id)
+      .select("id");
+    expect(updated).toEqual([]);
+
+    const { data: aView } = await userA.client
+      .from("relationships")
+      .select("role")
+      .eq("id", aRel.id)
+      .single();
+    expect((aView as any)?.role).toBeNull();
+  });
+
+  test("User A can delete their own Relationship", async () => {
+    // Insert a fresh contact + relationship (the beforeEach one belongs to a
+    // contact we still want around for other tests; delete this one in
+    // isolation).
+    const { data: tempContact } = await adminClient
+      .from("contacts")
+      .insert({ owner_id: userA.id, name: "Temp" })
+      .select("id")
+      .single();
+    if (!tempContact) throw new Error("no temp contact");
+
+    const { data: tempRel } = await adminClient
+      .from("relationships")
+      .select("id")
+      .eq("target_contact_id", tempContact.id)
+      .single();
+    if (!tempRel) throw new Error("no temp relationship");
+
+    const { error: deleteErr } = await userA.client
+      .from("relationships")
+      .delete()
+      .eq("id", tempRel.id);
+    expect(deleteErr).toBeNull();
+
+    const { data: remaining } = await userA.client
+      .from("relationships")
+      .select("id")
+      .eq("id", tempRel.id);
+    expect(remaining).toEqual([]);
+  });
 });

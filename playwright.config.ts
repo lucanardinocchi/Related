@@ -1,8 +1,10 @@
 import { defineConfig } from "@playwright/test";
 
-// Tests run against the Expo web export, served as static files.
-// `channel: "chrome"` uses the system-installed Google Chrome (no Playwright
-// browser download) — keeps the install footprint small.
+// Post-ADR-0008: the web E2E target is the Next.js app in src/web/, not
+// the old Expo web export. Tests are smoke-shaped — they navigate the
+// new routes and assert headings; they do not perform live agent /
+// supabase calls. `channel: "chrome"` uses the system-installed browser
+// to keep the install footprint small.
 
 export default defineConfig({
   testDir: "./e2e",
@@ -10,15 +12,15 @@ export default defineConfig({
   reporter: "list",
   timeout: 30_000,
   webServer: {
-    command: "python3 -m http.server 8080 --directory src/mobile/dist",
-    url: "http://localhost:8080",
+    command: "npm run dev --workspace=@related/web -- --port 3000",
+    url: "http://localhost:3000",
     reuseExistingServer: true,
-    timeout: 60_000,
+    timeout: 120_000,
   },
   use: {
-    baseURL: "http://localhost:8080",
+    baseURL: "http://localhost:3000",
     channel: "chrome",
     headless: true,
-    viewport: { width: 390, height: 844 },
+    viewport: { width: 1280, height: 800 },
   },
 });

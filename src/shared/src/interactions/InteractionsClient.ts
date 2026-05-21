@@ -171,4 +171,66 @@ export class InteractionsClient {
     if (error) throw error;
     return ((data ?? []) as unknown as InteractionRow[]).map(toInteraction);
   }
+
+  async getInteraction(id: string): Promise<Interaction> {
+    const { data, error } = await this.client
+      .from("interactions")
+      .select(SELECT_WITH_CONTACTS)
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    return toInteraction(data as unknown as InteractionRow);
+  }
+
+  /**
+   * Mutate an existing Interaction's time / kind / notes / status. Contact
+   * link mutation is out of scope for this client — re-link by deleting and
+   * re-creating, or extend with an explicit method once a UI pattern emerges
+   * (the web Calendar's inline edit only touches the scalar fields in v1).
+   */
+  async updateInteraction(
+    id: string,
+    input: Partial<
+      Pick<CreateInteractionInput, "time" | "kind" | "notes" | "status">
+    >,
+  ): Promise<Interaction> {
+    const patch: Record<string, unknown> = {};
+    if (input.time !== undefined) patch.time = input.time;
+    if (input.kind !== undefined) patch.kind = input.kind;
+    if (input.notes !== undefined) patch.notes = input.notes;
+    if (input.status !== undefined) patch.status = input.status;
+
+    const { data, error } = await this.client
+      .from("interactions")
+      .update(patch)
+      .eq("id", id)
+      .select(SELECT_WITH_CONTACTS)
+      .single();
+    if (error) throw error;
+    return toInteraction(data as unknown as InteractionRow);
+  }
+
+  async deleteInteraction(id: string): Promise<void> {
+    const { error } = await this.client
+      .from("interactions")
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
+  }
+
+  /**
+   * Interactions whose time falls within [from, to] (inclusive bounds, ISO
+   * strings). Drives the web /calendar window query. Server-side sort is
+   * `time` ascending so the UI can group consecutive same-day rows in order.
+   */
+  async listInRange(input: { from: string; to: string }): Promise<Interaction[]> {
+    const { data, error } = await this.client
+      .from("interactions")
+      .select(SELECT_WITH_CONTACTS)
+      .gte("time", input.from)
+      .lte("time", input.to)
+      .order("time", { ascending: true });
+    if (error) throw error;
+    return ((data ?? []) as unknown as InteractionRow[]).map(toInteraction);
+  }
 }

@@ -1,18 +1,122 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens — Notion-inspired, per src/web/CONTEXT.md / ADR-0008.
+ *
+ * The naming convention is semantic ("fg-muted") rather than visual
+ * ("gray-400") so primitives can reach for intent and the palette can
+ * shift without touching component code. Warm grays are the Notion-ish
+ * surface tone; cool grays show up only in specific affordance states.
+ */
 @theme {
+  /* Surfaces */
   --color-bg: #ffffff;
-  --color-fg: #0a0a0a;
-  --color-muted: #6b7280;
-  --color-border: #e5e7eb;
-  --color-surface: #fafafa;
-  --color-accent: #0a0a0a;
-  --color-accent-fg: #ffffff;
-  --color-danger: #b91c1c;
+  --color-surface: #f7f6f3;
+  --color-surface-2: #f1f1ef;
+  --color-hover: #ebebea;
+  --color-active: #e3e2df;
 
+  /* Foreground */
+  --color-fg: #37352f;
+  --color-fg-muted: #6f6e69;
+  --color-fg-subtle: #91918e;
+  --color-fg-on-accent: #ffffff;
+
+  /* Borders + dividers — kept faint so stacked components don't read as boxes.
+   * Use border-strong only for genuinely framed inputs / modals. */
+  --color-border: #efeeec;
+  --color-border-strong: #d3d2cf;
+  --color-divider: #f3f2f0;
+
+  /* Accent / interactive */
+  --color-accent: #2383e2;
+  --color-accent-hover: #1f78cf;
+  --color-accent-subtle: #eaf3fb;
+
+  /* Semantic / status */
+  --color-success: #0f7c4a;
+  --color-success-subtle: #e5f4ec;
+  --color-warning: #b06d00;
+  --color-warning-subtle: #fbf2e0;
+  --color-danger: #b91c1c;
+  --color-danger-subtle: #fbe6e6;
+  --color-info: #2383e2;
+  --color-info-subtle: #eaf3fb;
+
+  /* Status pills used across surfaces (Notion-style soft tints).
+   * draft / approved / sent / review / won / lost are the v1 set. */
+  --color-status-draft: #6f6e69;
+  --color-status-draft-bg: #ebebea;
+  --color-status-approved: #0f7c4a;
+  --color-status-approved-bg: #e5f4ec;
+  --color-status-sent: #2383e2;
+  --color-status-sent-bg: #eaf3fb;
+  --color-status-review: #b06d00;
+  --color-status-review-bg: #fbf2e0;
+  --color-status-won: #0f7c4a;
+  --color-status-won-bg: #e5f4ec;
+  --color-status-lost: #b91c1c;
+  --color-status-lost-bg: #fbe6e6;
+
+  /* Typography. Font families are wired via next/font/google in
+   * src/web/app/layout.tsx and exposed as CSS variables on <html>. */
   --font-sans:
-    "Inter Tight", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, sans-serif;
+    var(--font-outfit), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  /* Type scale — page H1 / section H2 / subsection H3 / body / small / micro.
+   * Letter-spacing tightens at the top end to match Notion's display feel. */
+  --text-display-size: 32px;
+  --text-display-line: 40px;
+  --text-display-tracking: -0.02em;
+  --text-h1-size: 24px;
+  --text-h1-line: 32px;
+  --text-h1-tracking: -0.01em;
+  --text-h2-size: 18px;
+  --text-h2-line: 26px;
+  --text-h2-tracking: -0.005em;
+  --text-h3-size: 14px;
+  --text-h3-line: 20px;
+  --text-h3-tracking: 0.02em; /* UPPERCASE eyebrow */
+  --text-body-size: 14px;
+  --text-body-line: 22px;
+  --text-small-size: 13px;
+  --text-small-line: 20px;
+  --text-micro-size: 11px;
+  --text-micro-line: 16px;
+  --text-micro-tracking: 0.04em;
+
+  /* Layout */
+  --layout-sidebar-w: 240px;
+  --layout-content-max-w: 1200px;
+  --layout-gutter: 24px;
+
+  /* Radii, shadows, motion — bumped softer than the original Notion spec
+   * so primitives feel less rectangular when stacked. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --shadow-1: 0 1px 0 rgba(15, 15, 15, 0.04);
+  --shadow-2: 0 1px 2px rgba(15, 15, 15, 0.06), 0 1px 3px rgba(15, 15, 15, 0.05);
+  --shadow-modal:
+    0 10px 30px rgba(15, 15, 15, 0.15), 0 4px 12px rgba(15, 15, 15, 0.08);
+
+  --motion-fast: 90ms;
+  --motion-base: 140ms;
+  --motion-slow: 220ms;
+  --motion-easing: cubic-bezier(0.2, 0, 0.13, 1);
+
+  /* Legacy aliases from the pre-ADR-0008 token set. Kept so the
+   * not-yet-rethemed routes (/onboarding, /sign-in, /sign-up, /talk
+   * scaffolding) keep rendering. New code should reach for the semantic
+   * tokens above. */
+  --color-muted: var(--color-fg-muted);
+  --color-accent-fg: var(--color-fg-on-accent);
 }
 
 html,
@@ -20,8 +124,23 @@ body {
   background: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
+  font-feature-settings: "ss01", "ss02", "cv11";
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Native focus ring is replaced by an inset accent ring on interactive
+ * primitives (see ui/Button etc.). Outline kept off by default; primitives
+ * opt in via :focus-visible rules. */
+*:focus {
+  outline: none;
+}
+
+/* Subtle selection colour matches accent-subtle so highlighting a passage
+ * doesn't shout. */
+::selection {
+  background: var(--color-accent-subtle);
+  color: var(--color-fg);
 }

@@ -98,4 +98,125 @@ describe("Contact RLS", () => {
       },
     ]);
   });
+
+  test("Contact stores optional profile fields (birthday, area, occupation, education)", async () => {
+    // ADR-0008 / 20260520000001_contact_profile_fields.sql — the web
+    // Relationship detail page's Key Details section reads/writes these.
+    const { error: insertErr } = await userA.client.from("contacts").insert({
+      owner_id: userA.id,
+      name: "Priya",
+      birthday: "1990-04-12",
+      area: "Surry Hills",
+      occupation: "product designer",
+      education: "UNSW, BSc",
+    });
+    expect(insertErr).toBeNull();
+
+    const { data, error } = await userA.client
+      .from("contacts")
+      .select("name, birthday, area, occupation, education");
+    expect(error).toBeNull();
+    expect(data).toEqual([
+      {
+        name: "Priya",
+        birthday: "1990-04-12",
+        area: "Surry Hills",
+        occupation: "product designer",
+        education: "UNSW, BSc",
+      },
+    ]);
+  });
+
+  test("User A can update their own Contact (profile fields)", async () => {
+    const { data: created, error: insertErr } = await userA.client
+      .from("contacts")
+      .insert({ owner_id: userA.id, name: "Maya" })
+      .select("id")
+      .single();
+    expect(insertErr).toBeNull();
+
+    const { error: updateErr } = await userA.client
+      .from("contacts")
+      .update({
+        occupation: "lawyer",
+        area: "Newtown",
+        birthday: "1988-09-03",
+      })
+      .eq("id", created!.id);
+    expect(updateErr).toBeNull();
+
+    const { data, error } = await userA.client
+      .from("contacts")
+      .select("occupation, area, birthday")
+      .eq("id", created!.id)
+      .single();
+    expect(error).toBeNull();
+    expect(data).toEqual({
+      occupation: "lawyer",
+      area: "Newtown",
+      birthday: "1988-09-03",
+    });
+  });
+
+  test("User B cannot update User A's Contact", async () => {
+    const { data: aContact, error: insertErr } = await adminClient
+      .from("contacts")
+      .insert({ owner_id: userA.id, name: "Sam", occupation: "engineer" })
+      .select("id")
+      .single();
+    expect(insertErr).toBeNull();
+
+    const { data: updated } = await userB.client
+      .from("contacts")
+      .update({ occupation: "hacked" })
+      .eq("id", aContact!.id)
+      .select("id");
+    // RLS hides the row from User B → update returns no rows, not an error.
+    expect(updated).toEqual([]);
+
+    const { data: aView } = await userA.client
+      .from("contacts")
+      .select("occupation")
+      .eq("id", aContact!.id)
+      .single();
+    expect((aView as any)?.occupation).toBe("engineer");
+  });
+
+  test("User A can delete their own Contact (Relationship cascades)", async () => {
+    const { data: created } = await userA.client
+      .from("contacts")
+      .insert({ owner_id: userA.id, name: "Temp" })
+      .select("id")
+      .single();
+    if (!created) throw new Error("no contact");
+
+    const { error: deleteErr } = await userA.client
+      .from("contacts")
+      .delete()
+      .eq("id", created.id);
+    expect(deleteErr).toBeNull();
+
+    const { data: remaining } = await userA.client
+      .from("contacts")
+      .select("id")
+      .eq("id", created.id);
+    expect(remaining).toEqual([]);
+  });
+
+  test("User B cannot delete User A's Contact", async () => {
+    const { data: aContact } = await adminClient
+      .from("contacts")
+      .insert({ owner_id: userA.id, name: "Untouchable" })
+      .select("id")
+      .single();
+    if (!aContact) throw new Error("no contact");
+
+    await userB.client.from("contacts").delete().eq("id", aContact.id);
+
+    const { data } = await adminClient
+      .from("contacts")
+      .select("id")
+      .eq("id", aContact.id);
+    expect(data).toEqual([{ id: aContact.id }]);
+  });
 });

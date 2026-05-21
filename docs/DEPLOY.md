@@ -105,7 +105,69 @@ supabase secrets set ELEVENLABS_DEFAULT_VOICE_ID=21m00Tcm4TlvDq8ikWAM
 supabase functions deploy voice-stt voice-tts
 ```
 
-`/talk` mic now works end-to-end (browser `MediaRecorder` → Whisper STT → Claude (Sonnet, via `engaged-pass`) → ElevenLabs TTS).
+`/talk` mic now works end-to-end (browser `MediaRecorder` → Whisper STT → Claude (Sonnet, via `engaged-pass`) → ElevenLabs TTS). The same `voice-stt` is also used by the `/agent` Conversational Intelligence composer (Tier 3.1).
+
+## Tier 3.1 — Conversational Intelligence + Extraction Pass (~5 min)
+
+The `/agent` Chat surface (per [ADR-0009](adr/0009-three-agent-architecture.md)) ships two new Edge Functions:
+
+```sh
+# ANTHROPIC_API_KEY was already set in Tier 1 via engaged-pass; both new
+# functions reuse it.
+supabase functions deploy chat-respond extract-context
+```
+
+- `chat-respond` — Conversational Intelligence agent. Runs a multi-round tool-use loop with the read-only tool surface (Relationships, Contacts, Open Threads, Interactions, Calendar, Groups, User Context). **Streams responses as Server-Sent Events** (`text/event-stream`) — `tool_use`, `tool_result`, `text_delta`, `done`, and `error` events arrive incrementally so the UI can render Claude's reply token-by-token. Web's `_AgentView.tsx` and mobile's `MobileChatScreen.tsx` both consume the stream via `chatsClient.respondStream(chatId)`. See [`src/backend/supabase/functions/chat-respond/README.md`](../src/backend/supabase/functions/chat-respond/README.md).
+- `extract-context` — Extraction Pass. Triggered after the User closes a Chat. Writes to `situational_state` (replace) and `transient_intent` (append, 7-day decay). Idempotent — gates on `chats.extracted_at`. See [`src/backend/supabase/functions/extract-context/README.md`](../src/backend/supabase/functions/extract-context/README.md).
+
+Apply the schema first:
+
+```sh
+supabase db push
+```
+
+…which runs both new migrations:
+
+- `20260521000001_chats_messages.sql` — `chats` + `chat_messages` tables with owner-only RLS.
+- `20260521000002_chats_extracted_at.sql` — Extraction idempotency stamp.
+
+## Tier 3.2 — Mobile Conversational surface (~10 min, requires expo-audio)
+
+Per the [ADR-0009 mobile amendment](adr/0009-three-agent-architecture.md), the Conversational Intelligence Chat tab now ships on mobile alongside web. The Chat tab is wired into `AuthedApp`'s bottom-tab navigator and hits the **same** `chat-respond` / `extract-context` Edge Functions and **same** `chats` / `chat_messages` tables — multi-tenant isolation flows from Supabase RLS, so a User's Chats sync across web and mobile for the same account.
+
+To enable native iOS voice capture (the mobile Chat tab's primary UX) install the audio module:
+
+```sh
+cd src/mobile
+npx expo install expo-audio expo-file-system
+```
+
+Then in `src/mobile/App.tsx`, wire the mic + TTS playback into the `AuthedApp` chat tab:
+
+```ts
+import { AudioModule, Recording, RecordingPresets } from "expo-audio";
+import * as FS from "expo-file-system";
+import { startExpoAudioCapture } from "./src/voice/ExpoAudioRecorder";
+import { createTTSPlayback } from "@related/shared";
+
+const startMicCapture = () =>
+  startExpoAudioCapture({
+    audio: { /* expo-audio adapter — see src/mobile/src/voice/ExpoAudioRecorder.ts */ },
+    fetchUri: async (uri) => {
+      const b64 = await FS.readAsStringAsync(uri, { encoding: FS.EncodingType.Base64 });
+      return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    },
+  });
+
+const ttsPlayback = createTTSPlayback({
+  ttsAdapter,                  // existing ElevenLabsTTSAdapter
+  player: { /* expo-audio Sound wrapper */ },
+});
+```
+
+Pass these into `<AuthedApp ... startMicCapture={startMicCapture} sttAdapter={sttAdapter} ttsPlayback={ttsPlayback} />`. Without them the Chat tab still works (text-only); with them, mic + auto-TTS turn on.
+
+iOS-only consents (`NSMicrophoneUsageDescription`) live in `app.json` — Expo prompts on first mic use.
 
 ## Tier 4 — iOS native (HealthKit, push, App Store)
 
