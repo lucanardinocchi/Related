@@ -10,6 +10,7 @@ export type EventType =
 export type EventStatus =
   | "planned"
   | "occurred"
+  | "attended"
   | "cancelled"
   | "missed";
 
