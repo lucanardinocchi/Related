@@ -30,6 +30,8 @@ interface RawCalendarEvent {
   start: string;
   end: string;
   isAllDay: boolean;
+  location: string | null;
+  attendeeEmails: string[];
 }
 
 interface SyncRequest {
@@ -54,11 +56,17 @@ interface GoogleEventTime {
   dateTime?: string;
   date?: string;
 }
+interface GoogleAttendee {
+  email?: string;
+  responseStatus?: string;
+}
 interface GoogleEvent {
   id: string;
   summary?: string;
+  location?: string;
   start?: GoogleEventTime;
   end?: GoogleEventTime;
+  attendees?: GoogleAttendee[];
 }
 
 function buildEventsUrl(asOf: Date): string {
@@ -80,12 +88,17 @@ function mapEvent(e: GoogleEvent): RawCalendarEvent | null {
   const start = e.start.dateTime ?? e.start.date;
   const end = e.end.dateTime ?? e.end.date;
   if (!start || !end) return null;
+  const attendeeEmails = (e.attendees ?? [])
+    .map((a) => a.email?.toLowerCase().trim())
+    .filter((email): email is string => Boolean(email));
   return {
     id: e.id,
     title: e.summary ?? null,
     start,
     end,
     isAllDay,
+    location: e.location ?? null,
+    attendeeEmails,
   };
 }
 
@@ -197,7 +210,9 @@ async function collectForOwner(
     .filter((e): e is RawCalendarEvent => e !== null);
 
   if (events.length > 0) {
-    const rows = events.map((e) => ({
+    // 1) Keep populating inferred_signal_calendar — the calendarDensity
+    //    signal (UserContextBuilder) still reads from there.
+    const signalRows = events.map((e) => ({
       owner_id: tokenRow.owner_id,
       event_id: e.id,
       title: e.title,
@@ -207,7 +222,7 @@ async function collectForOwner(
     }));
     const { error: upErr } = await supabase
       .from("inferred_signal_calendar")
-      .upsert(rows, { onConflict: "owner_id,event_id" });
+      .upsert(signalRows, { onConflict: "owner_id,event_id" });
     if (upErr) {
       return {
         ...baseSummary,
@@ -215,9 +230,95 @@ async function collectForOwner(
         error: `upsert: ${upErr.message ?? String(upErr)}`,
       };
     }
+
+    // 2) Materialize into the user-facing `events` table per ADR-0010.
+    //    Only Google-owned columns are in the payload; on conflict the
+    //    user-owned columns (aim, required_prep, status, type) are left
+    //    untouched because they aren't named in the update set.
+    const eventRows = events.map((e) => ({
+      owner_id: tokenRow.owner_id,
+      external_event_id: e.id,
+      source: "google" as const,
+      title: e.title,
+      start: e.start,
+      end: e.end,
+      is_all_day: e.isAllDay,
+      location: e.location,
+    }));
+    const { error: evErr } = await supabase
+      .from("events")
+      .upsert(eventRows, { onConflict: "owner_id,external_event_id" });
+    if (evErr) {
+      return {
+        ...baseSummary,
+        status: "error",
+        error: `events upsert: ${evErr.message ?? String(evErr)}`,
+      };
+    }
+
+    // 3) Refresh attendee links for synced events. Map Google attendee
+    //    emails → existing contacts by email (case-insensitive match
+    //    already applied in mapEvent). Unmatched emails are dropped in v1.
+    const allEmails = Array.from(
+      new Set(events.flatMap((e) => e.attendeeEmails)),
+    );
+    let emailToContactId = new Map<string, string>();
+    if (allEmails.length > 0) {
+      const { data: contactRows } = await supabase
+        .from("contacts")
+        .select("id, email")
+        .eq("owner_id", tokenRow.owner_id)
+        .in("email", allEmails);
+      emailToContactId = new Map(
+        ((contactRows ?? []) as Array<{ id: string; email: string | null }>)
+          .filter((c) => c.email)
+          .map((c) => [c.email!.toLowerCase(), c.id]),
+      );
+    }
+
+    // We need event UUIDs to write attendee links. The upsert above
+    // doesn't return ids in supabase-js v2 in one call, so re-select.
+    const externalIds = events.map((e) => e.id);
+    const { data: eventIdRows } = await supabase
+      .from("events")
+      .select("id, external_event_id")
+      .eq("owner_id", tokenRow.owner_id)
+      .in("external_event_id", externalIds);
+    const externalToEventId = new Map(
+      ((eventIdRows ?? []) as Array<{
+        id: string;
+        external_event_id: string;
+      }>).map((r) => [r.external_event_id, r.id]),
+    );
+
+    // For idempotency: wipe existing attendee links for the touched
+    // events, then re-insert from the current Google snapshot. This is
+    // also how user-removed attendees vanish on the next sync.
+    const touchedEventIds = Array.from(externalToEventId.values());
+    if (touchedEventIds.length > 0) {
+      await supabase
+        .from("event_attendees")
+        .delete()
+        .in("event_id", touchedEventIds);
+
+      const links: Array<{ event_id: string; contact_id: string }> = [];
+      for (const e of events) {
+        const eventId = externalToEventId.get(e.id);
+        if (!eventId) continue;
+        for (const email of e.attendeeEmails) {
+          const cid = emailToContactId.get(email);
+          if (cid) links.push({ event_id: eventId, contact_id: cid });
+        }
+      }
+      if (links.length > 0) {
+        await supabase.from("event_attendees").insert(links);
+      }
+    }
   }
 
-  // GC: remove rows for this owner not in the fetched set.
+  // GC: remove rows for this owner not in the fetched set. Applies to
+  // both signal and events tables — but for `events` only delete rows
+  // with source='google' so manually-created events aren't nuked.
   if (events.length > 0) {
     const keepList = events.map((e) => e.id).join(",");
     await supabase
@@ -225,11 +326,22 @@ async function collectForOwner(
       .delete()
       .eq("owner_id", tokenRow.owner_id)
       .not("event_id", "in", `(${keepList})`);
+    await supabase
+      .from("events")
+      .delete()
+      .eq("owner_id", tokenRow.owner_id)
+      .eq("source", "google")
+      .not("external_event_id", "in", `(${keepList})`);
   } else {
     await supabase
       .from("inferred_signal_calendar")
       .delete()
       .eq("owner_id", tokenRow.owner_id);
+    await supabase
+      .from("events")
+      .delete()
+      .eq("owner_id", tokenRow.owner_id)
+      .eq("source", "google");
   }
 
   return { ...baseSummary, eventsWritten: events.length, status: "ok" };

@@ -277,6 +277,18 @@ export type {
   InteractionsClientConfig,
 } from "./interactions/InteractionsClient";
 
+export { EventsClient } from "./events/EventsClient";
+export type {
+  Event,
+  EventType,
+  EventStatus,
+  EventSource,
+  EventAttendee,
+  CreateEventInput,
+  UpdateEventInput,
+  EventsClientConfig,
+} from "./events/EventsClient";
+
 export {
   VoiceSessionManager,
   InterruptedError as VoiceSessionInterruptedError,

@@ -1,69 +1,62 @@
 import type {
-  Interaction,
-  InteractionStatus,
-  InteractionCategory,
-} from "../interactions/InteractionsClient";
-import type {
-  CalendarEvent,
-  CalendarEventOverlay,
-} from "../calendar/CalendarEventsClient";
+  Event,
+  EventStatus,
+  EventType,
+} from "../events/EventsClient";
 
 /**
- * Header analytics for the web /calendar page (per ADR-0008). All counts
- * are over the merged set the page is currently rendering — the helper
- * takes pre-fetched lists so the page can compose them with whatever
- * window it's showing without re-querying.
+ * Header analytics for the web /calendar page. Per ADR-0010 the calendar
+ * reads from a unified `events` table so the helper takes a single Event
+ * list and returns counts the header tiles render directly.
  */
 export interface CalendarAnalytics {
-  /** Total entries (Interactions + external events) in the window. */
+  /** Total events in the window. */
   totalEntries: number;
-  /** Interaction count by status. */
-  interactionCounts: {
-    planned: number;
-    occurred: number;
-    attended: number;
-    missed: number;
-    cancelled: number;
-  };
-  /** Count of external events from each source. */
-  externalCountsBySource: Record<string, number>;
-  /** Distinct days that have at least one entry. */
+  /** Count by status. */
+  statusCounts: Record<EventStatus, number>;
+  /** Count by type. */
+  typeCounts: Record<EventType, number>;
+  /** Distinct days that have at least one event. */
   daysWithEntries: number;
 }
 
+const ALL_STATUSES: EventStatus[] = [
+  "planned",
+  "occurred",
+  "attended",
+  "cancelled",
+  "missed",
+];
+
+const ALL_TYPES: EventType[] = [
+  "work",
+  "meeting",
+  "uni",
+  "personal",
+  "activity",
+];
+
 export function calendarAnalytics(input: {
-  interactions: Interaction[];
-  externalEvents: CalendarEvent[];
+  events: Event[];
 }): CalendarAnalytics {
-  const interactionCounts = {
-    planned: 0,
-    occurred: 0,
-    attended: 0,
-    missed: 0,
-    cancelled: 0,
-  };
-  for (const i of input.interactions) {
-    interactionCounts[i.status] += 1;
-  }
-
-  const externalCountsBySource: Record<string, number> = {};
-  for (const e of input.externalEvents) {
-    externalCountsBySource[e.source] =
-      (externalCountsBySource[e.source] ?? 0) + 1;
-  }
-
+  const statusCounts = Object.fromEntries(
+    ALL_STATUSES.map((s) => [s, 0]),
+  ) as Record<EventStatus, number>;
+  const typeCounts = Object.fromEntries(
+    ALL_TYPES.map((t) => [t, 0]),
+  ) as Record<EventType, number>;
   const daySet = new Set<string>();
-  for (const i of input.interactions) {
-    daySet.add(i.time.slice(0, 10));
-  }
-  for (const e of input.externalEvents) {
+
+  for (const e of input.events) {
+    statusCounts[e.status] += 1;
+    typeCounts[e.type] += 1;
     daySet.add(e.start.slice(0, 10));
   }
 
   return {
-    totalEntries: input.interactions.length + input.externalEvents.length,
-    interactionCounts,
-    externalCountsBySource,
+    totalEntries: input.events.length,
+    statusCounts,
+    typeCounts,
     daysWithEntries: daySet.size,
   };
 }
@@ -71,10 +64,10 @@ export function calendarAnalytics(input: {
 /**
  * One point on the cumulative growth chart — a calendar day and the
  * running total of matching entries from the window start up to and
- * including that day.
+ * including that day. Ported from #55 to read from the unified `events`
+ * model.
  */
 export interface CumulativeBucket {
-  /** YYYY-MM-DD. */
   date: string;
   count: number;
 }
@@ -84,28 +77,24 @@ export interface CumulativeGrowthInput {
   from: string;
   /** Inclusive window end. ISO string. */
   to: string;
-  interactions: Interaction[];
-  externalEvents: CalendarEvent[];
-  overlays: CalendarEventOverlay[];
+  events: Event[];
   /**
-   * Filter that picks which entries contribute. `all` is the unfiltered
-   * total — drives the default chart view so the cumulative line shows
-   * every event, before the User narrows by status or category.
+   * Filter that picks which events contribute. `all` is the unfiltered
+   * total — drives the default chart view so the line shows every event
+   * before the User narrows by status or type.
    */
   filter:
     | { axis: "all" }
-    | { axis: "status"; value: InteractionStatus }
-    | { axis: "category"; value: InteractionCategory };
+    | { axis: "status"; value: EventStatus }
+    | { axis: "type"; value: EventType };
 }
 
-/** UTC midnight of the given ISO instant, returned as a Date. */
 function utcStartOfDay(iso: string): Date {
   const d = new Date(iso);
   d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
-/** YYYY-MM-DD in UTC. Matches `iso.slice(0, 10)` for ISO Z strings. */
 function ymdUTC(d: Date): string {
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -114,58 +103,30 @@ function ymdUTC(d: Date): string {
 }
 
 /**
- * Cumulative running-total of entries matching the given filter, bucketed
- * by day across [from, to]. Used by the Calendar page's growth chart —
- * one bucket per day, count is the cumulative number of matching entries
- * whose time/start falls in the window on or before that day.
- *
- * External Google events contribute their User-assigned overlay status or
- * category (no overlay = no contribution); Interactions contribute their
- * own status / category.
+ * Cumulative running-total of matching events bucketed by day across
+ * [from, to]. Walks the date axis so the line is continuous through
+ * empty days. UTC bucketing matches `iso.slice(0,10)` on the entry side
+ * — mixing local and UTC boundaries would silently land events in the
+ * wrong day when the User's timezone offset crosses midnight.
  */
 export function cumulativeGrowth(
   input: CumulativeGrowthInput,
 ): CumulativeBucket[] {
-  const overlayByEvent = new Map<string, CalendarEventOverlay>();
-  for (const o of input.overlays) overlayByEvent.set(o.eventId, o);
-
-  // Per-day delta — number of matching entries whose day == this day.
   const deltas = new Map<string, number>();
   const bump = (key: string) => {
     deltas.set(key, (deltas.get(key) ?? 0) + 1);
   };
 
-  const matchesInteraction = (i: Interaction) => {
+  const matches = (e: Event) => {
     if (input.filter.axis === "all") return true;
-    if (input.filter.axis === "status") return i.status === input.filter.value;
-    return i.category === input.filter.value;
+    if (input.filter.axis === "status") return e.status === input.filter.value;
+    return e.type === input.filter.value;
   };
 
-  for (const i of input.interactions) {
-    if (matchesInteraction(i)) bump(i.time.slice(0, 10));
+  for (const e of input.events) {
+    if (matches(e)) bump(e.start.slice(0, 10));
   }
 
-  for (const e of input.externalEvents) {
-    if (input.filter.axis === "all") {
-      // Unfiltered total includes every external event, regardless of
-      // whether the User has assigned an overlay yet.
-      bump(e.start.slice(0, 10));
-      continue;
-    }
-    const o = overlayByEvent.get(e.externalEventId);
-    if (!o) continue;
-    const matched =
-      input.filter.axis === "status"
-        ? o.status === input.filter.value
-        : o.category === input.filter.value;
-    if (matched) bump(e.start.slice(0, 10));
-  }
-
-  // Walk the date axis day-by-day so the chart line is continuous even
-  // through gaps with zero entries. Bucket keys are UTC YYYY-MM-DD to
-  // match `iso.slice(0,10)` on the entry side — mixing local and UTC
-  // boundaries would silently land events in the wrong day when the
-  // User's timezone offset crosses midnight relative to UTC.
   const buckets: CumulativeBucket[] = [];
   let running = 0;
   const cursor = utcStartOfDay(input.from);

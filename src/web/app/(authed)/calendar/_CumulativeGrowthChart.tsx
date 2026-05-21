@@ -1,44 +1,37 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type {
-  CalendarEvent,
-  CalendarEventOverlay,
-  Interaction,
-  InteractionCategory,
-  InteractionStatus,
-} from "@related/shared";
+import type { Event, EventStatus, EventType } from "@related/shared";
 import { cumulativeGrowth } from "@related/shared";
 import { Card, Eyebrow, H2, Pill } from "@/components/ui";
 
 type Tab =
   | { axis: "all"; label: string }
-  | { axis: "status"; value: InteractionStatus; label: string }
-  | { axis: "category"; value: InteractionCategory; label: string };
+  | { axis: "status"; value: EventStatus; label: string }
+  | { axis: "type"; value: EventType; label: string };
 
 const ALL_TAB: Tab = { axis: "all", label: "All" };
 
 const STATUS_TABS: Tab[] = [
   { axis: "status", value: "attended", label: "Attended" },
+  { axis: "status", value: "occurred", label: "Occurred" },
   { axis: "status", value: "missed", label: "Missed" },
   { axis: "status", value: "cancelled", label: "Cancelled" },
   { axis: "status", value: "planned", label: "Upcoming" },
 ];
 
-const CATEGORY_TABS: Tab[] = [
-  { axis: "category", value: "work", label: "Work" },
-  { axis: "category", value: "meeting", label: "Meeting" },
-  { axis: "category", value: "activity", label: "Activity" },
-  { axis: "category", value: "personal", label: "Personal" },
-  { axis: "category", value: "errands", label: "Errands" },
+const TYPE_TABS: Tab[] = [
+  { axis: "type", value: "work", label: "Work" },
+  { axis: "type", value: "meeting", label: "Meeting" },
+  { axis: "type", value: "uni", label: "Uni" },
+  { axis: "type", value: "personal", label: "Personal" },
+  { axis: "type", value: "activity", label: "Activity" },
 ];
 
 type Scope = "past" | "future";
 
 interface Props {
-  interactions: Interaction[];
-  externalEvents: CalendarEvent[];
-  overlays: CalendarEventOverlay[];
+  events: Event[];
   now: Date;
 }
 
@@ -52,45 +45,34 @@ function tabKey(t: Tab): string {
 }
 
 /**
- * Cumulative line chart for Calendar entries — mirrors the screenshot
- * reference: monospace y-axis ticks, dashed gridlines, orange accent
- * line. Hand-rolled SVG (no charting dep). Three filter axes:
- *
- *  - Scope pills (Past / Future) pick the 30-day window relative to today.
- *  - Status tabs in the upper-right pick a series (attended / missed /
- *    cancelled / upcoming). Past scope hides "Upcoming"; future scope
- *    only shows "Upcoming".
- *  - Type pills below the chart further narrow to one category, or
- *    "All" for the unfiltered total. Defaults to "All" so the chart
- *    shows the User's whole calendar before any narrowing.
+ * Cumulative line chart for Calendar entries. Ported from #55 to read
+ * from the unified `events` model (ADR-0010). Self-contained: scope pills
+ * pick Past/Future 30 days; status tabs in the header pick a series;
+ * type pills below narrow further.
  */
-export function CumulativeGrowthChart({
-  interactions,
-  externalEvents,
-  overlays,
-  now,
-}: Props) {
+export function CumulativeGrowthChart({ events, now }: Props) {
   const [scope, setScope] = useState<Scope>("past");
   const [activeTab, setActiveTab] = useState<Tab>(ALL_TAB);
 
-  // Tabs available for the right-hand status switcher in the current scope.
   const scopeStatusTabs = useMemo(
     () =>
       scope === "past"
-        ? STATUS_TABS.filter((t) => t.axis === "status" && t.value !== "planned")
-        : STATUS_TABS.filter((t) => t.axis === "status" && t.value === "planned"),
+        ? STATUS_TABS.filter(
+            (t) => t.axis === "status" && t.value !== "planned",
+          )
+        : STATUS_TABS.filter(
+            (t) => t.axis === "status" && t.value === "planned",
+          ),
     [scope],
   );
 
   function selectScope(next: Scope) {
     setScope(next);
-    // If the current status tab isn't valid in the new scope, fall back to All.
     if (activeTab.axis === "status") {
-      const stillValid = (
+      const stillValid =
         next === "past"
           ? activeTab.value !== "planned"
-          : activeTab.value === "planned"
-      );
+          : activeTab.value === "planned";
       if (!stillValid) setActiveTab(ALL_TAB);
     }
   }
@@ -109,19 +91,18 @@ export function CumulativeGrowthChart({
         ? { axis: "all" as const }
         : activeTab.axis === "status"
           ? { axis: "status" as const, value: activeTab.value }
-          : { axis: "category" as const, value: activeTab.value };
+          : { axis: "type" as const, value: activeTab.value };
     return cumulativeGrowth({
       from: from.toISOString(),
       to: to.toISOString(),
-      interactions,
-      externalEvents,
-      overlays,
+      events,
       filter,
     });
-  }, [activeTab, externalEvents, from, interactions, overlays, to]);
+  }, [activeTab, events, from, to]);
 
   const max = Math.max(1, ...buckets.map((b) => b.count));
-  const niceMax = max <= 3 ? 3 : max <= 6 ? 6 : max <= 10 ? 10 : Math.ceil(max / 5) * 5;
+  const niceMax =
+    max <= 3 ? 3 : max <= 6 ? 6 : max <= 10 ? 10 : Math.ceil(max / 5) * 5;
   const yTicks = [
     0,
     Math.round(niceMax / 3),
@@ -144,7 +125,10 @@ export function CumulativeGrowthChart({
     PAD_T + innerH - (count / niceMax) * innerH;
 
   const path = buckets
-    .map((b, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(b.count).toFixed(1)}`)
+    .map(
+      (b, i) =>
+        `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(b.count).toFixed(1)}`,
+    )
     .join(" ");
 
   const xLabelIndices = buckets
@@ -200,7 +184,10 @@ export function CumulativeGrowthChart({
         <Pill active={scope === "past"} onClick={() => selectScope("past")}>
           Past 30 days
         </Pill>
-        <Pill active={scope === "future"} onClick={() => selectScope("future")}>
+        <Pill
+          active={scope === "future"}
+          onClick={() => selectScope("future")}
+        >
           Next 30 days
         </Pill>
         <span className="mx-2 h-4 w-px bg-border" />
@@ -208,12 +195,12 @@ export function CumulativeGrowthChart({
           Type:
         </span>
         <Pill
-          active={activeTab.axis !== "category"}
+          active={activeTab.axis !== "type"}
           onClick={() => setActiveTab(ALL_TAB)}
         >
           All
         </Pill>
-        {CATEGORY_TABS.map((t) => (
+        {TYPE_TABS.map((t) => (
           <Pill
             key={tabKey(t)}
             active={activeKey === tabKey(t)}
