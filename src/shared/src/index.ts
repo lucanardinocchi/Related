@@ -34,21 +34,20 @@ export { CalendarEventsClient } from "./calendar/CalendarEventsClient";
 export type {
   CalendarEvent,
   CalendarEventSource,
-  CalendarEventOverlay,
   CalendarEventsClientConfig,
 } from "./calendar/CalendarEventsClient";
 
 export {
   relationshipAnalytics,
   calendarAnalytics,
-  cumulativeGrowth,
+  eventsPerDay,
   commitmentAnalytics,
 } from "./analytics";
 export type {
   RelationshipAnalytics,
   CalendarAnalytics,
-  CumulativeBucket,
-  CumulativeGrowthInput,
+  DailyBucket,
+  EventsPerDayInput,
   CommitmentAnalytics,
 } from "./analytics";
 
@@ -276,6 +275,18 @@ export type {
   CreateInteractionInput,
   InteractionsClientConfig,
 } from "./interactions/InteractionsClient";
+
+export { EventsClient } from "./events/EventsClient";
+export type {
+  Event,
+  EventType,
+  EventStatus,
+  EventSource,
+  EventAttendee,
+  CreateEventInput,
+  UpdateEventInput,
+  EventsClientConfig,
+} from "./events/EventsClient";
 
 export {
   VoiceSessionManager,

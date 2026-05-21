@@ -2,10 +2,6 @@ import {
   createClient,
   SupabaseClient,
 } from "@supabase/supabase-js";
-import type {
-  InteractionStatus,
-  InteractionCategory,
-} from "../interactions/InteractionsClient";
 
 /**
  * Source of a CalendarEvent — currently only Google Calendar (per
@@ -13,37 +9,6 @@ import type {
  * the union without breaking the unified web /calendar timeline.
  */
 export type CalendarEventSource = "google";
-
-/**
- * Per-event overlay the User can layer on top of an external (read-only)
- * calendar event. Keyed by (owner_id, event_id). Absence means "no User
- * choice yet" — the Calendar UI shows past unset entries in the pending
- * status widget so the User can decide attended / missed / cancelled.
- */
-export interface CalendarEventOverlay {
-  eventId: string;
-  status: InteractionStatus | null;
-  category: InteractionCategory | null;
-  updatedAt: string;
-}
-
-interface CalendarEventOverlayRow {
-  event_id: string;
-  status: InteractionStatus | null;
-  category: InteractionCategory | null;
-  updated_at: string;
-}
-
-function toCalendarEventOverlay(
-  row: CalendarEventOverlayRow,
-): CalendarEventOverlay {
-  return {
-    eventId: row.event_id,
-    status: row.status,
-    category: row.category,
-    updatedAt: row.updated_at,
-  };
-}
 
 /**
  * A single external calendar event the agent has ingested as an Inferred
@@ -138,37 +103,4 @@ export class CalendarEventsClient {
     return ((data ?? []) as unknown as CalendarEventRow[]).map(toCalendarEvent);
   }
 
-  /** Every overlay the owner has set. Sparse — only events the User has
-   * categorised or marked appear here. The Calendar view joins this in
-   * memory against the event list by externalEventId. */
-  async listOverlays(): Promise<CalendarEventOverlay[]> {
-    const { data, error } = await this.client
-      .from("inferred_signal_calendar_overlay")
-      .select("event_id, status, category, updated_at");
-    if (error) throw error;
-    return ((data ?? []) as unknown as CalendarEventOverlayRow[]).map(
-      toCalendarEventOverlay,
-    );
-  }
-
-  /** Upsert the per-event overlay. Pass null to clear a previously set
-   * value. The (owner_id, event_id) PK makes this idempotent. */
-  async upsertOverlay(input: {
-    eventId: string;
-    ownerId: string;
-    status?: InteractionStatus | null;
-    category?: InteractionCategory | null;
-  }): Promise<void> {
-    const patch: Record<string, unknown> = {
-      owner_id: input.ownerId,
-      event_id: input.eventId,
-      updated_at: new Date().toISOString(),
-    };
-    if (input.status !== undefined) patch.status = input.status;
-    if (input.category !== undefined) patch.category = input.category;
-    const { error } = await this.client
-      .from("inferred_signal_calendar_overlay")
-      .upsert(patch, { onConflict: "owner_id,event_id" });
-    if (error) throw error;
-  }
 }
