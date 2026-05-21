@@ -14,6 +14,7 @@ import type {
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Eyebrow, H1 } from "@/components/ui";
+import type { ContactLocationValue } from "@/components/ui";
 import { TouchpointsChart } from "./_TouchpointsChart";
 import { KeyDetailsSection, type GroupSummary } from "./_KeyDetailsSection";
 import { OpenThreadsSection } from "./_OpenThreadsSection";
@@ -47,13 +48,24 @@ export function RelationshipDetailView({
     initialOpenThreads,
   );
 
+  async function saveLocation(next: ContactLocationValue) {
+    const updated = await deps.relationships.updateContact(
+      relationship.contact.id,
+      {
+        area: next.area,
+        latitude: next.latitude,
+        longitude: next.longitude,
+      },
+    );
+    setRelationship((r) => ({ ...r, contact: updated }));
+  }
+
   async function saveContact(
     field:
       | "name"
       | "phone"
       | "email"
       | "birthday"
-      | "area"
       | "occupation"
       | "education",
     next: string,
@@ -198,6 +210,7 @@ export function RelationshipDetailView({
         relationship={relationship}
         groupMemberships={groupMemberships}
         onSaveContact={saveContact}
+        onSaveLocation={saveLocation}
         onSaveRelationship={saveRelationship}
       />
 

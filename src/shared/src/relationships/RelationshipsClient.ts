@@ -10,7 +10,10 @@ export interface Contact {
   email: string | null;
   // Profile fields added per ADR-0008 for the web Relationship detail page.
   birthday: string | null; // ISO date (YYYY-MM-DD)
+  /** Display label for the contact's location, e.g. "Surry Hills, NSW, Australia". */
   area: string | null;
+  latitude: number | null;
+  longitude: number | null;
   occupation: string | null;
   education: string | null;
   createdAt: string;
@@ -22,6 +25,8 @@ export interface CreateContactInput {
   email?: string | null;
   birthday?: string | null;
   area?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   occupation?: string | null;
   education?: string | null;
 }
@@ -32,6 +37,8 @@ export interface UpdateContactInput {
   email?: string | null;
   birthday?: string | null;
   area?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   occupation?: string | null;
   education?: string | null;
 }
@@ -71,6 +78,8 @@ interface ContactRow {
   email: string | null;
   birthday: string | null;
   area: string | null;
+  latitude: number | null;
+  longitude: number | null;
   occupation: string | null;
   education: string | null;
   created_at: string;
@@ -93,6 +102,8 @@ function toContact(row: ContactRow): Contact {
     email: row.email,
     birthday: row.birthday,
     area: row.area,
+    latitude: row.latitude,
+    longitude: row.longitude,
     occupation: row.occupation,
     education: row.education,
     createdAt: row.created_at,
@@ -111,7 +122,7 @@ function toRelationship(row: RelationshipRow): Relationship {
 }
 
 const CONTACT_COLUMNS =
-  "id, name, phone, email, birthday, area, occupation, education, created_at";
+  "id, name, phone, email, birthday, area, latitude, longitude, occupation, education, created_at";
 
 const RELATIONSHIP_SELECT =
   `id, target_type, created_at, role, cadence, contact:contacts!target_contact_id(${CONTACT_COLUMNS})`;
@@ -144,6 +155,8 @@ export class RelationshipsClient {
         email: input.email ?? null,
         birthday: input.birthday ?? null,
         area: input.area ?? null,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
         occupation: input.occupation ?? null,
         education: input.education ?? null,
       })
@@ -160,6 +173,8 @@ export class RelationshipsClient {
     if (input.email !== undefined) patch.email = input.email;
     if (input.birthday !== undefined) patch.birthday = input.birthday;
     if (input.area !== undefined) patch.area = input.area;
+    if (input.latitude !== undefined) patch.latitude = input.latitude;
+    if (input.longitude !== undefined) patch.longitude = input.longitude;
     if (input.occupation !== undefined) patch.occupation = input.occupation;
     if (input.education !== undefined) patch.education = input.education;
 

@@ -11,7 +11,12 @@ import {
 import Link from "next/link";
 import { Users } from "lucide-react";
 import type { Relationship } from "@related/shared";
-import { Badge, Mono } from "@/components/ui";
+import {
+  Badge,
+  Mono,
+  LocationPicker,
+  type ContactLocationValue,
+} from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 export interface GroupSummary {
@@ -29,11 +34,11 @@ interface Props {
       | "phone"
       | "email"
       | "birthday"
-      | "area"
       | "occupation"
       | "education",
     next: string,
   ) => Promise<void>;
+  onSaveLocation: (next: ContactLocationValue) => Promise<void>;
   onSaveRelationship: (field: "role" | "cadence", next: string) => Promise<void>;
 }
 
@@ -41,6 +46,7 @@ export function KeyDetailsSection({
   relationship,
   groupMemberships,
   onSaveContact,
+  onSaveLocation,
   onSaveRelationship,
 }: Props) {
   return (
@@ -77,11 +83,13 @@ export function KeyDetailsSection({
           mono
           onSave={(v) => onSaveContact("birthday", v)}
         />
-        <CompactField
-          label="Area"
-          value={relationship.contact.area ?? ""}
-          placeholder="e.g. Surry Hills"
-          onSave={(v) => onSaveContact("area", v)}
+        <LocationField
+          value={{
+            area: relationship.contact.area,
+            latitude: relationship.contact.latitude,
+            longitude: relationship.contact.longitude,
+          }}
+          onSave={onSaveLocation}
         />
         <CompactField
           label="Occupation"
@@ -123,6 +131,52 @@ function FieldLabel({ children }: { children: ReactNode }) {
   return (
     <div className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
       {children}
+    </div>
+  );
+}
+
+function LocationField({
+  value,
+  onSave,
+}: {
+  value: ContactLocationValue;
+  onSave: (next: ContactLocationValue) => Promise<void>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const display = value.area ?? "";
+  const isEmpty = display.length === 0;
+
+  async function commit(next: ContactLocationValue) {
+    setIsEditing(false);
+    const unchanged =
+      next.area === value.area &&
+      next.latitude === value.latitude &&
+      next.longitude === value.longitude;
+    if (unchanged) return;
+    await onSave(next);
+  }
+
+  const displayClass = cn(
+    "block w-full truncate rounded px-1 py-[2px] text-left text-[14px] leading-[20px]",
+    isEmpty ? "italic text-fg-subtle" : "text-fg",
+    "cursor-text hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
+  );
+
+  return (
+    <div className="min-w-0">
+      <FieldLabel>Location</FieldLabel>
+      {isEditing ? (
+        <LocationPicker
+          value={value}
+          onChange={commit}
+          placeholder="Search city, suburb, or neighbourhood…"
+          autoFocus
+        />
+      ) : (
+        <button type="button" onClick={() => setIsEditing(true)} className={displayClass}>
+          {isEmpty ? "e.g. Surry Hills, Sydney, Australia" : display}
+        </button>
+      )}
     </div>
   );
 }

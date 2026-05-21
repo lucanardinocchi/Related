@@ -7,6 +7,12 @@ export type { DataGridColumn } from "./DataGrid";
 export { Button } from "./Button";
 export type { ButtonProps } from "./Button";
 export { Input } from "./Input";
+export { LocationPicker, SuburbPicker } from "./LocationPicker";
+export type { ContactLocationValue } from "./LocationPicker";
+export {
+  contactLocationFromValue,
+  contactLocationToValue,
+} from "./LocationPicker";
 export { Textarea } from "./Textarea";
 export { Select } from "./Select";
 export { Checkbox } from "./Checkbox";

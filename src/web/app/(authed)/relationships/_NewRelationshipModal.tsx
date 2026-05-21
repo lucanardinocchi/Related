@@ -6,7 +6,8 @@ import { User, Users } from "lucide-react";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { cn } from "@/lib/cn";
 import { FormField } from "@/components/ui/FormField";
-import { Badge, Button, Checkbox, Input, Modal } from "@/components/ui";
+import { Badge, Button, Checkbox, Input, Modal, LocationPicker } from "@/components/ui";
+import type { ContactLocationValue } from "@/components/ui";
 
 type Step = "kind" | "essentials" | "extras";
 type Kind = "individual" | "group";
@@ -57,7 +58,11 @@ export function NewRelationshipModal({ contacts }: Props) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [birthday, setBirthday] = useState("");
-  const [area, setArea] = useState("");
+  const [location, setLocation] = useState<ContactLocationValue>({
+    area: null,
+    latitude: null,
+    longitude: null,
+  });
   const [occupation, setOccupation] = useState("");
   const [education, setEducation] = useState("");
 
@@ -74,7 +79,7 @@ export function NewRelationshipModal({ contacts }: Props) {
     setPhone("");
     setEmail("");
     setBirthday("");
-    setArea("");
+    setLocation({ area: null, latitude: null, longitude: null });
     setOccupation("");
     setEducation("");
     setMemberSearch("");
@@ -154,7 +159,9 @@ export function NewRelationshipModal({ contacts }: Props) {
           phone: phone.trim() || null,
           email: email.trim() || null,
           birthday: birthday.trim() || null,
-          area: area.trim() || null,
+          area: location.area,
+          latitude: location.latitude,
+          longitude: location.longitude,
           occupation: occupation.trim() || null,
           education: education.trim() || null,
         });
@@ -303,12 +310,11 @@ export function NewRelationshipModal({ contacts }: Props) {
                 placeholder="YYYY-MM-DD"
               />
             </FormField>
-            <FormField label="Area" htmlFor="contact-area" hint="Optional">
-              <Input
-                id="contact-area"
-                value={area}
-                onChange={(event) => setArea(event.target.value)}
-                placeholder="City or neighbourhood"
+            <FormField label="Location" htmlFor="contact-location" hint="Optional">
+              <LocationPicker
+                value={location}
+                onChange={setLocation}
+                placeholder="Search city, suburb, or neighbourhood…"
               />
             </FormField>
             <FormField label="Occupation" htmlFor="contact-occupation" hint="Optional">

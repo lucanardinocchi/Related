@@ -54,6 +54,8 @@ function withClient() {
 const NULL_PROFILE = {
   birthday: null,
   area: null,
+  latitude: null,
+  longitude: null,
   occupation: null,
   education: null,
 };
@@ -101,7 +103,9 @@ describe("RelationshipsClient.createContact", () => {
         phone: "+61 400 000 000",
         email: "jules@example.com",
         birthday: "1990-04-12",
-        area: "Surry Hills",
+        area: "Surry Hills, NSW",
+        latitude: -33.8848,
+        longitude: 151.2109,
         occupation: "designer",
         education: "UNSW",
         created_at: "2026-05-17T00:00:00Z",
@@ -114,7 +118,9 @@ describe("RelationshipsClient.createContact", () => {
       phone: "+61 400 000 000",
       email: "jules@example.com",
       birthday: "1990-04-12",
-      area: "Surry Hills",
+      area: "Surry Hills, NSW",
+      latitude: -33.8848,
+      longitude: 151.2109,
       occupation: "designer",
       education: "UNSW",
     });
@@ -124,7 +130,9 @@ describe("RelationshipsClient.createContact", () => {
       phone: "+61 400 000 000",
       email: "jules@example.com",
       birthday: "1990-04-12",
-      area: "Surry Hills",
+      area: "Surry Hills, NSW",
+      latitude: -33.8848,
+      longitude: 151.2109,
       occupation: "designer",
       education: "UNSW",
     });
@@ -153,7 +161,9 @@ describe("RelationshipsClient.updateContact", () => {
         phone: null,
         email: null,
         birthday: null,
-        area: "Newtown",
+        area: "Newtown, NSW",
+        latitude: -33.8969,
+        longitude: 151.1799,
         occupation: "lawyer",
         education: null,
         created_at: "2026-05-17T00:00:00Z",
@@ -162,10 +172,17 @@ describe("RelationshipsClient.updateContact", () => {
     });
     q.eqForUpdate.mockReturnValue({ select: jest.fn(() => ({ single })) });
 
-    await rels.updateContact("c-1", { area: "Newtown", occupation: "lawyer" });
+    await rels.updateContact("c-1", {
+      area: "Newtown, NSW",
+      latitude: -33.8969,
+      longitude: 151.1799,
+      occupation: "lawyer",
+    });
 
     expect(q.update).toHaveBeenCalledWith({
-      area: "Newtown",
+      area: "Newtown, NSW",
+      latitude: -33.8969,
+      longitude: 151.1799,
       occupation: "lawyer",
     });
     expect(q.eqForUpdate).toHaveBeenCalledWith("id", "c-1");
@@ -229,7 +246,9 @@ describe("RelationshipsClient.listRelationships", () => {
             phone: "+61",
             email: "j@x.com",
             birthday: "1990-01-01",
-            area: "Newtown",
+            area: "Newtown, NSW",
+            latitude: -33.8969,
+            longitude: 151.1799,
             occupation: "designer",
             education: null,
             created_at: "2026-05-17T00:30:00Z",
@@ -271,7 +290,9 @@ describe("RelationshipsClient.listRelationships", () => {
           phone: "+61",
           email: "j@x.com",
           birthday: "1990-01-01",
-          area: "Newtown",
+          area: "Newtown, NSW",
+          latitude: -33.8969,
+          longitude: 151.1799,
           occupation: "designer",
           education: null,
           createdAt: "2026-05-17T00:30:00Z",

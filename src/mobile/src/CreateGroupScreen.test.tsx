@@ -42,6 +42,8 @@ function rel(over: Partial<Relationship> = {}): Relationship {
       email: null,
       birthday: null,
       area: null,
+      latitude: null,
+      longitude: null,
       occupation: null,
       education: null,
       createdAt: "2026-05-17T00:00:00Z",

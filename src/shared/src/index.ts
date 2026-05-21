@@ -6,6 +6,19 @@ export type {
   Unsubscribe,
 } from "./auth/AuthClient";
 
+export {
+  placeFromContactLocation,
+  contactLocationFromPlace,
+  contactLocationsMatch,
+} from "./location/place";
+export type { Place, ContactLocation } from "./location/place";
+export { distanceKm, isWithinRadiusKm } from "./location/distance";
+export type { GeoPoint } from "./location/distance";
+export {
+  filterContactsWithinRadius,
+  contactHasLocation,
+} from "./location/filterByRadius";
+
 export { RelationshipsClient } from "./relationships/RelationshipsClient";
 export type {
   Contact,
