@@ -132,6 +132,7 @@ export { UserContextClient } from "./user-context/UserContextClient";
 export type {
   Goal,
   SituationalState,
+  OperatorStrength,
   UserContextClientConfig,
   OwnerIdResolver,
 } from "./user-context/UserContextClient";

@@ -61,7 +61,7 @@ Lifecycle is explicit-close (per ADR-0009): a Chat is `open` (writable, agent re
 _Avoid_: Conversation, thread (overloaded — "Open Thread" already means something else), session (overloaded — "session" is used for Engaged Pass voice).
 
 **Agent Pass**:
-One execution of the Ambient Intelligence loop against a single Relationship. Inputs: the Relationship's current state and history + the full **User Context** (all four flavours, with their current salience) + current Open Threads. Output: a refreshed set of Candidate Actions for the User.
+One execution of the Ambient Intelligence loop against a single Relationship. Inputs: the Relationship's current state and history + the full **User Context** (all five flavours, with their current salience) + current Open Threads. Output: a refreshed set of Candidate Actions for the User.
 _Avoid_: Tick, run, evaluation.
 
 There are three tiers of Pass, distinguished by what triggers them and which model runs them:
@@ -71,11 +71,12 @@ There are three tiers of Pass, distinguished by what triggers them and which mod
 - **Engaged Pass** — runs synchronously when the User starts a voice session focused on a Relationship. Inputs include the live **Transient Intent** captured in that session. Sonnet-class model.
 
 **User Context**:
-Umbrella term for the four sources of state that describe the User and feed every Agent Pass alongside the Relationship being reasoned about. Composed of four distinct flavours, each stored separately, each with its own lifecycle. Their relative influence on agent reasoning is **dynamically weighted** by their current salience — none is permanently dominant.
+Umbrella term for the five sources of state that describe the User and feed every Agent Pass alongside the Relationship being reasoned about. Composed of five distinct flavours, each stored separately, each with its own lifecycle. Their relative influence on agent reasoning is **dynamically weighted** by their current salience — none is permanently dominant.
 
 - **Transient Intent**: ephemeral, captured in chat sessions with the agent. Decays. "Right now I want to plan my birthday."
 - **Situational State**: medium-term, evolves over weeks/months. Reflects where the User is in life. "Just moved to Sydney." Updated explicitly by the User and silently by the agent when surfaced in conversation.
 - **Goals & Values**: long-running, User-authored, edited explicitly when the User decides to add or change one. "Be more present with family." Not inferred.
+- **Operator Profile**: long-running, User-authored, edited explicitly. The User's declared **Strengths** — what they are positioned to offer ("AI/ML expertise", "introductions in the startup world", "a good ear when someone is stuck"). The Ambient Intelligence agent uses this as a **capability filter** on every Pass: a Candidate Action must route through one of the User's declared Strengths, or the agent falls back to `DoNothing`. The intent is to keep proposed help honest — no point proposing a carpentry favour when the User has no carpentry. Empty Operator Profile = no filter applied (treated as unrestricted, with the agent noting the gap on its `why`). Never inferred — the agent does not write to this flavour, only reads from it.
 - **Inferred Signals**: ambient, system-observed signals about the User's current situation. v1 ships **two signals only**: **Calendar density** (7-day forward window, prompt focus on the next 72 hours) and **Sleep** (last 3 days of sleep, prompt focus on the next 48 hours). Both are pulled at a **daily fixed schedule (10 AM User local time)** — explicitly **independent of Agent Pass timing**. **Raw data is persisted** in the User's DB for the relevant window; the agent reads from local storage on every Pass rather than calling external APIs. Sleep source is HealthKit on iOS in v1; Android (Health Connect / Google Fit) is deferred. Location and time-of-day were considered and **explicitly excluded** from v1.
 
 _Avoid_: Profile, preferences, settings (these flatten what is intentionally a multi-source, dynamically-weighted model).

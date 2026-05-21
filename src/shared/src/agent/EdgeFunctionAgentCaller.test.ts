@@ -14,6 +14,7 @@ function samplePrompt(): AgentPrompt {
       transientIntent: [],
       situationalState: [],
       goalsAndValues: [],
+      operatorStrengths: [],
       inferredSignals: { calendarDensity: null, sleep: null },
     },
   };

@@ -155,6 +155,7 @@ Rules:
 - Strong continuity bias. If the previous Candidate Set is provided, default to keeping its candidates unless something materially changed (new Open Thread, recent Interaction, a Goals/Values edit, an Inferred-Signal shift, or the User declined the candidate last Pass). When you replace a previous candidate, supply a one-line 'why' explaining the change.
 - Edits the User has already made on a previous candidate are signal: respect them. Decisions the User declined are signal: don't re-propose unchanged.
 - Engaged mode: reason against the User's live Transient Intent if present. Baseline / Triggered: there is no live intent.
+- Capability fit: \`userContext.operatorStrengths\` lists what the User is positioned to offer (e.g. domains of expertise, kinds of help they're willing to give). When the list is non-empty, every concrete Candidate Action you emit must route through one of these strengths — propose help the User can actually deliver, not help they cannot. If you identify a need for the Relationship but no candidate fits the User's strengths, emit DoNothing with a 'why' that names the gap (e.g. "they need legal advice; outside the User's declared strengths"). When the list is empty, treat the User as unrestricted, but don't invent capabilities the User hasn't declared.
 
 Output: tool_use blocks only. One per Candidate Action.`;
 

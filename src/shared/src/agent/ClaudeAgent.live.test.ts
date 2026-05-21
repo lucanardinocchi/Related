@@ -62,6 +62,10 @@ describe("ClaudeAgent.propose — live Anthropic call", () => {
         ],
         situationalState: ["Just moved to Sydney; settling in"],
         goalsAndValues: ["Be present with close friends, not just family"],
+        operatorStrengths: [
+          "A good ear when a close friend's stuck",
+          "Help thinking through career moves",
+        ],
         inferredSignals: { calendarDensity: null, sleep: null },
       },
       liveContext: { sessionId: "sess-test", userTurn: "what should I do about Sam" },

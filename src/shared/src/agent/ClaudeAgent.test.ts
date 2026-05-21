@@ -17,6 +17,7 @@ function samplePrompt(over: Partial<AgentPrompt> = {}): AgentPrompt {
       transientIntent: [],
       situationalState: [],
       goalsAndValues: [],
+      operatorStrengths: [],
       inferredSignals: { calendarDensity: null, sleep: null },
     },
     ...over,
@@ -99,6 +100,7 @@ describe("ClaudeAgent.propose", () => {
         transientIntent: ["plan a low-key catch-up"],
         situationalState: ["Just moved to Sydney"],
         goalsAndValues: ["Be more present with family"],
+        operatorStrengths: ["A good ear when someone's stuck"],
         inferredSignals: { calendarDensity: null, sleep: null },
       },
     });

@@ -12,6 +12,10 @@ function makeMock(): MockedUC {
     deleteGoal: jest.fn(),
     getSituationalState: jest.fn().mockResolvedValue(null),
     setSituationalState: jest.fn(),
+    listOperatorStrengths: jest.fn().mockResolvedValue([]),
+    addOperatorStrength: jest.fn(),
+    updateOperatorStrength: jest.fn(),
+    deleteOperatorStrength: jest.fn(),
   };
 }
 

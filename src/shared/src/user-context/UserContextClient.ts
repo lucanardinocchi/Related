@@ -14,6 +14,13 @@ export interface SituationalState {
   updatedAt: string;
 }
 
+export interface OperatorStrength {
+  id: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UserContextClientConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
@@ -33,6 +40,13 @@ interface SituationalStateRow {
   updated_at: string;
 }
 
+interface OperatorStrengthRow {
+  id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 function toGoal(row: GoalRow): Goal {
   return {
     id: row.id,
@@ -43,6 +57,15 @@ function toGoal(row: GoalRow): Goal {
 }
 
 function toState(row: SituationalStateRow): SituationalState {
+  return {
+    id: row.id,
+    content: row.content,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toOperatorStrength(row: OperatorStrengthRow): OperatorStrength {
   return {
     id: row.id,
     content: row.content,
@@ -136,5 +159,41 @@ export class UserContextClient {
       .single();
     if (error) throw error;
     return toState(data as SituationalStateRow);
+  }
+
+  async listOperatorStrengths(): Promise<OperatorStrength[]> {
+    const { data, error } = await this.client
+      .from("operator_strengths")
+      .select("id, content, created_at, updated_at")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return ((data ?? []) as OperatorStrengthRow[]).map(toOperatorStrength);
+  }
+
+  async addOperatorStrength(content: string): Promise<OperatorStrength> {
+    const ownerId = await this.resolveOwnerId();
+    const { data, error } = await this.client
+      .from("operator_strengths")
+      .insert({ owner_id: ownerId, content })
+      .select()
+      .single();
+    if (error) throw error;
+    return toOperatorStrength(data as OperatorStrengthRow);
+  }
+
+  async updateOperatorStrength(id: string, content: string): Promise<void> {
+    const { error } = await this.client
+      .from("operator_strengths")
+      .update({ content })
+      .eq("id", id);
+    if (error) throw error;
+  }
+
+  async deleteOperatorStrength(id: string): Promise<void> {
+    const { error } = await this.client
+      .from("operator_strengths")
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
   }
 }

@@ -34,6 +34,13 @@ export interface UserContextSnapshot {
   transientIntent: string[];
   situationalState: string[];
   goalsAndValues: string[];
+  /**
+   * Operator Profile — the User's declared Strengths. Capability filter on
+   * every Pass: the agent only proposes Candidate Actions that route
+   * through one of these. Empty array = no filter (agent treats the
+   * Operator Profile as undeclared).
+   */
+  operatorStrengths: string[];
   inferredSignals: {
     calendarDensity: CalendarDensitySignal | null;
     sleep: SleepSignal | null;
@@ -74,6 +81,7 @@ export class UserContextBuilder {
   ): Promise<UserContextSnapshot> {
     const goals = await this.loadGoals();
     const situational = await this.loadSituationalState();
+    const operatorStrengths = await this.loadOperatorStrengths();
     const calendarDensity = await this.loadCalendarDensity(asOf);
     const sleep = await this.loadSleep(asOf);
     const transientIntent =
@@ -87,6 +95,7 @@ export class UserContextBuilder {
       transientIntent,
       situationalState: situational,
       goalsAndValues: goals,
+      operatorStrengths,
       inferredSignals: { calendarDensity, sleep },
     };
   }
@@ -99,6 +108,16 @@ export class UserContextBuilder {
       .order("created_at", { ascending: true });
     if (error) throw error;
     return ((data ?? []) as GoalRow[]).map((r) => r.content);
+  }
+
+  private async loadOperatorStrengths(): Promise<string[]> {
+    if (!this.supabase) return [];
+    const { data, error } = await this.supabase
+      .from("operator_strengths")
+      .select("content")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return ((data ?? []) as { content: string }[]).map((r) => r.content);
   }
 
   private async loadSituationalState(): Promise<string[]> {

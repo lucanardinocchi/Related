@@ -30,6 +30,7 @@ describe("UserContextBuilder.buildUserContext — Slice 10", () => {
       transientIntent: [],
       situationalState: [],
       goalsAndValues: [],
+      operatorStrengths: [],
       inferredSignals: { calendarDensity: null, sleep: null },
     });
   });
@@ -193,5 +194,27 @@ describe("UserContextBuilder.buildUserContext — Slice 10", () => {
 
     expect(snapshot.goalsAndValues).toEqual([]);
     expect(snapshot.situationalState).toEqual([]);
+    expect(snapshot.operatorStrengths).toEqual([]);
+  });
+
+  it("populates Operator Strengths from operator_strengths when rows exist", async () => {
+    const q = makeQueryMock();
+    q.order.mockResolvedValue({
+      data: [{ content: "AI/ML expertise" }, { content: "intros in startups" }],
+      error: null,
+    });
+    q.maybeSingle.mockResolvedValue({ data: null, error: null });
+    q.lte.mockResolvedValue({ data: [], error: null });
+    q.lt.mockResolvedValue({ data: [], error: null });
+    const supa = { from: q.from } as unknown as SupabaseClient;
+
+    const builder = new UserContextBuilder({ supabase: supa });
+    const snapshot = await builder.buildUserContext("u-1", new Date());
+
+    expect(snapshot.operatorStrengths).toEqual([
+      "AI/ML expertise",
+      "intros in startups",
+    ]);
+    expect(q.from).toHaveBeenCalledWith("operator_strengths");
   });
 });

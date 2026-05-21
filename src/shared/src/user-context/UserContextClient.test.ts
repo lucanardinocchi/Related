@@ -137,3 +137,79 @@ describe("UserContextClient — Situational State", () => {
     );
   });
 });
+
+describe("UserContextClient — Operator Strengths", () => {
+  it("listOperatorStrengths returns the User's strengths newest-first", async () => {
+    const { q, client } = withClient();
+    q.order.mockResolvedValue({
+      data: [
+        {
+          id: "s-2",
+          content: "intros in startups",
+          created_at: "2026-05-02",
+          updated_at: "2026-05-02",
+        },
+        {
+          id: "s-1",
+          content: "AI/ML expertise",
+          created_at: "2026-05-01",
+          updated_at: "2026-05-01",
+        },
+      ],
+      error: null,
+    });
+
+    const result = await client.listOperatorStrengths();
+    expect(q.from).toHaveBeenCalledWith("operator_strengths");
+    expect(result.map((r) => r.content)).toEqual([
+      "intros in startups",
+      "AI/ML expertise",
+    ]);
+  });
+
+  it("addOperatorStrength inserts a row tagged with the resolved owner_id", async () => {
+    const { q, client } = withClient();
+    q.single.mockResolvedValue({
+      data: {
+        id: "s-new",
+        content: "AI/ML expertise",
+        created_at: "2026-05-19",
+        updated_at: "2026-05-19",
+      },
+      error: null,
+    });
+
+    const s = await client.addOperatorStrength("AI/ML expertise");
+    expect(q.insert).toHaveBeenCalledWith({
+      owner_id: "u-1",
+      content: "AI/ML expertise",
+    });
+    expect(s).toEqual({
+      id: "s-new",
+      content: "AI/ML expertise",
+      createdAt: "2026-05-19",
+      updatedAt: "2026-05-19",
+    });
+  });
+
+  it("updateOperatorStrength rewrites the content for a single id", async () => {
+    const { q, client } = withClient();
+    q.eq.mockReturnValue({ single: q.single } as never);
+    q.single.mockResolvedValue({ data: null, error: null });
+
+    await client.updateOperatorStrength("s-1", "Edited strength");
+
+    expect(q.update).toHaveBeenCalledWith({ content: "Edited strength" });
+    expect(q.eq).toHaveBeenCalledWith("id", "s-1");
+  });
+
+  it("deleteOperatorStrength removes by id", async () => {
+    const { q, client } = withClient();
+    q.eq.mockReturnValue({ single: q.single } as never);
+    q.single.mockResolvedValue({ data: null, error: null });
+
+    await client.deleteOperatorStrength("s-1");
+    expect(q.deleteFn).toHaveBeenCalled();
+    expect(q.eq).toHaveBeenCalledWith("id", "s-1");
+  });
+});
