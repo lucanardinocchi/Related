@@ -166,6 +166,22 @@ See:
 - [`src/mobile/modules/healthkit/README.md`](../src/mobile/modules/healthkit/README.md) for the HealthKit native build steps
 - The App Store readiness checklist (Sign in with Apple, privacy policy, microphone consent) tracked separately
 
+## Seeding demo data for a User
+
+To wipe and re-seed the full domain dataset for a signed-up account (default: `lucanardinocchi@gmail.com`):
+
+```sh
+cd src/backend
+SUPABASE_URL="https://<ref>.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="<service_role>" \
+SUPABASE_ANON_KEY="<anon>" \
+node scripts/seed-user.mjs
+```
+
+The script clears all `owner_id`-scoped rows for that User, then inserts contacts, groups, relationships (with role/cadence), interactions, open threads, user context, inferred signals, candidate sets, chats, and onboarding state. Interactions and open threads use the User's RPCs (`create_interaction`, `create_open_thread`) so Postgres constraint triggers pass in a single transaction.
+
+Optional: `SEED_EMAIL=other@example.com` or `SEED_CLEAR_ONLY=1` (wipe only).
+
 ## Troubleshooting
 
 **"Missing NEXT_PUBLIC_SUPABASE_URL" at build time** — env vars must be set in Vercel BEFORE the build runs. Set them, then trigger a redeploy. (The env helpers in `src/web/lib/supabase/*` defer the check to call time so `next build` itself doesn't require secrets, but the deployed app does.)
