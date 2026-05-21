@@ -3,6 +3,7 @@ import type {
   AgentService,
   AuthClient,
   CandidatesClient,
+  ChatsClient,
   GroupsClient,
   InteractionsClient,
   OnboardingClient,
@@ -94,6 +95,14 @@ function makeMockCandidatesClient(): CandidatesClient {
   } as unknown as CandidatesClient;
 }
 
+function makeMockChatsClient(): ChatsClient {
+  return {
+    listChats: jest.fn().mockResolvedValue([]),
+    listMessages: jest.fn().mockResolvedValue([]),
+    createChat: jest.fn(),
+  } as unknown as ChatsClient;
+}
+
 function makeMockUserContextClient(): UserContextClient {
   return {
     listGoals: jest.fn().mockResolvedValue([]),
@@ -139,6 +148,7 @@ describe("<AuthGate />", () => {
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
+        chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
         navigate={jest.fn()}
@@ -167,6 +177,7 @@ describe("<AuthGate />", () => {
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
+        chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
         navigate={jest.fn()}
@@ -196,6 +207,7 @@ describe("<AuthGate />", () => {
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
+        chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
         navigate={jest.fn()}
@@ -235,6 +247,7 @@ describe("<AuthGate />", () => {
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
+        chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
         navigate={jest.fn()}
@@ -273,6 +286,7 @@ describe("<AuthGate />", () => {
         userContextClient={makeMockUserContextClient()}
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
+        chatsClient={makeMockChatsClient()}
         userProviderTokensClient={makeMockUserProviderTokensClient()}
         oauthRedirectTo="https://app.example/onboarding"
         navigate={jest.fn()}

@@ -131,43 +131,30 @@ supabase db push
 - `20260521000001_chats_messages.sql` — `chats` + `chat_messages` tables with owner-only RLS.
 - `20260521000002_chats_extracted_at.sql` — Extraction idempotency stamp.
 
-## Tier 3.2 — Mobile Conversational surface (~10 min, requires expo-audio)
+## Tier 3.2 — Mobile Conversational surface
 
-Per the [ADR-0009 mobile amendment](adr/0009-three-agent-architecture.md), the Conversational Intelligence Chat tab now ships on mobile alongside web. The Chat tab is wired into `AuthedApp`'s bottom-tab navigator and hits the **same** `chat-respond` / `extract-context` Edge Functions and **same** `chats` / `chat_messages` tables — multi-tenant isolation flows from Supabase RLS, so a User's Chats sync across web and mobile for the same account.
+Per the [ADR-0009 mobile amendment](adr/0009-three-agent-architecture.md), the Conversational Intelligence Chat tab ships on mobile alongside web. The Chat tab is wired into `AuthedApp`'s bottom-tab navigator and hits the **same** `chat-respond` / `extract-context` Edge Functions and **same** `chats` / `chat_messages` tables — multi-tenant isolation flows from Supabase RLS, so a User's Chats sync across web and mobile for the same account.
 
-To enable native iOS voice capture (the mobile Chat tab's primary UX) install the audio module:
+Native voice capture and TTS auto-playback are wired through `expo-audio` + `expo-file-system`:
+
+- `src/mobile/src/voice/createMobileMicCapture.ts` — binds `AudioModule.AudioRecorder` to the platform-agnostic adapter contract from `ExpoAudioRecorder.ts`.
+- `src/mobile/src/voice/createMobileAudioPlayer.ts` — implements the shared `AudioPlayer` port using `createAudioPlayer` against a temp file in `Paths.cache/tts/`.
+- `src/mobile/App.tsx` constructs both, gates them behind `Platform.OS === 'ios' || 'android'` (text-only on Expo Web for now), and threads them through `AuthGate` → `AuthedApp` → `MobileChatScreen`.
+
+Microphone permission is configured via the `expo-audio` config plugin in `src/mobile/app.json` — Expo prompts on first mic use with the message:
+
+> "Related uses your microphone so you can talk to the agent and have your context captured automatically."
+
+If you change Expo SDK or add other native modules, regenerate the iOS / Android binaries:
 
 ```sh
 cd src/mobile
-npx expo install expo-audio expo-file-system
+npx expo prebuild        # if using bare workflow / EAS Build
+# or rebuild with EAS:
+eas build --platform ios
 ```
 
-Then in `src/mobile/App.tsx`, wire the mic + TTS playback into the `AuthedApp` chat tab:
-
-```ts
-import { AudioModule, Recording, RecordingPresets } from "expo-audio";
-import * as FS from "expo-file-system";
-import { startExpoAudioCapture } from "./src/voice/ExpoAudioRecorder";
-import { createTTSPlayback } from "@related/shared";
-
-const startMicCapture = () =>
-  startExpoAudioCapture({
-    audio: { /* expo-audio adapter — see src/mobile/src/voice/ExpoAudioRecorder.ts */ },
-    fetchUri: async (uri) => {
-      const b64 = await FS.readAsStringAsync(uri, { encoding: FS.EncodingType.Base64 });
-      return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    },
-  });
-
-const ttsPlayback = createTTSPlayback({
-  ttsAdapter,                  // existing ElevenLabsTTSAdapter
-  player: { /* expo-audio Sound wrapper */ },
-});
-```
-
-Pass these into `<AuthedApp ... startMicCapture={startMicCapture} sttAdapter={sttAdapter} ttsPlayback={ttsPlayback} />`. Without them the Chat tab still works (text-only); with them, mic + auto-TTS turn on.
-
-iOS-only consents (`NSMicrophoneUsageDescription`) live in `app.json` — Expo prompts on first mic use.
+For day-to-day development with Expo Go, no rebuild needed — `expo-audio` is included.
 
 ## Tier 4 — iOS native (HealthKit, push, App Store)
 

@@ -15,9 +15,12 @@ import type {
   OpenThreadsClient,
   Relationship,
   RelationshipsClient,
+  STTAdapter,
+  TTSPlayback,
   UserContextClient,
   VoiceSessionManager,
 } from "@related/shared";
+import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
 import { AddContactScreen } from "./AddContactScreen";
 import { AgentScreen } from "./AgentScreen";
 import { CalendarScreen } from "./CalendarScreen";
@@ -43,6 +46,13 @@ export interface AuthedAppProps {
    * powers the Chat tab. Same `chats` / `chat_messages` tables as web.
    */
   chatsClient: ChatsClient;
+  /**
+   * Conversational Chat voice plumbing. Threaded into MobileChatScreen
+   * — undefined on Expo Web (text-only fallback) or tests.
+   */
+  chatStartMicCapture?: () => Promise<AudioCaptureHandle>;
+  chatSttAdapter?: STTAdapter;
+  chatTTSPlayback?: TTSPlayback;
   /** Optional voice pipeline — surfaces the Mic toggle in AgentScreen. */
   voiceSessionManager?: VoiceSessionManager;
   onSignOut: () => void;
@@ -231,6 +241,9 @@ export function AuthedApp({
   userContextClient,
   agentService,
   chatsClient,
+  chatStartMicCapture,
+  chatSttAdapter,
+  chatTTSPlayback,
   voiceSessionManager,
   onSignOut,
 }: AuthedAppProps) {
@@ -259,7 +272,14 @@ export function AuthedApp({
           )}
         </Tab.Screen>
         <Tab.Screen name="Chat">
-          {() => <MobileChatScreen chatsClient={chatsClient} />}
+          {() => (
+            <MobileChatScreen
+              chatsClient={chatsClient}
+              startMicCapture={chatStartMicCapture}
+              sttAdapter={chatSttAdapter}
+              ttsPlayback={chatTTSPlayback}
+            />
+          )}
         </Tab.Screen>
         <Tab.Screen name="Relationships">
           {() => (

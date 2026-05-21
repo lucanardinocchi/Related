@@ -28,7 +28,13 @@
     },
     "plugins": [
       "expo-font",
-      "./plugins/withHealthKit"
+      "./plugins/withHealthKit",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Related uses your microphone so you can talk to the agent and have your context captured automatically."
+        }
+      ]
     ]
   }
 }

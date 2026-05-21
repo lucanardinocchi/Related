@@ -10,10 +10,13 @@ import type {
   OpenThreadsClient,
   RelationshipsClient,
   Session,
+  STTAdapter,
+  TTSPlayback,
   UserContextClient,
   UserProviderTokensClient,
   VoiceSessionManager,
 } from "@related/shared";
+import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
 import { AuthedApp } from "./AuthedApp";
 import { OnboardingScreen } from "./OnboardingScreen";
 import { SignInScreen } from "./SignInScreen";
@@ -30,6 +33,14 @@ export interface AuthGateProps {
   agentService: AgentService;
   /** Conversational Intelligence client (per ADR-0009 mobile amendment). */
   chatsClient: ChatsClient;
+  /**
+   * Conversational Chat voice plumbing. All three are optional so the
+   * Chat tab degrades to text-only on platforms without native audio
+   * (Expo Web) or in tests. Pass them together for the mic + TTS UX.
+   */
+  chatStartMicCapture?: () => Promise<AudioCaptureHandle>;
+  chatSttAdapter?: STTAdapter;
+  chatTTSPlayback?: TTSPlayback;
   /**
    * Optional. When provided, threads through into AgentScreen so the
    * Mic toggle renders. Omitted in tests that don't exercise voice.
@@ -59,6 +70,9 @@ export function AuthGate({
   onboardingClient,
   agentService,
   chatsClient,
+  chatStartMicCapture,
+  chatSttAdapter,
+  chatTTSPlayback,
   voiceSessionManager,
   userProviderTokensClient,
   oauthRedirectTo,
@@ -136,6 +150,9 @@ export function AuthGate({
       userContextClient={userContextClient}
       agentService={agentService}
       chatsClient={chatsClient}
+      chatStartMicCapture={chatStartMicCapture}
+      chatSttAdapter={chatSttAdapter}
+      chatTTSPlayback={chatTTSPlayback}
       voiceSessionManager={voiceSessionManager}
       onSignOut={() => {
         void authClient.signOut();

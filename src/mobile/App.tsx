@@ -14,6 +14,7 @@ import {
   AuthClient,
   CandidatesClient,
   ChatsClient,
+  createTTSPlayback,
   ElevenLabsTTSAdapter,
   GroupsClient,
   InteractionsClient,
@@ -29,6 +30,8 @@ import {
 } from "@related/shared";
 import { Platform } from "react-native";
 import { AuthGate } from "./src/AuthGate";
+import { createMobileAudioPlayer } from "./src/voice/createMobileAudioPlayer";
+import { createMobileMicCapture } from "./src/voice/createMobileMicCapture";
 import {
   iosHealthKitSleepAdapter,
   requestPermissionAsync as requestHealthKitPermission,
@@ -85,8 +88,10 @@ const messageComposer = new SystemLinkingComposer({
 const agentService = new AgentService({ supabase, messageComposer });
 
 // Voice pipeline: real STT/TTS adapters proxy through Edge Functions so
-// API keys never reach the client bundle (ADR-0006). On native the
-// recorder is a no-op for now — see the header comment in AgentScreen.
+// API keys never reach the client bundle (ADR-0006). The native
+// recorder is now wired through `createMobileMicCapture` (expo-audio +
+// expo-file-system) so the Conversational Chat tab works end-to-end on
+// device, not just web.
 const sttAdapter = new OpenAIWhisperSTTAdapter({ supabase });
 const ttsAdapter = new ElevenLabsTTSAdapter({ supabase });
 const voiceSessionManager = new VoiceSessionManager({
@@ -94,6 +99,21 @@ const voiceSessionManager = new VoiceSessionManager({
   ttsAdapter,
   agentService,
 });
+
+// Conversational Intelligence voice plumbing per ADR-0009 mobile
+// amendment. Mic + auto-TTS only render on iOS / Android — Expo Web
+// has its own MediaRecorder pipeline (the existing _recorder.ts on
+// web), which we re-route through the Conversational tab in the future
+// if we ship Expo Web. Today: native-only, undefined on web so the
+// composer falls back to text-only.
+const isNative = Platform.OS === "ios" || Platform.OS === "android";
+const mobileTTSPlayback = isNative
+  ? createTTSPlayback({
+      ttsAdapter,
+      player: createMobileAudioPlayer(),
+    })
+  : undefined;
+const mobileMicCapture = isNative ? createMobileMicCapture : undefined;
 
 // Where Supabase sends the User back after OAuth consent.
 // Web: same origin (Vercel URL or localhost during dev).
@@ -149,6 +169,9 @@ export default function App() {
         onboardingClient={onboardingClient}
         agentService={agentService}
         chatsClient={chatsClient}
+        chatStartMicCapture={mobileMicCapture}
+        chatSttAdapter={isNative ? sttAdapter : undefined}
+        chatTTSPlayback={mobileTTSPlayback}
         voiceSessionManager={voiceSessionManager}
         userProviderTokensClient={userProviderTokensClient}
         oauthRedirectTo={oauthRedirectTo}

@@ -19,6 +19,8 @@
     "@related/shared": "*",
     "@supabase/supabase-js": "^2.46.1",
     "expo": "~54.0.33",
+    "expo-audio": "~1.1.1",
+    "expo-file-system": "~19.0.22",
     "expo-font": "~14.0.11",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
