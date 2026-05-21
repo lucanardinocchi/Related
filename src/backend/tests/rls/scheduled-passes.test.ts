@@ -133,6 +133,35 @@ describe("Pass scheduler", () => {
     ]);
   });
 
+  test("schedule_triggered_pass() enqueues a Triggered Pass for an owned Relationship", async () => {
+    const { error: rpcErr } = await userA.client.rpc("schedule_triggered_pass", {
+      p_relationship_id: aRelationshipId,
+      p_reason: "candidate_decision",
+    });
+    expect(rpcErr).toBeNull();
+
+    const { data: scheduled } = await adminClient
+      .from("scheduled_passes")
+      .select("relationship_id, mode, reason, dispatched_at")
+      .eq("owner_id", userA.id);
+    expect(scheduled).toEqual([
+      {
+        relationship_id: aRelationshipId,
+        mode: "triggered",
+        reason: "candidate_decision",
+        dispatched_at: null,
+      },
+    ]);
+  });
+
+  test("schedule_triggered_pass() rejects a Relationship the caller does not own", async () => {
+    const { error: rpcErr } = await userB.client.rpc("schedule_triggered_pass", {
+      p_relationship_id: aRelationshipId,
+      p_reason: "candidate_decision",
+    });
+    expect(rpcErr).not.toBeNull();
+  });
+
   test("schedule_baseline_passes() enqueues a Baseline Pass for every Relationship the User owns", async () => {
     // Add a second Relationship (via Contact insert) so the function clearly
     // enqueues one per Relationship rather than one per User.

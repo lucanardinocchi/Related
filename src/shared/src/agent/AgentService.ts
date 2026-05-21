@@ -10,6 +10,7 @@ import {
   type MessageComposer,
   type TriggeredPassScheduler,
 } from "./Executor";
+import { createDefaultTriggeredPassScheduler } from "./TriggeredPassScheduler";
 import {
   PassEngine,
   type AgentCaller,
@@ -40,9 +41,8 @@ export interface AgentServiceOptions {
   userContextBuilder?: UserContextBuilder;
   messageComposer?: MessageComposer;
   /**
-   * Triggered Pass dispatcher. Defaults to a no-op — the scheduler infra
-   * (pg_cron / NOTIFY) lands in a future slice; the Executor still records
-   * the decision and the next user-initiated Pass picks up the new state.
+   * Triggered Pass dispatcher. Defaults to `schedule_triggered_pass` RPC
+   * (enqueue on `scheduled_passes`). Override in tests.
    */
   scheduleTriggeredPass?: TriggeredPassScheduler;
   /**
@@ -100,7 +100,8 @@ export class AgentService {
     this.executor = new Executor({
       supabase: opts.supabase,
       scheduleTriggeredPass:
-        opts.scheduleTriggeredPass ?? (async () => undefined),
+        opts.scheduleTriggeredPass ??
+        createDefaultTriggeredPassScheduler(opts.supabase),
       messageComposer: opts.messageComposer,
     });
   }
