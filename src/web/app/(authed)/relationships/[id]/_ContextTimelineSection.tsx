@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import type {
   Interaction,
   InteractionCategory,
   InteractionStatus,
+  OpenThread,
 } from "@related/shared";
 import {
   Badge,
@@ -22,57 +23,34 @@ import {
   fromLocalDtInput,
   toLocalDtInput,
 } from "./_dateFormat";
+import { AddContextModal, type AddContextResult } from "./_AddContextModal";
+import {
+  commsKindLabel,
+  contextFamilyFromInteraction,
+  isCommsKind,
+  timelineVisualForInteraction,
+  timelineVisualForOpenThread,
+  toneClasses,
+  type ContextFamily,
+} from "./_contextTypes";
 
-const CONTEXT_KINDS = [
+const EDIT_KINDS = [
   "note",
   "event",
+  "commitment",
   "email",
+  "imessage",
   "sms",
   "phone_call",
   "whatsapp",
   "instagram_dm",
   "x_dm",
+  "tiktok_dm",
 ] as const;
-
-const KIND_LABEL: Record<string, string> = {
-  note: "Note",
-  event: "Event",
-  email: "Email",
-  sms: "SMS",
-  phone_call: "Phone call",
-  whatsapp: "WhatsApp",
-  instagram_dm: "Instagram DM",
-  x_dm: "X DM",
-};
-
-function kindLabel(kind: string): string {
-  return KIND_LABEL[kind] ?? kind;
-}
-
-const CATEGORIES: InteractionCategory[] = [
-  "personal",
-  "meeting",
-  "activity",
-  "work",
-  "errands",
-];
-
-const STATUSES: InteractionStatus[] = [
-  "occurred",
-  "planned",
-  "attended",
-  "missed",
-  "cancelled",
-];
-
-function statusTone(s: InteractionStatus): "approved" | "sent" | "lost" {
-  if (s === "occurred" || s === "attended") return "approved";
-  if (s === "planned") return "sent";
-  return "lost";
-}
 
 interface Props {
   interactions: Interaction[];
+  openThreads?: OpenThread[];
   onAdd: (input: {
     time: string;
     kind: string;
@@ -80,6 +58,7 @@ interface Props {
     notes: string | null;
     status: InteractionStatus;
   }) => Promise<void>;
+  onAddFromModal?: (result: AddContextResult) => Promise<void>;
   onEdit: (
     id: string,
     patch: Partial<{
@@ -93,64 +72,145 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
 }
 
+type TimelineItem =
+  | { key: string; sortTime: number; kind: "interaction"; data: Interaction }
+  | { key: string; sortTime: number; kind: "thread"; data: OpenThread };
+
 export function ContextTimelineSection({
   interactions,
+  openThreads = [],
   onAdd,
+  onAddFromModal,
   onEdit,
   onDelete,
 }: Props) {
-  const [adding, setAdding] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const items = useMemo(() => buildTimelineItems(interactions, openThreads), [
+    interactions,
+    openThreads,
+  ]);
+
+  async function handleModalSubmit(result: AddContextResult) {
+    if (onAddFromModal) {
+      await onAddFromModal(result);
+      return;
+    }
+    if (result.interaction) {
+      await onAdd({
+        time: result.time,
+        kind: result.interaction.kind,
+        category: result.interaction.category,
+        notes: result.notes,
+        status: result.interaction.status,
+      });
+    }
+  }
 
   return (
-    <Section
-      title="Context"
-      meta={
-        interactions.length === 0
-          ? undefined
-          : `${interactions.length} entr${interactions.length === 1 ? "y" : "ies"}`
-      }
-      actions={
-        adding ? null : (
+    <>
+      <Section
+        title="Context"
+        meta={
+          items.length === 0
+            ? undefined
+            : `${items.length} entr${items.length === 1 ? "y" : "ies"}`
+        }
+        actions={
           <Button
             variant="ghost"
             size="sm"
             leading={<Plus size={14} />}
-            onClick={() => setAdding(true)}
+            onClick={() => setModalOpen(true)}
           >
             Add context
           </Button>
-        )
-      }
-    >
-      {adding && (
-        <ContextEntryEditor
-          mode="create"
-          onSubmit={async (input) => {
-            await onAdd(input);
-            setAdding(false);
-          }}
-          onCancel={() => setAdding(false)}
-        />
-      )}
+        }
+      >
+        {items.length === 0 ? (
+          <EmptyState
+            title="No context yet"
+            description="Interactions, notes, comms, and commitments — everything you'd like the agent to remember."
+          />
+        ) : (
+          <ol className="divide-y divide-divider">
+            {items.map((item) =>
+              item.kind === "thread" ? (
+                <PlannedCommitmentRow key={item.key} thread={item.data} />
+              ) : (
+                <ContextEntry
+                  key={item.key}
+                  entry={item.data}
+                  onEdit={(patch) => onEdit(item.data.id, patch)}
+                  onDelete={() => onDelete(item.data.id)}
+                />
+              ),
+            )}
+          </ol>
+        )}
+      </Section>
 
-      {interactions.length === 0 && !adding ? (
-        <EmptyState
-          title="No context yet"
-          description="Notes, calls, messages, events — everything you'd like the agent to remember about this person."
-        />
-      ) : (
-        <ol className="divide-y divide-divider">
-          {interactions.map((i) => (
-            <ContextEntry
-              key={i.id}
-              entry={i}
-              onEdit={(patch) => onEdit(i.id, patch)}
-              onDelete={() => onDelete(i.id)}
-            />
-          ))}
-        </ol>
-      )}
-    </Section>
+      <AddContextModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSubmit={handleModalSubmit}
+      />
+    </>
+  );
+}
+
+function buildTimelineItems(
+  interactions: Interaction[],
+  openThreads: OpenThread[],
+): TimelineItem[] {
+  const rows: TimelineItem[] = [
+    ...interactions.map((i) => ({
+      key: `i-${i.id}`,
+      sortTime: new Date(i.time).getTime(),
+      kind: "interaction" as const,
+      data: i,
+    })),
+    ...openThreads
+      .filter((t) => t.closedAt === null)
+      .map((t) => ({
+        key: `t-${t.id}`,
+        sortTime: new Date(t.createdAt).getTime(),
+        kind: "thread" as const,
+        data: t,
+      })),
+  ];
+  return rows.sort((a, b) => b.sortTime - a.sortTime);
+}
+
+function PlannedCommitmentRow({ thread }: { thread: OpenThread }) {
+  const visual = timelineVisualForOpenThread(thread);
+  const tones = toneClasses(visual.tone);
+
+  return (
+    <li className="grid grid-cols-[150px_1fr] items-start gap-4 py-3">
+      <div className="select-none pt-[1px] font-[family-name:var(--font-jetbrains-mono)] text-[12px] leading-[18px] tabular-nums text-fg-muted">
+        <div>{fmtDay(thread.createdAt)}</div>
+        <div className="text-fg-subtle">{fmtTime(thread.createdAt)}</div>
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`text-[11px] font-medium uppercase tracking-[0.06em] ${tones.family}`}
+          >
+            {visual.familyLabel}
+          </span>
+          {visual.timingLabel && (
+            <Badge tone={tones.timing}>{visual.timingLabel}</Badge>
+          )}
+        </div>
+        <div className="mt-1 text-[14px] font-medium text-fg">
+          {visual.headline}
+        </div>
+        <p className="mt-1 text-[12px] text-fg-subtle">
+          Open in Open threads below
+        </p>
+      </div>
+    </li>
   );
 }
 
@@ -172,12 +232,16 @@ function ContextEntry({
   onDelete: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
+  const visual = timelineVisualForInteraction(entry);
+  const tones = toneClasses(visual.tone);
+  const family = contextFamilyFromInteraction(entry);
 
   if (editing) {
     return (
       <li className="py-3">
         <ContextEntryEditor
           mode="edit"
+          family={family}
           initial={{
             time: entry.time,
             kind: entry.kind,
@@ -199,8 +263,6 @@ function ContextEntry({
     );
   }
 
-  const showStatusBadge = entry.status !== "occurred";
-
   return (
     <li className="group grid grid-cols-[150px_1fr_auto] items-start gap-4 py-3">
       <div className="select-none pt-[1px] font-[family-name:var(--font-jetbrains-mono)] text-[12px] leading-[18px] tabular-nums text-fg-muted">
@@ -211,19 +273,24 @@ function ContextEntry({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="rounded text-left hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+        className="min-w-0 rounded text-left hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
       >
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[14px] font-medium text-fg">
-            {kindLabel(entry.kind)}
+          <span
+            className={`text-[11px] font-medium uppercase tracking-[0.06em] ${tones.family}`}
+          >
+            {visual.familyLabel}
           </span>
-          {showStatusBadge && (
-            <Badge tone={statusTone(entry.status)}>{entry.status}</Badge>
+          {visual.timingLabel && (
+            <Badge tone={tones.timing}>{visual.timingLabel}</Badge>
           )}
         </div>
-        {entry.notes && (
+        <div className="mt-1 text-[14px] font-medium text-fg">
+          {visual.headline}
+        </div>
+        {visual.subline && (
           <div className="mt-1 whitespace-pre-wrap text-[14px] leading-[22px] text-fg-muted">
-            {entry.notes}
+            {visual.subline}
           </div>
         )}
       </button>
@@ -250,12 +317,14 @@ interface ContextEditorValue {
 
 function ContextEntryEditor({
   mode,
+  family,
   initial,
   onSubmit,
   onCancel,
   onDelete,
 }: {
   mode: "create" | "edit";
+  family: ContextFamily;
   initial?: ContextEditorValue;
   onSubmit: (input: ContextEditorValue) => Promise<void>;
   onCancel: () => void;
@@ -274,11 +343,16 @@ function ContextEntryEditor({
   const [busy, setBusy] = useState(false);
 
   const kindOptions = (() => {
-    const seen = new Set<string>(CONTEXT_KINDS);
+    const base = [...EDIT_KINDS];
+    const seen = new Set<string>(base);
     const extras: string[] = [];
     if (initial && !seen.has(initial.kind)) extras.push(initial.kind);
-    return [...CONTEXT_KINDS, ...extras];
+    return [...base, ...extras];
   })();
+
+  const showCategory = family === "interaction";
+  const showStatus =
+    family === "interaction" || family === "commitment" || family === "comms";
 
   async function submit() {
     if (kind.trim().length === 0) return;
@@ -294,6 +368,13 @@ function ContextEntryEditor({
     } finally {
       setBusy(false);
     }
+  }
+
+  function kindOptionLabel(k: string): string {
+    if (k === "note") return "Note";
+    if (k === "commitment") return "Commitment";
+    if (isCommsKind(k)) return commsKindLabel(k);
+    return k.replace(/_/g, " ");
   }
 
   return (
@@ -315,39 +396,53 @@ function ContextEntryEditor({
           >
             {kindOptions.map((k) => (
               <option key={k} value={k}>
-                {kindLabel(k)}
+                {kindOptionLabel(k)}
               </option>
             ))}
           </Select>
         </Field>
-        <Field label="Category">
-          <Select
-            value={category}
-            onChange={(e) =>
-              setCategory(e.target.value as InteractionCategory)
-            }
-            disabled={busy}
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Status">
-          <Select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as InteractionStatus)}
-            disabled={busy}
-          >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {showCategory && (
+          <Field label="Category">
+            <Select
+              value={category}
+              onChange={(e) =>
+                setCategory(e.target.value as InteractionCategory)
+              }
+              disabled={busy}
+            >
+              {(["personal", "meeting", "activity", "work", "errands"] as const).map(
+                (c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ),
+              )}
+            </Select>
+          </Field>
+        )}
+        {showStatus && (
+          <Field label="Status">
+            <Select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as InteractionStatus)}
+              disabled={busy}
+            >
+              {(
+                [
+                  "occurred",
+                  "planned",
+                  "attended",
+                  "missed",
+                  "cancelled",
+                ] as InteractionStatus[]
+              ).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -355,7 +450,7 @@ function ContextEntryEditor({
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="What happened? What did they say? Anything you want to remember."
+            placeholder="What happened? What did they say?"
             rows={5}
             disabled={busy}
           />

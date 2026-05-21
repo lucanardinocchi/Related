@@ -17,6 +17,7 @@ import { Eyebrow, H1 } from "@/components/ui";
 import { TouchpointsChart } from "../../relationships/[id]/_TouchpointsChart";
 import { OpenThreadsSection } from "../../relationships/[id]/_OpenThreadsSection";
 import { ContextTimelineSection } from "../../relationships/[id]/_ContextTimelineSection";
+import type { AddContextResult } from "../../relationships/[id]/_AddContextModal";
 import { RelationshipAnalyticsSection } from "../../relationships/[id]/_RelationshipAnalyticsSection";
 import { GroupKeyDetailsSection } from "./_GroupKeyDetailsSection";
 import { GroupMessagesSection } from "./_GroupMessagesSection";
@@ -214,6 +215,34 @@ export function GroupDetailView({
     setInteractions((xs) => xs.filter((i) => i.id !== id));
   }
 
+  async function addContextFromModal(result: AddContextResult): Promise<void> {
+    if (result.commitment) {
+      const { description, timing } = result.commitment;
+      if (timing === "planned") {
+        await addThread(description);
+        return;
+      }
+      const status = timing === "completed" ? "occurred" : "missed";
+      await addContext({
+        time: result.time,
+        kind: "commitment",
+        category: "personal",
+        notes: description,
+        status,
+      });
+      return;
+    }
+    if (result.interaction) {
+      await addContext({
+        time: result.time,
+        kind: result.interaction.kind,
+        category: result.interaction.category,
+        notes: result.notes,
+        status: result.interaction.status,
+      });
+    }
+  }
+
   return (
     <div className="space-y-2">
       <header className="mt-2 pb-4">
@@ -302,7 +331,9 @@ export function GroupDetailView({
 
       <ContextTimelineSection
         interactions={interactions}
+        openThreads={openThreads}
         onAdd={addContext}
+        onAddFromModal={addContextFromModal}
         onEdit={patchContext}
         onDelete={deleteContext}
       />

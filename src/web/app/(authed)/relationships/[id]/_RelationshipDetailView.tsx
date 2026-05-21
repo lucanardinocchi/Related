@@ -18,6 +18,7 @@ import { TouchpointsChart } from "./_TouchpointsChart";
 import { KeyDetailsSection, type GroupSummary } from "./_KeyDetailsSection";
 import { OpenThreadsSection } from "./_OpenThreadsSection";
 import { ContextTimelineSection } from "./_ContextTimelineSection";
+import type { AddContextResult } from "./_AddContextModal";
 import { RecentCandidateSection } from "./_RecentCandidateSection";
 import { EmailSection } from "./_EmailSection";
 import { InstagramSection } from "./_InstagramSection";
@@ -231,6 +232,34 @@ export function RelationshipDetailView({
     setInteractions((xs) => xs.filter((i) => i.id !== id));
   }
 
+  async function addContextFromModal(result: AddContextResult): Promise<void> {
+    if (result.commitment) {
+      const { description, timing } = result.commitment;
+      if (timing === "planned") {
+        await addThread(description);
+        return;
+      }
+      const status = timing === "completed" ? "occurred" : "missed";
+      await addContext({
+        time: result.time,
+        kind: "commitment",
+        category: "personal",
+        notes: description,
+        status,
+      });
+      return;
+    }
+    if (result.interaction) {
+      await addContext({
+        time: result.time,
+        kind: result.interaction.kind,
+        category: result.interaction.category,
+        notes: result.notes,
+        status: result.interaction.status,
+      });
+    }
+  }
+
   return (
     <div className="space-y-2">
       <header className="mt-2 pb-4">
@@ -309,7 +338,9 @@ export function RelationshipDetailView({
 
       <ContextTimelineSection
         interactions={interactions}
+        openThreads={openThreads}
         onAdd={addContext}
+        onAddFromModal={addContextFromModal}
         onEdit={patchContext}
         onDelete={deleteContext}
       />

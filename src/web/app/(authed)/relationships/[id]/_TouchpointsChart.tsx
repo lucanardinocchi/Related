@@ -41,10 +41,12 @@ interface ContextVisibility {
 const COMMS_KINDS = new Set([
   "email",
   "sms",
+  "imessage",
   "phone_call",
   "whatsapp",
   "instagram_dm",
   "x_dm",
+  "tiktok_dm",
 ]);
 
 const DEFAULT_SERIES: SeriesVisibility = {
