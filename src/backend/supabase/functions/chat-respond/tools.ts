@@ -3,6 +3,17 @@
 // Candidate Action surfaced by Ambient Intelligence.
 
 // deno-lint-ignore-file no-explicit-any
+import {
+  buildGroupByIdQuery,
+  buildGroupsListQuery,
+  buildInteractionsListQuery,
+  buildOpenThreadsListQuery,
+  buildRelationshipByIdQuery,
+  buildRelationshipsListQuery,
+  fetchUserContextForTool,
+  filterInteractionsByContact,
+  filterOpenThreadsByRelationship,
+} from "./queries.ts";
 import type { ToolContext } from "./types.ts";
 
 export const TOOLS = [
@@ -85,7 +96,7 @@ export const TOOLS = [
   {
     name: "list_calendar_events",
     description:
-      "List external Google Calendar events the agent has synced into inferred_signal_calendar. Read-only mirror; this is the Calendar density signal.",
+      "List the User's calendar Events (manual entries and Google-synced rows from the unified events table). Includes user enrichment: aim, required prep, status, type.",
     input_schema: {
       type: "object",
       properties: {
@@ -123,26 +134,18 @@ export async function dispatchTool(
 ): Promise<unknown> {
   switch (name) {
     case "list_relationships": {
-      const targetType = input.target_type as string | undefined;
-      let q = ctx.supabase
-        .from("relationships")
-        .select(
-          "id, target_type, role, cadence, created_at, contact:contacts!target_contact_id(id, name, phone, email, birthday, area, occupation, education), group_target:groups!target_group_id(id, name)",
-        )
-        .order("created_at", { ascending: false });
-      if (targetType && targetType !== "all") q = q.eq("target_type", targetType);
-      const { data, error } = await q;
+      const { data, error } = await buildRelationshipsListQuery(
+        ctx.supabase,
+        input.target_type as string | undefined,
+      );
       if (error) throw error;
       return data;
     }
     case "get_relationship": {
-      const { data, error } = await ctx.supabase
-        .from("relationships")
-        .select(
-          "id, target_type, role, cadence, created_at, contact:contacts!target_contact_id(id, name, phone, email, birthday, area, occupation, education), group_target:groups!target_group_id(id, name)",
-        )
-        .eq("id", input.relationship_id as string)
-        .single();
+      const { data, error } = await buildRelationshipByIdQuery(
+        ctx.supabase,
+        input.relationship_id as string,
+      );
       if (error) throw error;
       return data;
     }
@@ -168,77 +171,44 @@ export async function dispatchTool(
       return data;
     }
     case "list_open_threads": {
-      const includeClosed = !!input.include_closed;
-      const direction = input.direction as string | undefined;
       const relationshipId = input.relationship_id as string | undefined;
-
-      let q = ctx.supabase
-        .from("open_threads")
-        .select(
-          "id, description, direction, origin, communication_status, created_at, closed_at, open_thread_relationships(relationship_id)",
-        )
-        .order("created_at", { ascending: false });
-      if (!includeClosed) q = q.is("closed_at", null);
-      if (direction) q = q.eq("direction", direction);
-
-      const { data, error } = await q;
+      const { data, error } = await buildOpenThreadsListQuery(ctx.supabase, {
+        includeClosed: !!input.include_closed,
+        direction: input.direction as string | undefined,
+      });
       if (error) throw error;
 
-      const rows = (data ?? []) as Array<{
-        id: string;
-        open_thread_relationships?: { relationship_id: string }[];
-        [k: string]: unknown;
-      }>;
-
+      const rows = data ?? [];
       if (relationshipId) {
-        return rows.filter((r) =>
-          (r.open_thread_relationships ?? []).some(
-            (l) => l.relationship_id === relationshipId,
-          ),
-        );
+        return filterOpenThreadsByRelationship(rows, relationshipId);
       }
       return rows;
     }
     case "list_interactions": {
-      let q = ctx.supabase
-        .from("interactions")
-        .select(
-          "id, time, kind, notes, status, interaction_contacts(contact_id, contacts(name))",
-        )
-        .order("time", { ascending: false })
-        .limit(200);
-      if (input.status)
-        q = q.eq("status", input.status as string);
-      if (input.since)
-        q = q.gte("time", input.since as string);
-      if (input.until)
-        q = q.lte("time", input.until as string);
-      const { data, error } = await q;
+      const { data, error } = await buildInteractionsListQuery(ctx.supabase, {
+        status: input.status as string | undefined,
+        since: input.since as string | undefined,
+        until: input.until as string | undefined,
+      });
       if (error) throw error;
 
-      const rows = (data ?? []) as Array<{
-        id: string;
-        interaction_contacts?: { contact_id: string }[];
-        [k: string]: unknown;
-      }>;
+      const rows = data ?? [];
       const contactId = input.contact_id as string | undefined;
       if (contactId) {
-        return rows.filter((r) =>
-          (r.interaction_contacts ?? []).some(
-            (l) => l.contact_id === contactId,
-          ),
-        );
+        return filterInteractionsByContact(rows, contactId);
       }
       return rows;
     }
     case "list_calendar_events": {
       let q = ctx.supabase
-        .from("inferred_signal_calendar")
-        .select("id, summary, start_at, end_at, source")
-        .order("start_at", { ascending: true })
+        .from("events")
+        .select(
+          "id, title, start, end, source, status, type, aim, required_prep, location, is_all_day, external_event_id",
+        )
+        .order("start", { ascending: true })
         .limit(200);
-      if (input.since) q = q.gte("start_at", input.since as string);
-      if (input.until) q = q.lte("start_at", input.until as string);
+      if (input.since) q = q.gte("start", input.since as string);
+      if (input.until) q = q.lte("start", input.until as string);
       const { data, error } = await q;
       if (error) {
         // Table may be unmigrated for some tenants; degrade gracefully.
@@ -247,50 +217,20 @@ export async function dispatchTool(
       return data;
     }
     case "list_groups": {
-      const { data, error } = await ctx.supabase
-        .from("groups")
-        .select("id, name, created_at")
-        .order("name", { ascending: true });
+      const { data, error } = await buildGroupsListQuery(ctx.supabase);
       if (error) throw error;
       return data;
     }
     case "get_group": {
-      const { data, error } = await ctx.supabase
-        .from("groups")
-        .select(
-          "id, name, created_at, contact_groups(contact_id, contacts(id, name))",
-        )
-        .eq("id", input.group_id as string)
-        .single();
+      const { data, error } = await buildGroupByIdQuery(
+        ctx.supabase,
+        input.group_id as string,
+      );
       if (error) throw error;
       return data;
     }
     case "get_user_context": {
-      const goalsP = ctx.supabase
-        .from("goals_and_values")
-        .select("id, content, created_at, updated_at")
-        .order("created_at", { ascending: false });
-      const ssP = ctx.supabase
-        .from("situational_state")
-        .select("id, content, updated_at")
-        .maybeSingle();
-      const tiP = ctx.supabase
-        .from("transient_intent")
-        .select("id, content, captured_at, expires_at, relationship_id")
-        .gt("expires_at", new Date().toISOString())
-        .order("captured_at", { ascending: false })
-        .limit(20);
-
-      const [goals, ss, ti] = await Promise.all([goalsP, ssP, tiP]);
-      if (goals.error) throw goals.error;
-      if (ss.error) throw ss.error;
-      if (ti.error) throw ti.error;
-
-      return {
-        goals_and_values: goals.data ?? [],
-        situational_state: ss.data ?? null,
-        transient_intent: ti.data ?? [],
-      };
+      return fetchUserContextForTool(ctx.supabase);
     }
     default:
       throw new Error(`unknown tool: ${name}`);
