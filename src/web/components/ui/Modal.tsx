@@ -61,43 +61,47 @@ export function Modal({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 backdrop-blur-sm px-4 py-16"
-      onClick={onClose}
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/30 backdrop-blur-sm"
     >
       <div
-        className={cn(
-          "w-full rounded-lg bg-bg shadow-[var(--shadow-modal)]",
-          sizeClasses[size],
-          className,
-        )}
-        onClick={(e) => e.stopPropagation()}
+        className="flex min-h-full items-center justify-center px-4 py-4"
+        onClick={onClose}
       >
-        <header className="flex items-start gap-3 border-b border-divider px-5 py-4">
-          <div className="min-w-0 flex-1">
-            <div className="text-[18px] leading-[26px] tracking-[-0.005em] font-medium text-fg">
-              {title}
-            </div>
-            {subtitle && (
-              <div className="mt-0.5 text-[13px] leading-[20px] text-fg-muted">
-                {subtitle}
+        <div
+          className={cn(
+            "w-full rounded-lg bg-bg shadow-[var(--shadow-modal)]",
+            sizeClasses[size],
+            className,
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <header className="flex items-start gap-3 border-b border-divider px-5 py-4">
+            <div className="min-w-0 flex-1">
+              <div className="text-[18px] leading-[26px] tracking-[-0.005em] font-medium text-fg">
+                {title}
               </div>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="-mr-2 -mt-1 rounded p-1 text-fg-muted transition-colors hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-            aria-label="Close"
-          >
-            <X size={16} />
-          </button>
-        </header>
-        <div className="px-5 py-4">{children}</div>
-        {footer && (
-          <footer className="flex items-center justify-end gap-2 border-t border-divider px-5 py-3">
-            {footer}
-          </footer>
-        )}
+              {subtitle && (
+                <div className="mt-0.5 text-[13px] leading-[20px] text-fg-muted">
+                  {subtitle}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="-mr-2 -mt-1 rounded p-1 text-fg-muted transition-colors hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
+          </header>
+          <div className="px-5 py-4">{children}</div>
+          {footer && (
+            <footer className="flex items-center justify-end gap-2 border-t border-divider px-5 py-3">
+              {footer}
+            </footer>
+          )}
+        </div>
       </div>
     </div>
   );
