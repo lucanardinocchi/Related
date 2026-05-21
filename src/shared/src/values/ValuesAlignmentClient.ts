@@ -5,6 +5,7 @@ export interface CharacterValuesAlignment {
   id: string;
   characterId: string;
   aligned: boolean;
+  rankPosition: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +31,7 @@ interface CharacterValuesAlignmentRow {
   id: string;
   character_id: string;
   aligned: boolean;
+  rank_position: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,6 +43,7 @@ function toCharacterValuesAlignment(
     id: row.id,
     characterId: row.character_id,
     aligned: row.aligned,
+    rankPosition: row.rank_position,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -98,7 +101,7 @@ export class ValuesAlignmentClient {
   async listAlignments(): Promise<CharacterValuesAlignment[]> {
     const { data, error } = await this.client
       .from("user_character_values_alignment")
-      .select("id, character_id, aligned, created_at, updated_at")
+      .select("id, character_id, aligned, rank_position, created_at, updated_at")
       .order("updated_at", { ascending: false });
 
     if (error) throw error;
@@ -122,11 +125,30 @@ export class ValuesAlignmentClient {
         },
         { onConflict: "owner_id,character_id" },
       )
-      .select("id, character_id, aligned, created_at, updated_at")
+      .select("id, character_id, aligned, rank_position, created_at, updated_at")
       .single();
 
     if (error) throw error;
     return toCharacterValuesAlignment(data as CharacterValuesAlignmentRow);
+  }
+
+  /**
+   * Persist drag-and-drop order for aligned characters (1 = strongest alignment).
+   */
+  async saveRankings(orderedCharacterIds: string[]): Promise<void> {
+    const ownerId = await this.resolveOwnerId();
+
+    for (let index = 0; index < orderedCharacterIds.length; index++) {
+      const characterId = orderedCharacterIds[index]!;
+      const { error } = await this.client
+        .from("user_character_values_alignment")
+        .update({ rank_position: index + 1 })
+        .eq("owner_id", ownerId)
+        .eq("character_id", characterId)
+        .eq("aligned", true);
+
+      if (error) throw error;
+    }
   }
 
   /**

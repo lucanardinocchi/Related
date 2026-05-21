@@ -1,11 +1,11 @@
 import { VALUES_CHARACTERS } from "@related/shared";
 import { getServerDeps } from "@/lib/deps/server";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { ValuesSwipeView } from "./_ValuesSwipeView";
+import { ValuesRankView } from "../_ValuesRankView";
 
 export const dynamic = "force-dynamic";
 
-export default async function ValuesPage() {
+export default async function ValuesRankPage() {
   const { valuesAlignment } = await getServerDeps();
   const alignments = await valuesAlignment.listAlignments();
 
@@ -13,15 +13,21 @@ export default async function ValuesPage() {
     alignments.map((a) => [a.characterId, a.aligned] as const),
   );
 
+  const initialOrder = alignments
+    .filter((a) => a.aligned && a.rankPosition != null)
+    .sort((a, b) => (a.rankPosition ?? 0) - (b.rankPosition ?? 0))
+    .map((a) => a.characterId);
+
   return (
     <>
       <PageHeader
-        title="Values"
-        subtitle="Swipe through characters on video — align, pass, or skip if you don't know. After 10 alignments, rank who resonates most."
+        title="Rank your alignments"
+        subtitle="Order the characters you resonate with most — top is strongest."
       />
-      <ValuesSwipeView
+      <ValuesRankView
         characters={VALUES_CHARACTERS}
-        initialAlignments={alignmentByCharacterId}
+        alignments={alignmentByCharacterId}
+        initialOrder={initialOrder}
       />
     </>
   );

@@ -30,11 +30,11 @@ const PRIMARY: NavItem[] = [
   { href: "/calendar", label: "Calendar", icon: CalendarIcon },
   { href: "/commitments", label: "Commitments", icon: CircleCheck },
   { href: "/agent", label: "Agent", icon: MessageSquareText },
-  { href: "/context", label: "Context", icon: Sparkles },
-  { href: "/values", label: "Values", icon: HeartHandshake },
 ];
 
 const SETTINGS: NavItem[] = [
+  { href: "/context", label: "Context", icon: Sparkles },
+  { href: "/values", label: "Values", icon: HeartHandshake },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

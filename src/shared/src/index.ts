@@ -163,6 +163,7 @@ export {
   getValuesCharacter,
 } from "./values/valuesCharacters";
 export type { ValuesCharacter } from "./values/valuesCharacters";
+export { MIN_ALIGNED_FOR_RANKING } from "./values/valuesConstants";
 
 export { ValuesAlignmentClient } from "./values/ValuesAlignmentClient";
 export type {

@@ -7,10 +7,9 @@ import {
   ValuesAlignmentClient,
   type ValuesCharacter,
 } from "@related/shared";
+import { MIN_ALIGNED_FOR_RANKING } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Button, Card, Checkbox, Input } from "@/components/ui";
-
-export const MIN_SWIPES_FOR_INFERENCE = 10;
 
 interface ProposedGoalRow {
   id: string;
@@ -28,10 +27,9 @@ function nextRowId(): string {
 }
 
 export function ValuesConfirmPanel({ alignments, characters }: Props) {
-  const reviewedCount = useMemo(
+  const alignedCount = useMemo(
     () =>
-      characters.filter((character) => alignments[character.id] !== undefined)
-        .length,
+      characters.filter((character) => alignments[character.id] === true).length,
     [alignments, characters],
   );
 
@@ -43,7 +41,7 @@ export function ValuesConfirmPanel({ alignments, characters }: Props) {
   const [addError, setAddError] = useState<string | null>(null);
   const [addedCount, setAddedCount] = useState<number | null>(null);
 
-  const thresholdReached = reviewedCount >= MIN_SWIPES_FOR_INFERENCE;
+  const thresholdReached = alignedCount >= MIN_ALIGNED_FOR_RANKING;
 
   useEffect(() => {
     if (thresholdReached && rows.length === 0 && addedCount === null) {
@@ -129,8 +127,8 @@ export function ValuesConfirmPanel({ alignments, characters }: Props) {
             Values discovery
           </div>
           <p className="mt-2 max-w-lg text-[14px] leading-[22px] text-fg-muted">
-            You&apos;ve reviewed {reviewedCount} characters. Related can propose
-            goals based on who you aligned with — you choose what to keep.
+            You&apos;ve aligned with {alignedCount} characters. Related can propose
+            goals based on your ranking — you choose what to keep.
           </p>
         </div>
         {rows.length === 0 && (
