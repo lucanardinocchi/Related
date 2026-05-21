@@ -20,6 +20,7 @@ describe("Goals & Values + Situational State RLS", () => {
 
   afterEach(async () => {
     const ids = [userA.id, userB.id];
+    await adminClient.from("operator_strengths").delete().in("owner_id", ids);
     await adminClient.from("goals_and_values").delete().in("owner_id", ids);
     await adminClient.from("situational_state").delete().in("owner_id", ids);
     await teardownTestUsers([userA, userB]);
@@ -82,6 +83,53 @@ describe("Goals & Values + Situational State RLS", () => {
       .select("content");
     expect((data ?? []).map((r) => r.content).sort()).toEqual(
       ["Be more present with family", "Move slow, build deep relationships"].sort(),
+    );
+  });
+});
+
+describe("Operator Strengths RLS", () => {
+  let userA: TestUser;
+  let userB: TestUser;
+
+  beforeEach(async () => {
+    [userA, userB] = await setupTestUsers(2);
+  });
+
+  afterEach(async () => {
+    const ids = [userA.id, userB.id];
+    await adminClient.from("operator_strengths").delete().in("owner_id", ids);
+    await teardownTestUsers([userA, userB]);
+  });
+
+  test("User B cannot read User A's Operator Strengths", async () => {
+    await adminClient
+      .from("operator_strengths")
+      .insert({ owner_id: userA.id, content: "AI/ML expertise" });
+
+    const { data, error } = await userB.client
+      .from("operator_strengths")
+      .select("id");
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
+
+  test("User A can author multiple Operator Strength rows", async () => {
+    const { error: e1 } = await userA.client
+      .from("operator_strengths")
+      .insert({ owner_id: userA.id, content: "AI/ML expertise" });
+    expect(e1).toBeNull();
+
+    const { error: e2 } = await userA.client
+      .from("operator_strengths")
+      .insert({ owner_id: userA.id, content: "Startup intros" });
+    expect(e2).toBeNull();
+
+    const { data } = await userA.client
+      .from("operator_strengths")
+      .select("content")
+      .order("created_at", { ascending: false });
+    expect((data ?? []).map((r) => r.content).sort()).toEqual(
+      ["AI/ML expertise", "Startup intros"].sort(),
     );
   });
 });
