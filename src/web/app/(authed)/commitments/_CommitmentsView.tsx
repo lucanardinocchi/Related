@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import {
   commitmentAnalytics,
   type CommitmentAnalytics,
@@ -12,6 +14,7 @@ import { getBrowserDeps } from "@/lib/deps/client";
 import {
   AnalyticTile,
   AnalyticsRow,
+  Button,
   Display,
   EmptyState,
   Eyebrow,
@@ -45,6 +48,11 @@ export function CommitmentsView({
   const [origin, setOrigin] = useState<OriginFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setCommitments(initialCommitments);
+    setAnalytics(initialAnalytics);
+  }, [initialCommitments, initialAnalytics]);
 
   // Re-render every minute so "days outstanding" rolls over without a refresh.
   const [, setTick] = useState(0);
@@ -108,14 +116,21 @@ export function CommitmentsView({
 
   return (
     <div className="space-y-10">
-      <header>
-        <Eyebrow>Open threads I owe</Eyebrow>
-        <Display className="mt-1">Commitments</Display>
-        <p className="mt-2 max-w-prose text-[14px] leading-[22px] text-fg-muted">
-          Things you owe someone. Click a row to add the context that makes
-          following through easier — who it helps and why you&apos;re the right
-          person to do it.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <Eyebrow>Open threads I owe</Eyebrow>
+          <Display className="mt-1">Commitments</Display>
+          <p className="mt-2 max-w-prose text-[14px] leading-[22px] text-fg-muted">
+            Things you owe someone. Click a row to add the context that makes
+            following through easier — who it helps and why you&apos;re the
+            right person to do it.
+          </p>
+        </div>
+        <Link href="/commitments?new=1" scroll={false}>
+          <Button variant="primary" leading={<Plus size={14} />}>
+            Add
+          </Button>
+        </Link>
       </header>
 
       <AnalyticsRow>
@@ -184,8 +199,17 @@ export function CommitmentsView({
           }
           description={
             commitments.length === 0
-              ? "Commitments born from an Agent Pass or captured directly appear here."
+              ? "Add a commitment directly, or capture one from a relationship page or Agent Pass."
               : "Try clearing one of the filters above."
+          }
+          action={
+            commitments.length === 0 ? (
+              <Link href="/commitments?new=1" scroll={false}>
+                <Button variant="primary" leading={<Plus size={14} />}>
+                  Add commitment
+                </Button>
+              </Link>
+            ) : undefined
           }
         />
       ) : (

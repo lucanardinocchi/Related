@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { getServerDeps } from "@/lib/deps/server";
 import { commitmentAnalytics } from "@related/shared";
 import { CommitmentsView } from "./_CommitmentsView";
+import { NewCommitmentModal } from "./_NewCommitmentModal";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +36,17 @@ export default async function CommitmentsPage() {
   ].sort((a, b) => a.label.localeCompare(b.label));
 
   return (
-    <CommitmentsView
-      initialCommitments={commitments}
-      initialAnalytics={analytics}
-      assignableRelationships={assignableRelationships}
-    />
+    <>
+      <CommitmentsView
+        initialCommitments={commitments}
+        initialAnalytics={analytics}
+        assignableRelationships={assignableRelationships}
+      />
+      <Suspense fallback={null}>
+        <NewCommitmentModal
+          assignableRelationships={assignableRelationships}
+        />
+      </Suspense>
+    </>
   );
 }
