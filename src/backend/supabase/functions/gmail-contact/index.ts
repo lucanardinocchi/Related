@@ -280,7 +280,7 @@ async function listMessagesForContact(
         subject: subject || "(no subject)",
         from,
         to,
-        date: date || detail.internalDate ?? "",
+        date: date || (detail.internalDate ?? ""),
         snippet: (detail.snippet as string) ?? "",
         direction,
       } satisfies GmailMessageSummary;
