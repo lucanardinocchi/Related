@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { User, Users, Plus } from "lucide-react";
 import { getServerDeps } from "@/lib/deps/server";
+import { NewRelationshipModal } from "./_NewRelationshipModal";
 import {
   Display,
   Body,
@@ -66,6 +68,11 @@ export default async function RelationshipsIndexPage() {
       }
     }
   }
+
+  const contactOptions = contactRels.map((relationship) => ({
+    id: relationship.contact.id,
+    name: relationship.contact.name,
+  }));
 
   const rows: RelationshipRow[] = [
     ...contactRels.map((r): RelationshipRow => ({
@@ -141,9 +148,11 @@ export default async function RelationshipsIndexPage() {
           <Eyebrow>People & Groups</Eyebrow>
           <Display className="mt-1">Relationships</Display>
         </div>
-        <Button variant="primary" leading={<Plus size={14} />}>
-          New
-        </Button>
+        <Link href="/relationships?new=1" scroll={false}>
+          <Button variant="primary" leading={<Plus size={14} />}>
+            New
+          </Button>
+        </Link>
       </header>
 
       <AnalyticsRow>
@@ -173,11 +182,13 @@ export default async function RelationshipsIndexPage() {
         rowHref={(r) => r.href}
         emptyState={
           <EmptyState
-            title="No Relationships yet"
-            description="Add your first Contact during onboarding, then revisit this page."
+            title="No relationships yet"
+            description="Add an individual contact or a group to start building your network."
             action={
-              <Link href="/onboarding">
-                <Button variant="primary">Open onboarding</Button>
+              <Link href="/relationships?new=1" scroll={false}>
+                <Button variant="primary" leading={<Plus size={14} />}>
+                  New relationship
+                </Button>
               </Link>
             }
           />
@@ -189,6 +200,10 @@ export default async function RelationshipsIndexPage() {
           Tip — group memberships and rich profile fields live on each detail page.
         </Body>
       )}
+
+      <Suspense fallback={null}>
+        <NewRelationshipModal contacts={contactOptions} />
+      </Suspense>
     </div>
   );
 }
