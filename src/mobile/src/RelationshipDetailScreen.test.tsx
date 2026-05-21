@@ -102,6 +102,7 @@ function interaction(over: Partial<Interaction> = {}): Interaction {
     id: "i-1",
     time: "2026-05-10T09:00:00Z",
     kind: "coffee",
+    category: "personal",
     notes: null,
     status: "occurred",
     contacts: [{ id: "c-1", name: "Sam" }],

@@ -34,17 +34,21 @@ export { CalendarEventsClient } from "./calendar/CalendarEventsClient";
 export type {
   CalendarEvent,
   CalendarEventSource,
+  CalendarEventOverlay,
   CalendarEventsClientConfig,
 } from "./calendar/CalendarEventsClient";
 
 export {
   relationshipAnalytics,
   calendarAnalytics,
+  cumulativeGrowth,
   commitmentAnalytics,
 } from "./analytics";
 export type {
   RelationshipAnalytics,
   CalendarAnalytics,
+  CumulativeBucket,
+  CumulativeGrowthInput,
   CommitmentAnalytics,
 } from "./analytics";
 
@@ -266,6 +270,7 @@ export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,
   InteractionStatus,
+  InteractionCategory,
   InteractionContact,
   CreateInteractionInput,
   InteractionsClientConfig,

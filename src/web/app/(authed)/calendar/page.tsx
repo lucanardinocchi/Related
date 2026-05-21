@@ -5,7 +5,7 @@ import { CalendarView } from "./_CalendarView";
 export const dynamic = "force-dynamic";
 
 export default async function CalendarPage() {
-  const { interactions, calendarEvents } = await getServerDeps();
+  const { interactions, calendarEvents, resolveOwnerId } = await getServerDeps();
 
   // Default window: 30 days back, 30 days forward. The Client view can
   // re-query with its own range once filters change (out of scope for v1 —
@@ -14,7 +14,7 @@ export default async function CalendarPage() {
   const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const to = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  const [allInteractions, externalEvents] = await Promise.all([
+  const [allInteractions, externalEvents, overlays, ownerId] = await Promise.all([
     interactions.listInRange({
       from: from.toISOString(),
       to: to.toISOString(),
@@ -23,6 +23,8 @@ export default async function CalendarPage() {
       from: from.toISOString(),
       to: to.toISOString(),
     }),
+    calendarEvents.listOverlays(),
+    resolveOwnerId(),
   ]);
 
   const analytics = calendarAnalytics({
@@ -34,7 +36,9 @@ export default async function CalendarPage() {
     <CalendarView
       interactions={allInteractions}
       externalEvents={externalEvents}
+      overlays={overlays}
       analytics={analytics}
+      ownerId={ownerId}
     />
   );
 }

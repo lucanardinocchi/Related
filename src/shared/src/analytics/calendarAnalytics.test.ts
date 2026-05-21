@@ -7,6 +7,7 @@ function interaction(over: Partial<Interaction>): Interaction {
     id: "i-1",
     time: "2026-05-20T10:00:00Z",
     kind: "coffee",
+    category: "personal",
     notes: null,
     status: "occurred",
     contacts: [],
@@ -46,7 +47,9 @@ describe("calendarAnalytics", () => {
     expect(result.interactionCounts).toEqual({
       planned: 2,
       occurred: 1,
+      attended: 0,
       missed: 1,
+      cancelled: 0,
     });
     expect(result.externalCountsBySource).toEqual({ google: 2 });
   });
