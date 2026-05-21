@@ -2,13 +2,20 @@
 // ADR-0009. Wraps the Anthropic Sonnet-class model server-side so the API
 // key never reaches the client bundle. Receives a chatId, loads the
 // transcript through the User's authenticated Supabase client (RLS
-// enforces ownership), runs a multi-round tool-use loop with the
-// read-only tool surface defined below, then persists the final
-// assistant turn and returns it.
+// enforces ownership), preloads a compact ConversationContextSnapshot
+// of the User's world, runs a multi-round tool-use loop with the
+// read-only tool surface, then persists the final assistant turn and
+// returns it.
 //
 // **Read-only by design.** None of the tools mutate state. Every effect
 // on the world still passes through a Candidate Action surfaced by
 // Ambient Intelligence — see ADR-0009.
+//
+// This file is the glue layer. Behaviour is split across:
+//   - contextLoader.ts — single-call snapshot of the User's world
+//   - prompt.ts        — static directive prompt + per-turn context block
+//   - tools.ts         — read-only tool defs and dispatcher
+//   - types.ts         — shared interfaces
 //
 // Deploy:
 //   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
@@ -19,346 +26,24 @@
 // deno-lint-ignore-file no-explicit-any
 
 import Anthropic from "npm:@anthropic-ai/sdk@^0.96.0";
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@^2.45.0";
+
+import { loadConversationContext } from "./contextLoader.ts";
+import { renderContextBlock, SYSTEM_PROMPT_BASE } from "./prompt.ts";
+import { dispatchTool, TOOLS } from "./tools.ts";
+import type {
+  ChatMessageRow,
+  ToolCallSummary,
+  ToolContext,
+} from "./types.ts";
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 4096;
 const MAX_TOOL_ROUNDS = 8;
 
-const SYSTEM_PROMPT = `You are Conversational Intelligence for Related — a relationship-intelligence app.
-
-Your role:
-- You are READ-ONLY on app state. You can read Relationships, Contacts, Open Threads, Interactions, Calendar events, Groups, and the User's User Context (Goals & Values, Situational State, Transient Intent, Inferred Signals). You CANNOT create, update, or delete anything. Mutations are the job of a separate Ambient Intelligence agent that proposes Candidate Actions for the User to accept.
-- You ask questions to elicit context. The User's self-narrative content (life situation, current mental state, what they're trying to do this week) is what you exist to draw out. After this Chat closes, an Extraction Pass will route what they said into Situational State and Transient Intent — you do not write those yourself.
-- Be concrete. Use the tools to ground your answers in the User's actual data. Do not speculate when you can look up.
-- Be brief. Conversational, not encyclopaedic. Ask follow-up questions rather than dumping information.
-- Never propose specific actions ("you should text Sam"). Reflect, ask, surface — don't prescribe. Prescriptions are Ambient Intelligence's job, surfaced as Candidate Actions on the User's Relationships.
-- Never speak first on a new Chat — but you are mid-Chat now, so respond directly to the latest User message.
-
-Tool use:
-- Call tools whenever a question touches concrete data. Don't ask the User something the tools could answer.
-- Tool results are JSON. Synthesise — don't paste raw JSON back at the User.
-- Multiple tool calls per turn are fine. Plan them and dispatch in parallel when independent.
-
-Output: a single concise reply addressed to the User. Plain text only — no Markdown headings, no bullet lists unless the User explicitly asked for a list.`;
-
-// =============================================================================
-// Tool surface — read-only. Per ADR-0009 Q7.
-// =============================================================================
-
-const TOOLS = [
-  {
-    name: "list_relationships",
-    description:
-      "List all of the User's Relationships (the bond from User to a Contact or Group). Returns id, role, cadence, and the target Contact or Group's name + basic details. Use to enumerate the people in their world.",
-    input_schema: {
-      type: "object",
-      properties: {
-        target_type: {
-          type: "string",
-          enum: ["contact", "group", "all"],
-          description: "Filter to Contact-targeted, Group-targeted, or all (default).",
-        },
-      },
-    },
-  },
-  {
-    name: "get_relationship",
-    description:
-      "Get one Relationship by id with the full Contact (or Group) profile attached.",
-    input_schema: {
-      type: "object",
-      required: ["relationship_id"],
-      properties: { relationship_id: { type: "string" } },
-    },
-  },
-  {
-    name: "list_contacts",
-    description:
-      "List all Contacts the User has stored. A Contact is a referenced person, not a Relationship — use list_relationships when you want bond context.",
-    input_schema: { type: "object", properties: {} },
-  },
-  {
-    name: "get_contact",
-    description: "Get a single Contact by id with full profile fields.",
-    input_schema: {
-      type: "object",
-      required: ["contact_id"],
-      properties: { contact_id: { type: "string" } },
-    },
-  },
-  {
-    name: "list_open_threads",
-    description:
-      "List the User's Open Threads (commitments, owed replies, unresolved items). Optionally filter to threads attached to a specific Relationship, or to me_owes_them direction (Commitments view).",
-    input_schema: {
-      type: "object",
-      properties: {
-        relationship_id: { type: "string" },
-        direction: {
-          type: "string",
-          enum: ["me_owes_them", "they_owe_me"],
-        },
-        include_closed: {
-          type: "boolean",
-          description: "Include closed threads (default false).",
-        },
-      },
-    },
-  },
-  {
-    name: "list_interactions",
-    description:
-      "List Interactions (logged or planned moments of contact). Optionally filter by contact, status, or time window.",
-    input_schema: {
-      type: "object",
-      properties: {
-        contact_id: { type: "string" },
-        status: {
-          type: "string",
-          enum: ["planned", "occurred", "missed"],
-        },
-        since: { type: "string", description: "ISO timestamp lower bound." },
-        until: { type: "string", description: "ISO timestamp upper bound." },
-      },
-    },
-  },
-  {
-    name: "list_calendar_events",
-    description:
-      "List external Google Calendar events the agent has synced into inferred_signal_calendar. Read-only mirror; this is the Calendar density signal.",
-    input_schema: {
-      type: "object",
-      properties: {
-        since: { type: "string" },
-        until: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "list_groups",
-    description: "List the User's Groups (named collections of Contacts).",
-    input_schema: { type: "object", properties: {} },
-  },
-  {
-    name: "get_group",
-    description: "Get a Group by id with member Contacts attached.",
-    input_schema: {
-      type: "object",
-      required: ["group_id"],
-      properties: { group_id: { type: "string" } },
-    },
-  },
-  {
-    name: "get_user_context",
-    description:
-      "Get the User's User Context — all four flavours: Goals & Values (User-authored), Situational State (current life context), recent Transient Intent (recent ephemeral intents from prior Chats), and Inferred Signals (Calendar density + Sleep summary, if present).",
-    input_schema: { type: "object", properties: {} },
-  },
-] as const;
-
-// =============================================================================
-// Tool dispatchers — read directly via the User-scoped Supabase client.
-// RLS enforces owner-only.
-// =============================================================================
-
-interface ToolContext {
-  supabase: SupabaseClient;
-}
-
-async function dispatchTool(
-  name: string,
-  input: Record<string, unknown>,
-  ctx: ToolContext,
-): Promise<unknown> {
-  switch (name) {
-    case "list_relationships": {
-      const targetType = input.target_type as string | undefined;
-      let q = ctx.supabase
-        .from("relationships")
-        .select(
-          "id, target_type, role, cadence, created_at, contact:contacts!target_contact_id(id, name, phone, email, birthday, area, occupation, education), group_target:groups!target_group_id(id, name)",
-        )
-        .order("created_at", { ascending: false });
-      if (targetType && targetType !== "all") q = q.eq("target_type", targetType);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data;
-    }
-    case "get_relationship": {
-      const { data, error } = await ctx.supabase
-        .from("relationships")
-        .select(
-          "id, target_type, role, cadence, created_at, contact:contacts!target_contact_id(id, name, phone, email, birthday, area, occupation, education), group_target:groups!target_group_id(id, name)",
-        )
-        .eq("id", input.relationship_id as string)
-        .single();
-      if (error) throw error;
-      return data;
-    }
-    case "list_contacts": {
-      const { data, error } = await ctx.supabase
-        .from("contacts")
-        .select(
-          "id, name, phone, email, birthday, area, occupation, education, created_at",
-        )
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return data;
-    }
-    case "get_contact": {
-      const { data, error } = await ctx.supabase
-        .from("contacts")
-        .select(
-          "id, name, phone, email, birthday, area, occupation, education, created_at",
-        )
-        .eq("id", input.contact_id as string)
-        .single();
-      if (error) throw error;
-      return data;
-    }
-    case "list_open_threads": {
-      const includeClosed = !!input.include_closed;
-      const direction = input.direction as string | undefined;
-      const relationshipId = input.relationship_id as string | undefined;
-
-      let q = ctx.supabase
-        .from("open_threads")
-        .select(
-          "id, description, direction, origin, communication_status, created_at, closed_at, open_thread_relationships(relationship_id)",
-        )
-        .order("created_at", { ascending: false });
-      if (!includeClosed) q = q.is("closed_at", null);
-      if (direction) q = q.eq("direction", direction);
-
-      const { data, error } = await q;
-      if (error) throw error;
-
-      const rows = (data ?? []) as Array<{
-        id: string;
-        open_thread_relationships?: { relationship_id: string }[];
-        [k: string]: unknown;
-      }>;
-
-      if (relationshipId) {
-        return rows.filter((r) =>
-          (r.open_thread_relationships ?? []).some(
-            (l) => l.relationship_id === relationshipId,
-          ),
-        );
-      }
-      return rows;
-    }
-    case "list_interactions": {
-      let q = ctx.supabase
-        .from("interactions")
-        .select(
-          "id, time, kind, notes, status, interaction_contacts(contact_id, contacts(name))",
-        )
-        .order("time", { ascending: false })
-        .limit(200);
-      if (input.status)
-        q = q.eq("status", input.status as string);
-      if (input.since)
-        q = q.gte("time", input.since as string);
-      if (input.until)
-        q = q.lte("time", input.until as string);
-      const { data, error } = await q;
-      if (error) throw error;
-
-      const rows = (data ?? []) as Array<{
-        id: string;
-        interaction_contacts?: { contact_id: string }[];
-        [k: string]: unknown;
-      }>;
-      const contactId = input.contact_id as string | undefined;
-      if (contactId) {
-        return rows.filter((r) =>
-          (r.interaction_contacts ?? []).some(
-            (l) => l.contact_id === contactId,
-          ),
-        );
-      }
-      return rows;
-    }
-    case "list_calendar_events": {
-      let q = ctx.supabase
-        .from("inferred_signal_calendar")
-        .select("id, summary, start_at, end_at, source")
-        .order("start_at", { ascending: true })
-        .limit(200);
-      if (input.since) q = q.gte("start_at", input.since as string);
-      if (input.until) q = q.lte("start_at", input.until as string);
-      const { data, error } = await q;
-      if (error) {
-        // Table may be unmigrated for some tenants; degrade gracefully.
-        return { error: error.message, events: [] };
-      }
-      return data;
-    }
-    case "list_groups": {
-      const { data, error } = await ctx.supabase
-        .from("groups")
-        .select("id, name, created_at")
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return data;
-    }
-    case "get_group": {
-      const { data, error } = await ctx.supabase
-        .from("groups")
-        .select(
-          "id, name, created_at, contact_groups(contact_id, contacts(id, name))",
-        )
-        .eq("id", input.group_id as string)
-        .single();
-      if (error) throw error;
-      return data;
-    }
-    case "get_user_context": {
-      const goalsP = ctx.supabase
-        .from("goals_and_values")
-        .select("id, content, created_at, updated_at")
-        .order("created_at", { ascending: false });
-      const ssP = ctx.supabase
-        .from("situational_state")
-        .select("id, content, updated_at")
-        .maybeSingle();
-      const tiP = ctx.supabase
-        .from("transient_intent")
-        .select("id, content, captured_at, expires_at, relationship_id")
-        .gt("expires_at", new Date().toISOString())
-        .order("captured_at", { ascending: false })
-        .limit(20);
-
-      const [goals, ss, ti] = await Promise.all([goalsP, ssP, tiP]);
-      if (goals.error) throw goals.error;
-      if (ss.error) throw ss.error;
-      if (ti.error) throw ti.error;
-
-      return {
-        goals_and_values: goals.data ?? [],
-        situational_state: ss.data ?? null,
-        transient_intent: ti.data ?? [],
-      };
-    }
-    default:
-      throw new Error(`unknown tool: ${name}`);
-  }
-}
-
 // =============================================================================
 // Message conversion — chat_messages rows ↔ Anthropic content blocks.
 // =============================================================================
-
-interface ChatMessageRow {
-  id: string;
-  role: "user" | "assistant" | "system" | "tool";
-  content: string;
-  tool_calls: unknown[] | null;
-  tool_call_id: string | null;
-  created_at: string;
-}
 
 /**
  * Build the Anthropic message array from stored chat history.
@@ -387,14 +72,6 @@ function buildHistoryMessages(rows: ChatMessageRow[]): Array<{
 // Anthropic tool-use loop with SSE streaming.
 // =============================================================================
 
-interface ToolCallSummary {
-  id: string;
-  name: string;
-  input: Record<string, unknown>;
-  result_preview: string;
-  error?: string;
-}
-
 /**
  * Encodes a single SSE event into the wire format the
  * `parseSseStream` parser in @related/shared expects:
@@ -414,14 +91,30 @@ function sseEvent(event: string, data: unknown): Uint8Array {
  * to the response body as the agent emits content. Returns the final
  * text + accumulated tool-call summaries; the caller persists them to
  * `chat_messages` and emits the `done` event.
+ *
+ * The system prompt is sent as two blocks:
+ *   1. SYSTEM_PROMPT_BASE with `cache_control: ephemeral` so subsequent
+ *      turns in the same chat hit the cache and skip re-tokenising it.
+ *   2. The per-turn context block (User's world snapshot). Not cached
+ *      because Open Threads / Interactions can change between turns.
  */
 async function streamToolLoop(
   anthropic: Anthropic,
   history: Array<{ role: "user" | "assistant"; content: string }>,
+  contextBlock: string,
   ctx: ToolContext,
   emit: (event: string, data: unknown) => void,
 ): Promise<{ text: string; toolCalls: ToolCallSummary[] }> {
   const toolCalls: ToolCallSummary[] = [];
+
+  const systemBlocks = [
+    {
+      type: "text",
+      text: SYSTEM_PROMPT_BASE,
+      cache_control: { type: "ephemeral" },
+    },
+    { type: "text", text: contextBlock },
+  ];
 
   const working: Array<{
     role: "user" | "assistant";
@@ -432,7 +125,7 @@ async function streamToolLoop(
     const stream = anthropic.messages.stream({
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      system: SYSTEM_PROMPT,
+      system: systemBlocks as any,
       tools: TOOLS as any,
       messages: working as any,
     });
@@ -628,6 +321,24 @@ Deno.serve(async (req) => {
   }
 
   const history = buildHistoryMessages(rows);
+
+  // Preload the User's world before invoking the model. One round of
+  // queries gathered concurrently — see contextLoader.ts. If the load
+  // fails (table missing, RLS unhappy), degrade gracefully rather than
+  // failing the whole chat turn.
+  let contextBlock: string;
+  try {
+    const snapshot = await loadConversationContext(supabase);
+    contextBlock = renderContextBlock(snapshot);
+  } catch (err) {
+    console.warn(
+      "chat-respond: context preload failed, continuing with empty snapshot:",
+      err,
+    );
+    contextBlock =
+      "<user_world>\n(context preload failed; rely on tools)\n</user_world>";
+  }
+
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
   // SSE response body. We hold a controller for the ReadableStream so
@@ -648,6 +359,7 @@ Deno.serve(async (req) => {
         result = await streamToolLoop(
           anthropic,
           history,
+          contextBlock,
           { supabase },
           emit,
         );
