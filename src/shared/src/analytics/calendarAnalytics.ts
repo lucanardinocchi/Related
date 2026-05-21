@@ -87,21 +87,29 @@ export interface CumulativeGrowthInput {
   interactions: Interaction[];
   externalEvents: CalendarEvent[];
   overlays: CalendarEventOverlay[];
+  /**
+   * Filter that picks which entries contribute. `all` is the unfiltered
+   * total — drives the default chart view so the cumulative line shows
+   * every event, before the User narrows by status or category.
+   */
   filter:
+    | { axis: "all" }
     | { axis: "status"; value: InteractionStatus }
     | { axis: "category"; value: InteractionCategory };
 }
 
-function startOfDay(iso: string): Date {
+/** UTC midnight of the given ISO instant, returned as a Date. */
+function utcStartOfDay(iso: string): Date {
   const d = new Date(iso);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
-function ymd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+/** YYYY-MM-DD in UTC. Matches `iso.slice(0, 10)` for ISO Z strings. */
+function ymdUTC(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
@@ -127,16 +135,23 @@ export function cumulativeGrowth(
     deltas.set(key, (deltas.get(key) ?? 0) + 1);
   };
 
-  const matchesInteraction = (i: Interaction) =>
-    input.filter.axis === "status"
-      ? i.status === input.filter.value
-      : i.category === input.filter.value;
+  const matchesInteraction = (i: Interaction) => {
+    if (input.filter.axis === "all") return true;
+    if (input.filter.axis === "status") return i.status === input.filter.value;
+    return i.category === input.filter.value;
+  };
 
   for (const i of input.interactions) {
     if (matchesInteraction(i)) bump(i.time.slice(0, 10));
   }
 
   for (const e of input.externalEvents) {
+    if (input.filter.axis === "all") {
+      // Unfiltered total includes every external event, regardless of
+      // whether the User has assigned an overlay yet.
+      bump(e.start.slice(0, 10));
+      continue;
+    }
     const o = overlayByEvent.get(e.externalEventId);
     if (!o) continue;
     const matched =
@@ -147,16 +162,19 @@ export function cumulativeGrowth(
   }
 
   // Walk the date axis day-by-day so the chart line is continuous even
-  // through gaps with zero entries.
+  // through gaps with zero entries. Bucket keys are UTC YYYY-MM-DD to
+  // match `iso.slice(0,10)` on the entry side — mixing local and UTC
+  // boundaries would silently land events in the wrong day when the
+  // User's timezone offset crosses midnight relative to UTC.
   const buckets: CumulativeBucket[] = [];
   let running = 0;
-  const cursor = startOfDay(input.from);
-  const end = startOfDay(input.to);
+  const cursor = utcStartOfDay(input.from);
+  const end = utcStartOfDay(input.to);
   while (cursor.getTime() <= end.getTime()) {
-    const key = ymd(cursor);
+    const key = ymdUTC(cursor);
     running += deltas.get(key) ?? 0;
     buckets.push({ date: key, count: running });
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return buckets;
 }
