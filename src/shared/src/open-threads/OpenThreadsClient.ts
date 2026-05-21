@@ -148,6 +148,25 @@ export class OpenThreadsClient {
     return data as string;
   }
 
+  /**
+   * Edit an Open Thread's description in place. Gated by the
+   * `open_threads_update_own` RLS policy — RLS rejects writes the User
+   * doesn't own without round-tripping the client.
+   */
+  async updateOpenThread(
+    id: string,
+    input: { description: string },
+  ): Promise<OpenThread> {
+    const { data, error } = await this.client
+      .from("open_threads")
+      .update({ description: input.description })
+      .eq("id", id)
+      .select(SELECT_WITH_LINKS)
+      .single();
+    if (error) throw error;
+    return toOpenThread(data as unknown as OpenThreadRow);
+  }
+
   async closeOpenThread(id: string): Promise<void> {
     const { error } = await this.client
       .from("open_threads")

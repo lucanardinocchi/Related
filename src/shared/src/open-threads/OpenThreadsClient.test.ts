@@ -78,6 +78,62 @@ describe("OpenThreadsClient.createOpenThread", () => {
   });
 });
 
+describe("OpenThreadsClient.updateOpenThread", () => {
+  it("updates description and returns the full OpenThread with links", async () => {
+    const { q, client } = withClient();
+    const single = jest.fn().mockResolvedValue({
+      data: {
+        id: "ot-1",
+        description: "revised wording",
+        direction: "me_owes_them",
+        ...NULL_COMMITMENT,
+        created_at: "2026-04-01T10:00:00Z",
+        closed_at: null,
+        open_thread_relationships: [
+          { relationship_id: "r-1" },
+          { relationship_id: "r-2" },
+        ],
+      },
+      error: null,
+    });
+    const selectInner = jest.fn(() => ({ single }));
+    const eq = jest.fn(() => ({ select: selectInner }));
+    q.update.mockReturnValueOnce({ eq } as unknown as ReturnType<typeof q.update>);
+
+    const updated = await client.updateOpenThread("ot-1", {
+      description: "revised wording",
+    });
+
+    expect(q.from).toHaveBeenCalledWith("open_threads");
+    expect(q.update).toHaveBeenCalledWith({ description: "revised wording" });
+    expect(eq).toHaveBeenCalledWith("id", "ot-1");
+    expect(updated).toEqual({
+      id: "ot-1",
+      description: "revised wording",
+      direction: "me_owes_them",
+      ...NULL_COMMITMENT_CAMEL,
+      createdAt: "2026-04-01T10:00:00Z",
+      closedAt: null,
+      relationshipIds: ["r-1", "r-2"],
+    });
+  });
+
+  it("throws when RLS rejects the write", async () => {
+    const { q, client } = withClient();
+    const single = jest.fn().mockResolvedValue({
+      data: null,
+      error: { message: "row violates RLS" },
+    });
+    const selectInner = jest.fn(() => ({ single }));
+    const eq = jest.fn(() => ({ select: selectInner }));
+    q.update.mockReturnValueOnce({ eq } as unknown as ReturnType<typeof q.update>);
+
+    await expect(
+      client.updateOpenThread("ot-other", { description: "nope" }),
+    ).rejects.toMatchObject({ message: "row violates RLS" });
+  });
+});
+
 describe("OpenThreadsClient.closeOpenThread", () => {
   it("updates closed_at on the thread by id and returns void", async () => {
     const { q, client } = withClient();
