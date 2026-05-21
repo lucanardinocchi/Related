@@ -1,6 +1,5 @@
 import {
   AuthClient,
-  CalendarEventsClient,
   CandidatesClient,
   ChatsClient,
   EventsClient,
@@ -35,7 +34,6 @@ export async function getServerDeps() {
     relationships: new RelationshipsClient(supabase),
     openThreads: new OpenThreadsClient(supabase),
     interactions: new InteractionsClient(supabase),
-    calendarEvents: new CalendarEventsClient(supabase),
     events: new EventsClient(supabase),
     groups: new GroupsClient(supabase),
     candidates: new CandidatesClient(supabase),

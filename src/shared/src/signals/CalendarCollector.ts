@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RawCalendarEvent } from "./calendarDensity";
+import { toSignalRow } from "./calendarSyncDualWrite";
 
 /**
  * Slice 11 calendar collector. The OAuth-bound fetcher (Google Calendar
@@ -35,14 +36,7 @@ export class CalendarCollector {
     const events = await this.fetcher(asOf);
 
     if (events.length > 0) {
-      const rows = events.map((e) => ({
-        owner_id: ownerId,
-        event_id: e.id,
-        title: e.title ?? null,
-        start: e.start,
-        end: e.end,
-        is_all_day: e.isAllDay,
-      }));
+      const rows = events.map((e) => toSignalRow(ownerId, e));
       const { error: upErr } = await this.supabase
         .from("inferred_signal_calendar")
         .upsert(rows, { onConflict: "owner_id,event_id" });

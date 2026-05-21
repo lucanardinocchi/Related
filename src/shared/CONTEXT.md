@@ -110,8 +110,8 @@ The web `/commitments` page (per ADR-0008). Not a separate domain entity — it 
 _Avoid_: Commitments table, Commitments entity (this is presentation, not a schema concept; the storage is still `open_threads`).
 
 **Calendar (UI)**:
-On web, the `/calendar` page is a **unified timeline** of (a) first-class **Interactions** the User has logged or scheduled, and (b) read-only **external calendar events** sourced from `inferred_signal_calendar` (Google Calendar). Each entry is badged by source. Interactions remain editable through their existing CRUD; external events are read-only mirrors of what the agent sees in its Calendar density signal. The distinction matters: editing an Interaction changes the agent's behaviour on the next Pass; external events change only when the upstream Google Calendar changes and the daily `sync-calendar` cron picks them up.
-_Avoid_: Conflating "Calendar event" with "Interaction". An Interaction is User-curated relationship state; an external Calendar event is observed background context.
+On web, the `/calendar` page reads exclusively from the unified **`events`** table (ADR-0010). Both User-created entries (`source = manual`) and Google-synced rows (`source = google`, keyed by `external_event_id`) share the same editable shape: title, start/end, aim, required prep, status, type, location, attendees. The daily `sync-calendar` Edge Function dual-writes Google snapshots into `inferred_signal_calendar` (agent density signal input) and materialises them into `events`, overwriting only Google-owned columns (title, start, end, is_all_day, location) so user enrichment survives re-syncs. **Interactions** remain a separate operational touchpoint log linked to Relationships — they are not the Calendar surface.
+_Avoid_: Conflating "Calendar event" with "Interaction". An Event is a scheduled block on the User's calendar; an Interaction is a logged or planned moment of contact.
 
 ## Relationships
 

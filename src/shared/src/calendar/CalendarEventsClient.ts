@@ -14,8 +14,12 @@ export type CalendarEventSource = "google";
  * A single external calendar event the agent has ingested as an Inferred
  * Signal (`inferred_signal_calendar`). Read-only from the web UI: editing
  * happens upstream in the User's external calendar; the daily `sync-calendar`
- * cron picks up changes. The /calendar page renders these alongside
- * Interactions, badged by source. See src/shared/CONTEXT.md → Calendar (UI).
+ * cron picks up changes.
+ *
+ * @deprecated ADR-0010 — web /calendar reads from `events` via EventsClient.
+ * Retained for agent signal reads if needed; UserContextBuilder queries
+ * inferred_signal_calendar directly for density. Prefer EventsClient for
+ * user-facing calendar data.
  */
 export interface CalendarEvent {
   id: string;
@@ -65,14 +69,11 @@ function toCalendarEvent(row: CalendarEventRow): CalendarEvent {
 const SELECT = "id, event_id, title, start, end, is_all_day, fetched_at";
 
 /**
- * Read external Calendar events from `inferred_signal_calendar`. This is
- * the integration boundary for the web /calendar page's unified view —
- * external events render read-only alongside first-class Interactions, with
- * a source badge so the User can tell them apart. RLS scopes to owner.
+ * Read external Calendar events from `inferred_signal_calendar`. Agent
+ * density signal storage only — web /calendar uses EventsClient (ADR-0010).
+ * RLS scopes to owner.
  *
- * Per ADR-0008, no writes here — the upstream Google Calendar is the
- * source of truth and the daily `sync-calendar` Edge Function performs the
- * ingestion. Stale events naturally expire as the cron re-pulls.
+ * @deprecated Prefer EventsClient for user-facing calendar data.
  */
 export class CalendarEventsClient {
   constructor(private readonly client: SupabaseClient) {}
