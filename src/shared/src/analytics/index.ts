@@ -23,3 +23,11 @@ export type {
   RelationshipAgeBand,
   TopContactsAverage,
 } from "./relationshipIndexAnalytics";
+
+export { innerCircleCloseness, CLOSENESS_WEIGHTS } from "./innerCircleAnalytics";
+export type {
+  ClosenessSignalCounts,
+  InnerCircleContact,
+  InnerCircleRankings,
+  InnerCircleContactInput,
+} from "./innerCircleAnalytics";

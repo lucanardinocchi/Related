@@ -62,6 +62,8 @@ export {
   groupsAddedPerDay,
   averageInteractionsByRelationshipAge,
   averageInteractionsAmongTopContacts,
+  innerCircleCloseness,
+  CLOSENESS_WEIGHTS,
 } from "./analytics";
 export type {
   RelationshipAnalytics,
@@ -73,6 +75,10 @@ export type {
   RelationshipAgeEngagementBucket,
   RelationshipAgeBand,
   TopContactsAverage,
+  ClosenessSignalCounts,
+  InnerCircleContact,
+  InnerCircleRankings,
+  InnerCircleContactInput,
 } from "./analytics";
 
 export { GroupsClient } from "./groups/GroupsClient";

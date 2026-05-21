@@ -1,18 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Interaction } from "@related/shared";
+import type { Interaction, OpenThread } from "@related/shared";
 import {
   peopleAddedPerDay,
   groupsAddedPerDay,
   averageInteractionsByRelationshipAge,
-  averageInteractionsAmongTopContacts,
+  type InnerCircleContactInput,
 } from "@related/shared";
-import { Card, Eyebrow, H2, Pill, Mono } from "@/components/ui";
+import { Card, Eyebrow, H2, Pill } from "@/components/ui";
+import { InnerCircleChart } from "./_InnerCircleChart";
 
 type AnalyticsSection = "growth" | "engagement" | "inner";
 type GrowthChart = "people" | "groups";
-type InnerWindow = "7d" | "30d" | "90d";
 type DayWindow = "14d" | "30d" | "90d" | "1y";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -68,16 +68,10 @@ const SECTION_META: Record<
   },
   inner: {
     eyebrow: "Inner circle",
-    title: "Top 15 — Average Interactions",
+    title: "Who you're closest with",
     description:
-      "Mean occurred-interaction count among your 15 most-contacted people.",
+      "Ranked by interactions, comms, context notes, and commitments — inner rings are closer relationships.",
   },
-};
-
-const INNER_WINDOW_DAYS: Record<InnerWindow, number> = {
-  "7d": 7,
-  "30d": 30,
-  "90d": 90,
 };
 
 interface Props {
@@ -85,6 +79,9 @@ interface Props {
   groupCreatedAts: string[];
   interactions: Interaction[];
   relationshipCreatedAtByContactId: Record<string, string>;
+  innerCircleContacts: InnerCircleContactInput[];
+  openThreads: OpenThread[];
+  contactIdByRelationshipId: Record<string, string>;
 }
 
 function fmtDay(date: string): string {
@@ -252,11 +249,13 @@ export function RelationshipsIndexCharts({
   groupCreatedAts,
   interactions,
   relationshipCreatedAtByContactId,
+  innerCircleContacts,
+  openThreads,
+  contactIdByRelationshipId,
 }: Props) {
   const now = useMemo(() => new Date(), []);
   const [section, setSection] = useState<AnalyticsSection>("growth");
   const [growthChart, setGrowthChart] = useState<GrowthChart>("people");
-  const [innerWindow, setInnerWindow] = useState<InnerWindow>("30d");
   const [dayWindow, setDayWindow] = useState<DayWindow>("30d");
 
   const windowDays = DAY_WINDOW_DAYS[dayWindow];
@@ -300,31 +299,6 @@ export function RelationshipsIndexCharts({
       })),
     [interactions, relationshipCreatedAtByContactId, from, to],
   );
-
-  const top15AllWindows = useMemo(() => {
-    const windows: { id: InnerWindow; label: string; days: number }[] = [
-      { id: "7d", label: "7d", days: 7 },
-      { id: "30d", label: "30d", days: 30 },
-      { id: "90d", label: "90d", days: 90 },
-    ];
-    return windows.map(({ id, label, days }) => {
-      const result = averageInteractionsAmongTopContacts({
-        interactions,
-        windowDays: days,
-        topN: 15,
-        now,
-      });
-      const count =
-        result.average === null ? 0 : Math.round(result.average * 10) / 10;
-      return { id, label, count };
-    });
-  }, [interactions, now]);
-
-  const top15Selected = top15AllWindows.find((w) => w.id === innerWindow);
-  const top15ChartBuckets = top15AllWindows.map((w) => ({
-    label: w.label,
-    count: w.count,
-  }));
 
   const meta = SECTION_META[section];
   const growthTitle =
@@ -370,29 +344,6 @@ export function RelationshipsIndexCharts({
           </div>
         )}
 
-        {section === "inner" && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Pill
-              active={innerWindow === "7d"}
-              onClick={() => setInnerWindow("7d")}
-            >
-              Last 7 days
-            </Pill>
-            <Pill
-              active={innerWindow === "30d"}
-              onClick={() => setInnerWindow("30d")}
-            >
-              Last 30 days
-            </Pill>
-            <Pill
-              active={innerWindow === "90d"}
-              onClick={() => setInnerWindow("90d")}
-            >
-              Last 90 days
-            </Pill>
-          </div>
-        )}
-
         <div className="mt-5">
           {section === "growth" && growthChart === "people" && (
             <SimpleBarChart
@@ -430,26 +381,12 @@ export function RelationshipsIndexCharts({
             </div>
           )}
           {section === "inner" && (
-            <div>
-              <div className="mb-4">
-                <div className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-                  Last {INNER_WINDOW_DAYS[innerWindow]} days
-                </div>
-                <Mono className="mt-1 block text-[20px] leading-[28px]">
-                  {top15Selected?.count === 0
-                    ? "—"
-                    : top15Selected?.count.toFixed(1)}
-                </Mono>
-                <p className="mt-0.5 text-[13px] text-fg-muted">
-                  per person (top 15)
-                </p>
-              </div>
-              <SimpleBarChart
-                buckets={top15ChartBuckets}
-                title="Top 15 average interactions by window"
-                barColor="#5b7cfa"
-              />
-            </div>
+            <InnerCircleChart
+              contacts={innerCircleContacts}
+              interactions={interactions}
+              openThreads={openThreads}
+              contactIdByRelationshipId={contactIdByRelationshipId}
+            />
           )}
         </div>
       </Card>

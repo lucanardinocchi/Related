@@ -193,6 +193,16 @@ export class OpenThreadsClient {
     return ((data ?? []) as unknown as OpenThreadRow[]).map(toOpenThread);
   }
 
+  /** Open and closed threads — used for all-time closeness signals. */
+  async listAllForUser(): Promise<OpenThread[]> {
+    const { data, error } = await this.client
+      .from("open_threads")
+      .select(SELECT_WITH_LINKS)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return ((data ?? []) as unknown as OpenThreadRow[]).map(toOpenThread);
+  }
+
   async listOpenForRelationship(relationshipId: string): Promise<OpenThread[]> {
     // Query through the join so we naturally filter by relationship_id and
     // still get the thread hydrated. Ordering is on the joined open_threads

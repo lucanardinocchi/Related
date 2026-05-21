@@ -46,12 +46,13 @@ export default async function RelationshipsIndexPage() {
   const { relationships, groups, interactions, openThreads } =
     await getServerDeps();
 
-  const [contactRels, groupRels, allInteractions, allOpenThreads] =
+  const [contactRels, groupRels, allInteractions, allOpenThreads, allThreads] =
     await Promise.all([
       relationships.listRelationships(),
       groups.listGroupRelationships(),
       interactions.listAll(),
       openThreads.listOpenForUser(),
+      openThreads.listAllForUser(),
     ]);
 
   const now = new Date();
@@ -120,6 +121,20 @@ export default async function RelationshipsIndexPage() {
       .filter((r) => r.contact != null)
       .map((r) => [r.contact.id, r.createdAt] as const),
   );
+
+  const contactIdByRelationshipId = Object.fromEntries(
+    contactRels
+      .filter((r) => r.contact != null)
+      .map((r) => [r.id, r.contact.id] as const),
+  );
+
+  const innerCircleContacts = contactRels
+    .filter((r) => r.contact != null)
+    .map((r) => ({
+      contactId: r.contact.id,
+      relationshipId: r.id,
+      name: r.contact.name,
+    }));
 
   const columns: DataGridColumn<RelationshipRow>[] = [
     {
@@ -201,7 +216,8 @@ export default async function RelationshipsIndexPage() {
 
       {(peopleCreatedAts.length > 0 ||
         groupCreatedAts.length > 0 ||
-        allInteractions.length > 0) && (
+        allInteractions.length > 0 ||
+        allThreads.length > 0) && (
         <RelationshipsIndexCharts
           peopleCreatedAts={peopleCreatedAts}
           groupCreatedAts={groupCreatedAts}
@@ -209,6 +225,9 @@ export default async function RelationshipsIndexPage() {
           relationshipCreatedAtByContactId={
             relationshipCreatedAtByContactId
           }
+          innerCircleContacts={innerCircleContacts}
+          openThreads={allThreads}
+          contactIdByRelationshipId={contactIdByRelationshipId}
         />
       )}
 
