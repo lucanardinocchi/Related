@@ -13,8 +13,10 @@ import type {
   ChatSummary,
   ChatsClient,
   STTAdapter,
+  ToolCallSummary,
   TTSPlayback,
 } from "@related/shared";
+import { useConversationalChat } from "@related/shared/chats/useConversationalChat";
 import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
 import { colors, fonts, fontSizes, lineHeights, radii } from "./ui/tokens";
 
@@ -38,14 +40,6 @@ export interface MobileChatScreenProps {
    * Tests inject a stub; the User can mute via the header toggle.
    */
   ttsPlayback?: TTSPlayback;
-}
-
-interface ToolCallSummary {
-  id: string;
-  name: string;
-  input: Record<string, unknown>;
-  result_preview: string;
-  error?: string;
 }
 
 /**
@@ -72,7 +66,6 @@ export function MobileChatScreen({
   );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
-  const [responding, setResponding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Mic state. `recording` means the User has started capture but not
   // yet stopped; `transcribing` means the audio handle has been closed
@@ -83,6 +76,16 @@ export function MobileChatScreen({
   const transcriptRef = useRef<FlatList<ChatMessage>>(null);
 
   const micEnabled = !!(startMicCapture && sttAdapter);
+
+  const { responding, runAgentRespondStream } = useConversationalChat({
+    chatsClient,
+    onStreamError: setError,
+    onStreamDone: (message) => {
+      if (ttsPlayback && message.content) {
+        void ttsPlayback.play(message.content).catch(() => {});
+      }
+    },
+  });
 
   const handleMic = useCallback(async () => {
     if (!micEnabled) return;
@@ -207,91 +210,8 @@ export function MobileChatScreen({
       return;
     }
     setMessages((prev) => [...prev, userMsg]);
-
-    setResponding(true);
-    const placeholderId = `streaming-${Date.now()}`;
-    const partial: ChatMessage = {
-      id: placeholderId,
-      chatId: selectedChatId,
-      role: "assistant",
-      content: "",
-      toolCalls: [],
-      toolCallId: null,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, partial]);
-
-    try {
-      for await (const event of chatsClient.respondStream(selectedChatId)) {
-        if (event.type === "text_delta") {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === placeholderId
-                ? { ...m, content: m.content + event.delta }
-                : m,
-            ),
-          );
-        } else if (event.type === "tool_use") {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === placeholderId
-                ? {
-                    ...m,
-                    toolCalls: [
-                      ...((m.toolCalls ?? []) as ToolCallSummary[]),
-                      {
-                        id: event.id,
-                        name: event.name,
-                        input: event.input,
-                        result_preview: "",
-                      },
-                    ],
-                  }
-                : m,
-            ),
-          );
-        } else if (event.type === "tool_result") {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === placeholderId
-                ? {
-                    ...m,
-                    toolCalls: ((m.toolCalls ?? []) as ToolCallSummary[]).map(
-                      (tc) =>
-                        tc.id === event.id
-                          ? {
-                              ...tc,
-                              result_preview: event.preview,
-                              error: event.error,
-                            }
-                          : tc,
-                    ),
-                  }
-                : m,
-            ),
-          );
-          } else if (event.type === "done") {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === placeholderId ? event.message : m)),
-            );
-            if (ttsPlayback && event.message.content) {
-              // Fire-and-forget — playback running in parallel with
-              // the next User turn is fine; errors here mustn't block
-              // the conversation.
-              void ttsPlayback.play(event.message.content).catch(() => {});
-            }
-          } else if (event.type === "error") {
-          setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
-          setError(event.message);
-        }
-      }
-    } catch (err) {
-      setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setResponding(false);
-    }
-  }, [chatsClient, draft, responding, selectedChatId]);
+    await runAgentRespondStream(selectedChatId, setMessages);
+  }, [chatsClient, draft, responding, runAgentRespondStream, selectedChatId]);
 
   const headerTitle = useMemo(() => {
     const c = chatList.find((c) => c.id === selectedChatId);

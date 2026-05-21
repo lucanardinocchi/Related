@@ -17,7 +17,9 @@ import type {
   ChatMessage,
   ChatSummary,
   ExtractionResult,
+  ToolCallSummary,
 } from "@related/shared";
+import { useConversationalChat } from "@related/shared/chats/useConversationalChat";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -26,14 +28,6 @@ import { startMicCapture, type MicCaptureHandle } from "../talk/_recorder";
 
 interface AgentViewProps {
   initialChats: ChatSummary[];
-}
-
-interface ToolCallSummary {
-  id: string;
-  name: string;
-  input: Record<string, unknown>;
-  result_preview: string;
-  error?: string;
 }
 
 interface ToastMsg {
@@ -75,7 +69,6 @@ export function AgentView({ initialChats }: AgentViewProps) {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [working, setWorking] = useState(false);
-  const [agentResponding, setAgentResponding] = useState(false);
   const [voiceState, setVoiceState] = useState<
     "idle" | "recording" | "transcribing"
   >("idle");
@@ -90,6 +83,13 @@ export function AgentView({ initialChats }: AgentViewProps) {
     () => chats.find((c) => c.id === selectedId) ?? null,
     [chats, selectedId],
   );
+
+  const { responding: agentResponding, runAgentRespondStream, closeChatAndExtract } =
+    useConversationalChat({
+      chatsClient,
+      streamErrorPrefix: "Agent didn't respond: ",
+      onStreamError: (text) => setToast({ kind: "error", text }),
+    });
 
   // Toast auto-dismiss.
   useEffect(() => {
@@ -182,97 +182,7 @@ export function AgentView({ initialChats }: AgentViewProps) {
         }
       }
 
-      // Run Conversational Intelligence (chat-respond) with streaming.
-      // We render a live placeholder bubble that fills in as text_delta
-      // events arrive, then swap to the persisted message on `done`.
-      setAgentResponding(true);
-      const placeholderId = `streaming-${Date.now()}`;
-      const partial: ChatMessage = {
-        id: placeholderId,
-        chatId: selectedChat.id,
-        role: "assistant",
-        content: "",
-        toolCalls: [],
-        toolCallId: null,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, partial]);
-
-      try {
-        for await (const event of chatsClient.respondStream(selectedChat.id)) {
-          if (event.type === "text_delta") {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === placeholderId
-                  ? { ...m, content: m.content + event.delta }
-                  : m,
-              ),
-            );
-          } else if (event.type === "tool_use") {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === placeholderId
-                  ? {
-                      ...m,
-                      toolCalls: [
-                        ...((m.toolCalls ?? []) as ToolCallSummary[]),
-                        {
-                          id: event.id,
-                          name: event.name,
-                          input: event.input,
-                          result_preview: "",
-                        },
-                      ],
-                    }
-                  : m,
-              ),
-            );
-          } else if (event.type === "tool_result") {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === placeholderId
-                  ? {
-                      ...m,
-                      toolCalls: ((m.toolCalls ?? []) as ToolCallSummary[]).map(
-                        (tc) =>
-                          tc.id === event.id
-                            ? {
-                                ...tc,
-                                result_preview: event.preview,
-                                error: event.error,
-                              }
-                            : tc,
-                      ),
-                    }
-                  : m,
-              ),
-            );
-          } else if (event.type === "done") {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === placeholderId ? event.message : m)),
-            );
-          } else if (event.type === "error") {
-            setMessages((prev) =>
-              prev.filter((m) => m.id !== placeholderId),
-            );
-            setToast({
-              kind: "error",
-              text: "Agent didn't respond: " + event.message,
-            });
-          }
-        }
-      } catch (err) {
-        setMessages((prev) => prev.filter((m) => m.id !== placeholderId));
-        setToast({
-          kind: "error",
-          text:
-            "Agent didn't respond: " +
-            (err instanceof Error ? err.message : String(err)),
-        });
-      } finally {
-        setAgentResponding(false);
-      }
-
+      await runAgentRespondStream(selectedChat.id, setMessages);
       await refreshChats();
     } catch (err) {
       setToast({
@@ -291,36 +201,31 @@ export function AgentView({ initialChats }: AgentViewProps) {
     if (!selectedChat || selectedChat.closedAt) return;
     setWorking(true);
     try {
-      const closed = await chatsClient.closeChat(selectedChat.id);
-      // Optimistic refresh first so the UI reflects closure even if
-      // extraction takes a few seconds.
-      await refreshChats();
-      setToast({ kind: "info", text: "Chat closed. Extracting context…" });
-
-      // Fire Extraction Pass. Long-running but non-blocking on UI;
-      // we still await so we can report what got written.
-      try {
-        const result = await chatsClient.extract(closed.id);
-        if ("skipped" in result && result.skipped) {
+      await closeChatAndExtract(selectedChat.id, {
+        onClosed: refreshChats,
+        onExtracting: () =>
+          setToast({ kind: "info", text: "Chat closed. Extracting context…" }),
+        onExtractResult: (result) => {
+          if ("skipped" in result && result.skipped) {
+            setToast({
+              kind: "info",
+              text: `Extraction skipped: ${result.reason}.`,
+            });
+          } else if ("ok" in result) {
+            setToast({
+              kind: "success",
+              text: extractionToast(result),
+            });
+          }
+        },
+        onExtractError: (err) =>
           setToast({
-            kind: "info",
-            text: `Extraction skipped: ${result.reason}.`,
-          });
-        } else if ("ok" in result) {
-          setToast({
-            kind: "success",
-            text: extractionToast(result),
-          });
-        }
-      } catch (err) {
-        setToast({
-          kind: "error",
-          text:
-            "Chat closed, but extraction failed: " +
-            (err instanceof Error ? err.message : String(err)),
-        });
-      }
-
+            kind: "error",
+            text:
+              "Chat closed, but extraction failed: " +
+              (err instanceof Error ? err.message : String(err)),
+          }),
+      });
       await refreshChats();
     } catch (err) {
       setToast({
