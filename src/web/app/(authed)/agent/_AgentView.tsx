@@ -7,6 +7,8 @@ import {
   ChevronRight,
   Loader2,
   Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   SendHorizontal,
   Square,
@@ -21,6 +23,7 @@ import type {
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Button, EmptyState } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { usePersistedBoolean } from "@/lib/usePersistedBoolean";
 import { startMicCapture, type MicCaptureHandle } from "../talk/_recorder";
 
 interface AgentViewProps {
@@ -39,6 +42,8 @@ interface ToastMsg {
   kind: "info" | "success" | "error";
   text: string;
 }
+
+const CHATS_RAIL_COLLAPSED_KEY = "related.agent.chats-rail.collapsed";
 
 /**
  * Two-pane Conversational Intelligence shell, fully wired.
@@ -75,6 +80,9 @@ export function AgentView({ initialChats }: AgentViewProps) {
   const [toast, setToast] = useState<ToastMsg | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const voiceHandleRef = useRef<MicCaptureHandle | null>(null);
+  const [chatsRailCollapsed, toggleChatsRail] = usePersistedBoolean(
+    CHATS_RAIL_COLLAPSED_KEY,
+  );
 
   const selectedChat = useMemo(
     () => chats.find((c) => c.id === selectedId) ?? null,
@@ -392,61 +400,104 @@ export function AgentView({ initialChats }: AgentViewProps) {
 
   return (
     <div className="-my-8 -mx-10 flex h-[calc(100vh-0px)] flex-row">
-      {/* Chat list rail */}
-      <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-border bg-surface">
-        <div className="flex items-center justify-between px-3 py-3">
-          <span className="text-[13px] font-medium text-fg">Chats</span>
-          <button
-            type="button"
-            onClick={handleNewChat}
-            disabled={working}
-            aria-label="New chat"
-            title="New chat"
-            className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-hover hover:text-fg disabled:opacity-50"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-1 pb-2">
-          {chats.length === 0 ? (
-            <div className="px-3 py-2 text-[12px] text-fg-subtle">
-              No chats yet.
-            </div>
-          ) : (
-            <ul className="space-y-0.5">
-              {chats.map((chat) => (
-                <li key={chat.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(chat.id)}
-                    className={cn(
-                      "w-full rounded-md px-2 py-2 text-left transition-colors",
-                      chat.id === selectedId
-                        ? "bg-active text-fg"
-                        : "text-fg-muted hover:bg-hover hover:text-fg",
-                    )}
-                  >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-[13px] font-medium">
-                        {chat.title ?? "Untitled chat"}
-                      </span>
-                      {chat.closedAt ? (
-                        <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
-                          {chat.extractedAt ? "extracted" : "closed"}
-                        </span>
-                      ) : null}
-                    </div>
-                    {chat.lastMessagePreview ? (
-                      <div className="mt-0.5 truncate text-[12px] text-fg-subtle">
-                        {chat.lastMessagePreview}
-                      </div>
-                    ) : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
+      {/* Chat list rail — collapsible like the app nav sidebar */}
+      <aside
+        data-collapsed={chatsRailCollapsed ? "true" : "false"}
+        className={cn(
+          "flex h-full shrink-0 flex-col border-r border-border bg-surface",
+          "transition-[width] duration-150 ease-out motion-reduce:transition-none",
+          chatsRailCollapsed ? "w-12" : "w-[260px]",
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center py-3",
+            chatsRailCollapsed
+              ? "flex-col gap-2 px-1"
+              : "justify-between px-3",
           )}
+        >
+          {chatsRailCollapsed ? null : (
+            <span className="text-[13px] font-medium text-fg">Chats</span>
+          )}
+          <div
+            className={cn(
+              "flex items-center",
+              chatsRailCollapsed ? "flex-col gap-1" : "gap-1",
+            )}
+          >
+            <button
+              type="button"
+              onClick={handleNewChat}
+              disabled={working}
+              aria-label="New chat"
+              title="New chat"
+              className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-hover hover:text-fg disabled:opacity-50"
+            >
+              <Plus size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={toggleChatsRail}
+              aria-label={
+                chatsRailCollapsed ? "Expand chat list" : "Collapse chat list"
+              }
+              aria-expanded={!chatsRailCollapsed}
+              title={
+                chatsRailCollapsed ? "Expand chat list" : "Collapse chat list"
+              }
+              className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-hover hover:text-fg"
+            >
+              {chatsRailCollapsed ? (
+                <PanelLeftOpen size={16} />
+              ) : (
+                <PanelLeftClose size={16} />
+              )}
+            </button>
+          </div>
         </div>
+        {chatsRailCollapsed ? null : (
+          <div className="flex-1 overflow-y-auto px-1 pb-2">
+            {chats.length === 0 ? (
+              <div className="px-3 py-2 text-[12px] text-fg-subtle">
+                No chats yet.
+              </div>
+            ) : (
+              <ul className="space-y-0.5">
+                {chats.map((chat) => (
+                  <li key={chat.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(chat.id)}
+                      className={cn(
+                        "w-full rounded-md px-2 py-2 text-left transition-colors",
+                        chat.id === selectedId
+                          ? "bg-active text-fg"
+                          : "text-fg-muted hover:bg-hover hover:text-fg",
+                      )}
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-[13px] font-medium">
+                          {chat.title ?? "Untitled chat"}
+                        </span>
+                        {chat.closedAt ? (
+                          <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
+                            {chat.extractedAt ? "extracted" : "closed"}
+                          </span>
+                        ) : null}
+                      </div>
+                      {chat.lastMessagePreview ? (
+                        <div className="mt-0.5 truncate text-[12px] text-fg-subtle">
+                          {chat.lastMessagePreview}
+                        </div>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </aside>
 
       {/* Thread + composer */}

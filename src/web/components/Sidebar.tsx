@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import {
   Calendar as CalendarIcon,
   CircleCheck,
@@ -15,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { usePersistedBoolean } from "@/lib/usePersistedBoolean";
 
 interface NavItem {
   href: string;
@@ -83,46 +83,35 @@ function NavLink({
 
 export function Sidebar({ userEmail }: { userEmail: string }) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(COLLAPSED_KEY);
-      if (stored === "1") setCollapsed(true);
-    } catch {
-      // localStorage unavailable (private mode, SSR drift) — keep default.
-    }
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      window.localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0");
-    } catch {
-      // ignored
-    }
-  }, [collapsed, hydrated]);
-
-  const toggle = () => setCollapsed((c) => !c);
+  const [collapsed, toggleCollapsed] = usePersistedBoolean(COLLAPSED_KEY);
 
   return (
     <aside
       data-collapsed={collapsed ? "true" : "false"}
       className={cn(
-        "flex h-screen shrink-0 flex-col bg-surface",
+        "flex h-screen shrink-0 flex-col border-r border-border bg-surface",
         "transition-[width] duration-150 ease-out motion-reduce:transition-none",
-        collapsed ? "w-[56px]" : "w-[var(--layout-sidebar-w)]",
+        collapsed ? "w-14" : "w-60",
       )}
     >
       <div
         className={cn(
-          "flex items-center pt-5 pb-3",
-          collapsed ? "justify-center px-2" : "justify-between px-4",
+          "flex pt-5 pb-3",
+          collapsed
+            ? "flex-col items-center gap-2 px-1"
+            : "items-center justify-between px-4",
         )}
       >
-        {collapsed ? null : (
+        {collapsed ? (
+          <Link
+            href="/relationships"
+            title="Related"
+            aria-label="Related"
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-[13px] font-semibold text-fg hover:bg-hover"
+          >
+            R
+          </Link>
+        ) : (
           <Link
             href="/relationships"
             className="inline-flex items-center gap-2 rounded px-1.5 py-1 text-[15px] font-medium text-fg hover:bg-hover"
@@ -132,11 +121,11 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
         )}
         <button
           type="button"
-          onClick={toggle}
+          onClick={toggleCollapsed}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-expanded={!collapsed}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-hover hover:text-fg"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-fg-subtle hover:bg-hover hover:text-fg"
         >
           {collapsed ? (
             <PanelLeftOpen size={16} />
