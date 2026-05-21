@@ -2,20 +2,19 @@ import type { Interaction } from "../interactions/InteractionsClient";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-export interface WeeklyCountBucket {
-  /** UTC date (YYYY-MM-DD) for Monday of the week. */
-  weekStart: string;
+export interface DailyCountBucket {
+  /** UTC date (YYYY-MM-DD). */
+  date: string;
   count: number;
 }
 
 export type RelationshipAgeBand = "new" | "growing" | "established" | "longTerm";
 
-export interface WeeklyInteractionsByAgeBucket {
-  weekStart: string;
-  new: number;
-  growing: number;
-  established: number;
-  longTerm: number;
+export interface RelationshipAgeEngagementBucket {
+  band: RelationshipAgeBand;
+  /** Mean occurred-interaction count among relationships in this tenure band; null when empty. */
+  averageInteractions: number | null;
+  relationshipCount: number;
 }
 
 export interface TopContactsAverage {
@@ -31,15 +30,6 @@ function utcStartOfDay(d: Date): Date {
   return x;
 }
 
-/** Monday-based week start (UTC). */
-function utcStartOfWeek(d: Date): Date {
-  const x = utcStartOfDay(d);
-  const dow = x.getUTCDay();
-  const back = (dow + 6) % 7;
-  x.setUTCDate(x.getUTCDate() - back);
-  return x;
-}
-
 function ymdUTC(d: Date): string {
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -47,8 +37,19 @@ function ymdUTC(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function weekKeyFor(iso: string): string {
-  return ymdUTC(utcStartOfWeek(new Date(iso)));
+function dayKeyFor(iso: string): string {
+  return ymdUTC(utcStartOfDay(new Date(iso)));
+}
+
+function walkDays(from: Date, to: Date): string[] {
+  const keys: string[] = [];
+  const cursor = utcStartOfDay(from);
+  const end = utcStartOfDay(to);
+  while (cursor.getTime() <= end.getTime()) {
+    keys.push(ymdUTC(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return keys;
 }
 
 function relationshipAgeBand(
@@ -64,102 +65,93 @@ function relationshipAgeBand(
   return "longTerm";
 }
 
-function walkWeeks(from: Date, to: Date): string[] {
-  const keys: string[] = [];
-  const cursor = utcStartOfWeek(from);
-  const end = utcStartOfWeek(to);
-  while (cursor.getTime() <= end.getTime()) {
-    keys.push(ymdUTC(cursor));
-    cursor.setUTCDate(cursor.getUTCDate() + 7);
-  }
-  return keys;
-}
+const AGE_BANDS: RelationshipAgeBand[] = [
+  "new",
+  "growing",
+  "established",
+  "longTerm",
+];
 
 /**
- * New contacts added per week (by `createdAt`). One bar per week in [from, to].
+ * New contacts added per day (by `createdAt`). One bar per day in [from, to].
  */
-export function peopleAddedPerWeek(input: {
+export function peopleAddedPerDay(input: {
   createdAts: string[];
   from: string;
   to: string;
-}): WeeklyCountBucket[] {
+}): DailyCountBucket[] {
   const counts = new Map<string, number>();
   for (const iso of input.createdAts) {
-    const key = weekKeyFor(iso);
+    const key = dayKeyFor(iso);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  const weeks = walkWeeks(
-    utcStartOfWeek(new Date(input.from)),
-    utcStartOfWeek(new Date(input.to)),
-  );
-  return weeks.map((weekStart) => ({
-    weekStart,
-    count: counts.get(weekStart) ?? 0,
+  const days = walkDays(new Date(input.from), new Date(input.to));
+  return days.map((date) => ({
+    date,
+    count: counts.get(date) ?? 0,
   }));
 }
 
 /**
- * New groups added per week (by `createdAt`).
+ * New groups added per day (by `createdAt`).
  */
-export function groupsAddedPerWeek(input: {
+export function groupsAddedPerDay(input: {
   createdAts: string[];
   from: string;
   to: string;
-}): WeeklyCountBucket[] {
-  return peopleAddedPerWeek(input);
+}): DailyCountBucket[] {
+  return peopleAddedPerDay(input);
 }
 
 /**
- * Occurred interactions per calendar week, split by relationship tenure at
- * interaction time. Each contact on an interaction contributes one count to
- * their relationship's age band for that week.
+ * Average occurred-interaction count per relationship, grouped by tenure at
+ * `to`. Each contact with a known relationship `createdAt` contributes one
+ * relationship; interactions in [from, to] are counted (zero when none).
  */
-export function interactionsPerWeekByRelationshipAge(input: {
+export function averageInteractionsByRelationshipAge(input: {
   interactions: Interaction[];
   /** contact id → relationship `createdAt` */
   relationshipCreatedAtByContactId: Record<string, string>;
   from: string;
   to: string;
-}): WeeklyInteractionsByAgeBucket[] {
-  const counts = new Map<
-    string,
-    { new: number; growing: number; established: number; longTerm: number }
-  >();
+}): RelationshipAgeEngagementBucket[] {
+  const fromTime = new Date(input.from).getTime();
+  const toTime = new Date(input.to).getTime();
+  const at = new Date(input.to);
 
-  const bump = (weekStart: string, band: RelationshipAgeBand) => {
-    const prev = counts.get(weekStart) ?? {
-      new: 0,
-      growing: 0,
-      established: 0,
-      longTerm: 0,
-    };
-    prev[band] += 1;
-    counts.set(weekStart, prev);
-  };
-
+  const interactionCounts = new Map<string, number>();
   for (const i of input.interactions) {
     if (i.status !== "occurred") continue;
-    const at = new Date(i.time);
-    const weekStart = weekKeyFor(i.time);
+    const t = new Date(i.time).getTime();
+    if (t < fromTime || t > toTime) continue;
     for (const c of i.contacts) {
-      const relCreated = input.relationshipCreatedAtByContactId[c.id];
-      if (!relCreated) continue;
-      bump(weekStart, relationshipAgeBand(relCreated, at));
+      interactionCounts.set(c.id, (interactionCounts.get(c.id) ?? 0) + 1);
     }
   }
 
-  const weeks = walkWeeks(
-    utcStartOfWeek(new Date(input.from)),
-    utcStartOfWeek(new Date(input.to)),
-  );
-  return weeks.map((weekStart) => {
-    const c = counts.get(weekStart);
+  const perBand = new Map<RelationshipAgeBand, number[]>();
+  for (const band of AGE_BANDS) {
+    perBand.set(band, []);
+  }
+
+  for (const [contactId, relCreated] of Object.entries(
+    input.relationshipCreatedAtByContactId,
+  )) {
+    const band = relationshipAgeBand(relCreated, at);
+    const count = interactionCounts.get(contactId) ?? 0;
+    perBand.get(band)!.push(count);
+  }
+
+  return AGE_BANDS.map((band) => {
+    const counts = perBand.get(band)!;
+    if (counts.length === 0) {
+      return { band, averageInteractions: null, relationshipCount: 0 };
+    }
+    const sum = counts.reduce((a, b) => a + b, 0);
     return {
-      weekStart,
-      new: c?.new ?? 0,
-      growing: c?.growing ?? 0,
-      established: c?.established ?? 0,
-      longTerm: c?.longTerm ?? 0,
+      band,
+      averageInteractions: Math.round((sum / counts.length) * 10) / 10,
+      relationshipCount: counts.length,
     };
   });
 }

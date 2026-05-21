@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 import type { Interaction } from "@related/shared";
 import {
-  peopleAddedPerWeek,
-  groupsAddedPerWeek,
-  interactionsPerWeekByRelationshipAge,
+  peopleAddedPerDay,
+  groupsAddedPerDay,
+  averageInteractionsByRelationshipAge,
   averageInteractionsAmongTopContacts,
 } from "@related/shared";
 import { Card, Eyebrow, H2, Pill, Mono } from "@/components/ui";
@@ -13,9 +13,9 @@ import { Card, Eyebrow, H2, Pill, Mono } from "@/components/ui";
 type AnalyticsSection = "growth" | "engagement" | "inner";
 type GrowthChart = "people" | "groups";
 type InnerWindow = "7d" | "30d" | "90d";
-type WeekWindow = "12w" | "26w" | "52w";
+type DayWindow = "14d" | "30d" | "90d" | "1y";
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SECTION_TABS: { id: AnalyticsSection; label: string }[] = [
   { id: "growth", label: "Growth" },
@@ -37,20 +37,34 @@ const AGE_LABELS: Record<string, string> = {
   longTerm: "1+ year",
 };
 
+const DAY_WINDOW_DAYS: Record<DayWindow, number> = {
+  "14d": 14,
+  "30d": 30,
+  "90d": 90,
+  "1y": 365,
+};
+
+const DAY_WINDOW_LABELS: Record<DayWindow, string> = {
+  "14d": "14 days",
+  "30d": "30 days",
+  "90d": "90 days",
+  "1y": "1 year",
+};
+
 const SECTION_META: Record<
   AnalyticsSection,
   { eyebrow: string; title: string; description: string }
 > = {
   growth: {
     eyebrow: "Growth",
-    title: "New per Week",
-    description: "How many contacts or groups you added each week.",
+    title: "New per Day",
+    description: "How many contacts or groups you added each day.",
   },
   engagement: {
     eyebrow: "Engagement",
-    title: "Weekly Interactions by Relationship Age",
+    title: "Average Interactions by Relationship Length",
     description:
-      "Occurred interactions per week, stacked by how long you had known each person at the touchpoint.",
+      "Mean occurred interactions in the window, grouped by how long you have known each person.",
   },
   inner: {
     eyebrow: "Inner circle",
@@ -73,13 +87,13 @@ interface Props {
   relationshipCreatedAtByContactId: Record<string, string>;
 }
 
-function fmtWeek(weekStart: string): string {
-  const d = new Date(`${weekStart}T00:00:00`);
+function fmtDay(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function windowRange(now: Date, weeks: number): [Date, Date] {
-  return [new Date(now.getTime() - weeks * WEEK_MS), now];
+function windowRange(now: Date, days: number): [Date, Date] {
+  return [new Date(now.getTime() - days * DAY_MS), now];
 }
 
 function niceMax(max: number): number {
@@ -94,7 +108,7 @@ function SimpleBarChart({
   title,
   barColor = "#ed7a35",
 }: {
-  buckets: { label: string; count: number }[];
+  buckets: { label: string; count: number; color?: string }[];
   title: string;
   barColor?: string;
 }) {
@@ -166,7 +180,7 @@ function SimpleBarChart({
             width={barW}
             height={h}
             rx={2}
-            fill={barColor}
+            fill={b.color ?? barColor}
           >
             <title>{`${b.label}: ${b.count}`}</title>
           </rect>
@@ -185,140 +199,6 @@ function SimpleBarChart({
         </text>
       ))}
     </svg>
-  );
-}
-
-function StackedWeeklyChart({
-  buckets,
-  title,
-}: {
-  buckets: {
-    label: string;
-    new: number;
-    growing: number;
-    established: number;
-    longTerm: number;
-  }[];
-  title: string;
-}) {
-  const totals = buckets.map(
-    (b) => b.new + b.growing + b.established + b.longTerm,
-  );
-  const max = Math.max(1, ...totals);
-  const yMax = niceMax(max);
-  const yTicks = [0, Math.round(yMax / 3), Math.round((yMax * 2) / 3), yMax];
-
-  const W = 1000;
-  const H = 240;
-  const PAD_L = 56;
-  const PAD_R = 24;
-  const PAD_T = 16;
-  const PAD_B = 32;
-  const innerW = W - PAD_L - PAD_R;
-  const innerH = H - PAD_T - PAD_B;
-
-  const slot = buckets.length > 0 ? innerW / buckets.length : 0;
-  const barW = Math.max(2, slot * 0.7);
-  const xAt = (i: number) => PAD_L + i * slot + (slot - barW) / 2;
-  const yAt = (count: number) => PAD_T + innerH - (count / yMax) * innerH;
-
-  const series = ["new", "growing", "established", "longTerm"] as const;
-
-  const xLabelIndices = buckets
-    .map((_, i) => i)
-    .filter(
-      (i) =>
-        buckets.length <= 1 ||
-        i % Math.max(1, Math.floor((buckets.length - 1) / 4)) === 0,
-    );
-
-  return (
-    <div>
-      <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2">
-        {series.map((key) => (
-          <div
-            key={key}
-            className="flex items-center gap-2 text-[12px] text-fg-muted"
-          >
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-sm"
-              style={{ backgroundColor: AGE_COLORS[key] }}
-            />
-            {AGE_LABELS[key]}
-          </div>
-        ))}
-      </div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label={title}
-        className="block w-full"
-      >
-        {yTicks.map((t) => (
-          <g key={`y-${t}`}>
-            <line
-              x1={PAD_L}
-              x2={W - PAD_R}
-              y1={yAt(t)}
-              y2={yAt(t)}
-              stroke="currentColor"
-              strokeWidth={1}
-              strokeDasharray="4 4"
-              className="text-border"
-            />
-            <text
-              x={PAD_L - 12}
-              y={yAt(t) + 4}
-              textAnchor="end"
-              className="fill-fg-muted font-[family-name:var(--font-jetbrains-mono)] text-[12px]"
-            >
-              {t}
-            </text>
-          </g>
-        ))}
-
-        {buckets.map((b, i) => {
-          const total =
-            b.new + b.growing + b.established + b.longTerm;
-          if (total === 0) return null;
-          let stackTop = PAD_T + innerH;
-          return (
-            <g key={`stack-${b.label}`}>
-              {series.map((key) => {
-                const count = b[key];
-                if (count === 0) return null;
-                const segH = (count / yMax) * innerH;
-                stackTop -= segH;
-                return (
-                  <rect
-                    key={`${b.label}-${key}`}
-                    x={xAt(i)}
-                    y={stackTop}
-                    width={barW}
-                    height={segH}
-                    fill={AGE_COLORS[key]}
-                  >
-                    <title>{`${b.label} — ${AGE_LABELS[key]}: ${count}`}</title>
-                  </rect>
-                );
-              })}
-            </g>
-          );
-        })}
-
-        {xLabelIndices.map((i) => (
-          <text
-            key={`x-${i}`}
-            x={xAt(i) + barW / 2}
-            y={H - PAD_B + 18}
-            textAnchor="middle"
-            className="fill-fg-muted text-[12px]"
-          >
-            {buckets[i].label}
-          </text>
-        ))}
-      </svg>
-    </div>
   );
 }
 
@@ -349,6 +229,24 @@ function SectionToggle({
   );
 }
 
+function DayWindowPills({
+  active,
+  onChange,
+}: {
+  active: DayWindow;
+  onChange: (w: DayWindow) => void;
+}) {
+  return (
+    <>
+      {(Object.keys(DAY_WINDOW_DAYS) as DayWindow[]).map((w) => (
+        <Pill key={w} active={active === w} onClick={() => onChange(w)}>
+          {DAY_WINDOW_LABELS[w]}
+        </Pill>
+      ))}
+    </>
+  );
+}
+
 export function RelationshipsIndexCharts({
   peopleCreatedAts,
   groupCreatedAts,
@@ -359,49 +257,46 @@ export function RelationshipsIndexCharts({
   const [section, setSection] = useState<AnalyticsSection>("growth");
   const [growthChart, setGrowthChart] = useState<GrowthChart>("people");
   const [innerWindow, setInnerWindow] = useState<InnerWindow>("30d");
-  const [weekWindow, setWeekWindow] = useState<WeekWindow>("26w");
+  const [dayWindow, setDayWindow] = useState<DayWindow>("30d");
 
-  const weeks =
-    weekWindow === "12w" ? 12 : weekWindow === "26w" ? 26 : 52;
+  const windowDays = DAY_WINDOW_DAYS[dayWindow];
 
   const [from, to] = useMemo(
-    () => windowRange(now, weeks),
-    [now, weeks],
+    () => windowRange(now, windowDays),
+    [now, windowDays],
   );
 
   const peopleBuckets = useMemo(
     () =>
-      peopleAddedPerWeek({
+      peopleAddedPerDay({
         createdAts: peopleCreatedAts,
         from: from.toISOString(),
         to: to.toISOString(),
-      }).map((b) => ({ label: fmtWeek(b.weekStart), count: b.count })),
+      }).map((b) => ({ label: fmtDay(b.date), count: b.count })),
     [peopleCreatedAts, from, to],
   );
 
   const groupBuckets = useMemo(
     () =>
-      groupsAddedPerWeek({
+      groupsAddedPerDay({
         createdAts: groupCreatedAts,
         from: from.toISOString(),
         to: to.toISOString(),
-      }).map((b) => ({ label: fmtWeek(b.weekStart), count: b.count })),
+      }).map((b) => ({ label: fmtDay(b.date), count: b.count })),
     [groupCreatedAts, from, to],
   );
 
-  const ageBuckets = useMemo(
+  const engagementBuckets = useMemo(
     () =>
-      interactionsPerWeekByRelationshipAge({
+      averageInteractionsByRelationshipAge({
         interactions,
         relationshipCreatedAtByContactId,
         from: from.toISOString(),
         to: to.toISOString(),
       }).map((b) => ({
-        label: fmtWeek(b.weekStart),
-        new: b.new,
-        growing: b.growing,
-        established: b.established,
-        longTerm: b.longTerm,
+        label: AGE_LABELS[b.band],
+        count: b.averageInteractions ?? 0,
+        color: AGE_COLORS[b.band],
       })),
     [interactions, relationshipCreatedAtByContactId, from, to],
   );
@@ -433,7 +328,7 @@ export function RelationshipsIndexCharts({
 
   const meta = SECTION_META[section];
   const growthTitle =
-    growthChart === "people" ? "New People per Week" : "New Groups per Week";
+    growthChart === "people" ? "New People per Day" : "New Groups per Day";
 
   return (
     <div className="space-y-3">
@@ -446,7 +341,8 @@ export function RelationshipsIndexCharts({
         </H2>
         <p className="mt-1 text-[13px] leading-[20px] text-fg-muted">
           {meta.description}
-          {section !== "inner" && ` Last ${weeks} weeks.`}
+          {(section === "growth" || section === "engagement") &&
+            ` Last ${DAY_WINDOW_LABELS[dayWindow]}.`}
         </p>
 
         {section === "growth" && (
@@ -464,47 +360,13 @@ export function RelationshipsIndexCharts({
               Groups
             </Pill>
             <span className="mx-1 h-4 w-px bg-border" />
-            <Pill
-              active={weekWindow === "12w"}
-              onClick={() => setWeekWindow("12w")}
-            >
-              12 weeks
-            </Pill>
-            <Pill
-              active={weekWindow === "26w"}
-              onClick={() => setWeekWindow("26w")}
-            >
-              26 weeks
-            </Pill>
-            <Pill
-              active={weekWindow === "52w"}
-              onClick={() => setWeekWindow("52w")}
-            >
-              52 weeks
-            </Pill>
+            <DayWindowPills active={dayWindow} onChange={setDayWindow} />
           </div>
         )}
 
         {section === "engagement" && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Pill
-              active={weekWindow === "12w"}
-              onClick={() => setWeekWindow("12w")}
-            >
-              12 weeks
-            </Pill>
-            <Pill
-              active={weekWindow === "26w"}
-              onClick={() => setWeekWindow("26w")}
-            >
-              26 weeks
-            </Pill>
-            <Pill
-              active={weekWindow === "52w"}
-              onClick={() => setWeekWindow("52w")}
-            >
-              52 weeks
-            </Pill>
+            <DayWindowPills active={dayWindow} onChange={setDayWindow} />
           </div>
         )}
 
@@ -535,21 +397,37 @@ export function RelationshipsIndexCharts({
           {section === "growth" && growthChart === "people" && (
             <SimpleBarChart
               buckets={peopleBuckets}
-              title="New people per week"
+              title="New people per day"
             />
           )}
           {section === "growth" && growthChart === "groups" && (
             <SimpleBarChart
               buckets={groupBuckets}
-              title="New groups per week"
+              title="New groups per day"
               barColor="#3d8f6e"
             />
           )}
           {section === "engagement" && (
-            <StackedWeeklyChart
-              buckets={ageBuckets}
-              title="Weekly interactions by relationship age"
-            />
+            <div>
+              <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2">
+                {Object.entries(AGE_LABELS).map(([key, label]) => (
+                  <div
+                    key={key}
+                    className="flex items-center gap-2 text-[12px] text-fg-muted"
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-sm"
+                      style={{ backgroundColor: AGE_COLORS[key] }}
+                    />
+                    {label}
+                  </div>
+                ))}
+              </div>
+              <SimpleBarChart
+                buckets={engagementBuckets}
+                title="Average interactions by relationship length"
+              />
+            </div>
           )}
           {section === "inner" && (
             <div>

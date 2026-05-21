@@ -58,9 +58,9 @@ export {
   calendarAnalytics,
   eventsPerDay,
   commitmentAnalytics,
-  peopleAddedPerWeek,
-  groupsAddedPerWeek,
-  interactionsPerWeekByRelationshipAge,
+  peopleAddedPerDay,
+  groupsAddedPerDay,
+  averageInteractionsByRelationshipAge,
   averageInteractionsAmongTopContacts,
 } from "./analytics";
 export type {
@@ -69,8 +69,8 @@ export type {
   DailyBucket,
   EventsPerDayInput,
   CommitmentAnalytics,
-  WeeklyCountBucket,
-  WeeklyInteractionsByAgeBucket,
+  DailyCountBucket,
+  RelationshipAgeEngagementBucket,
   RelationshipAgeBand,
   TopContactsAverage,
 } from "./analytics";

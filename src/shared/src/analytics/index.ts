@@ -12,14 +12,14 @@ export { commitmentAnalytics } from "./commitmentAnalytics";
 export type { CommitmentAnalytics } from "./commitmentAnalytics";
 
 export {
-  peopleAddedPerWeek,
-  groupsAddedPerWeek,
-  interactionsPerWeekByRelationshipAge,
+  peopleAddedPerDay,
+  groupsAddedPerDay,
+  averageInteractionsByRelationshipAge,
   averageInteractionsAmongTopContacts,
 } from "./relationshipIndexAnalytics";
 export type {
-  WeeklyCountBucket,
-  WeeklyInteractionsByAgeBucket,
+  DailyCountBucket,
+  RelationshipAgeEngagementBucket,
   RelationshipAgeBand,
   TopContactsAverage,
 } from "./relationshipIndexAnalytics";
