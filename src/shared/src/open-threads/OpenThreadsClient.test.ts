@@ -31,11 +31,15 @@ function withClient() {
 const NULL_COMMITMENT = {
   origin: null,
   communication_status: "not_communicated" as const,
+  why_helps_person: null,
+  why_i_can_help: null,
 };
 
 const NULL_COMMITMENT_CAMEL = {
   origin: null,
   communicationStatus: "not_communicated" as const,
+  whyHelpsPerson: null,
+  whyICanHelp: null,
 };
 
 describe("OpenThreadsClient.createOpenThread", () => {
@@ -259,6 +263,8 @@ describe("OpenThreadsClient.setCommitmentMeta", () => {
         direction: "me_owes_them",
         origin: "self_led",
         communication_status: "confirmed",
+        why_helps_person: null,
+        why_i_can_help: null,
         created_at: "2026-04-01T10:00:00Z",
         closed_at: null,
         open_thread_relationships: [{ relationship_id: "r-1" }],
@@ -282,6 +288,87 @@ describe("OpenThreadsClient.setCommitmentMeta", () => {
     expect(eq).toHaveBeenCalledWith("id", "ot-1");
     expect(updated.origin).toBe("self_led");
     expect(updated.communicationStatus).toBe("confirmed");
+  });
+
+  it("maps whyHelpsPerson / whyICanHelp to snake-case columns and accepts null clears", async () => {
+    const { q, client } = withClient();
+    const single = jest.fn().mockResolvedValue({
+      data: {
+        id: "ot-2",
+        description: "the context one",
+        direction: "me_owes_them",
+        origin: null,
+        communication_status: "not_communicated",
+        why_helps_person: "they want to learn",
+        why_i_can_help: null,
+        created_at: "2026-04-01T10:00:00Z",
+        closed_at: null,
+        open_thread_relationships: [{ relationship_id: "r-1" }],
+      },
+      error: null,
+    });
+    const selectInner = jest.fn(() => ({ single }));
+    const eq = jest.fn(() => ({ select: selectInner }));
+    q.update.mockReturnValueOnce({ eq } as unknown as ReturnType<typeof q.update>);
+
+    const updated = await client.setCommitmentMeta("ot-2", {
+      whyHelpsPerson: "they want to learn",
+      whyICanHelp: null,
+    });
+
+    expect(q.update).toHaveBeenCalledWith({
+      why_helps_person: "they want to learn",
+      why_i_can_help: null,
+    });
+    expect(updated.whyHelpsPerson).toBe("they want to learn");
+    expect(updated.whyICanHelp).toBeNull();
+  });
+});
+
+describe("OpenThreadsClient.setOpenThreadRelationships", () => {
+  it("calls the RPC then re-reads and returns the hydrated thread", async () => {
+    const { q, client } = withClient();
+    q.rpc.mockResolvedValueOnce({ data: null, error: null });
+
+    const single = jest.fn().mockResolvedValue({
+      data: {
+        id: "ot-3",
+        description: "reassigned",
+        direction: "me_owes_them",
+        origin: null,
+        communication_status: "not_communicated",
+        why_helps_person: null,
+        why_i_can_help: null,
+        created_at: "2026-04-01T10:00:00Z",
+        closed_at: null,
+        open_thread_relationships: [{ relationship_id: "r-new" }],
+      },
+      error: null,
+    });
+    const eq = jest.fn(() => ({ single }));
+    q.select.mockReturnValueOnce({ eq } as unknown as ReturnType<typeof q.select>);
+
+    const updated = await client.setOpenThreadRelationships("ot-3", ["r-new"]);
+
+    expect(q.rpc).toHaveBeenCalledWith("set_open_thread_relationships", {
+      p_open_thread_id: "ot-3",
+      p_relationship_ids: ["r-new"],
+    });
+    expect(q.from).toHaveBeenLastCalledWith("open_threads");
+    expect(eq).toHaveBeenCalledWith("id", "ot-3");
+    expect(updated.relationshipIds).toEqual(["r-new"]);
+  });
+
+  it("throws when the RPC errors (e.g. empty relationship list)", async () => {
+    const { q, client } = withClient();
+    q.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "at least one relationship required" },
+    });
+
+    await expect(
+      client.setOpenThreadRelationships("ot-3", []),
+    ).rejects.toMatchObject({ message: "at least one relationship required" });
   });
 });
 

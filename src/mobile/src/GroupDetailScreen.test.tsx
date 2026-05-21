@@ -80,9 +80,13 @@ describe("<GroupDetailScreen />", () => {
         id: "ot-1",
         description: "plan next dinner",
         direction: "me_owes_them",
+        origin: null,
+        communicationStatus: "not_communicated",
         createdAt: "2026-05-18T00:00:00Z",
         closedAt: null,
         relationshipIds: ["r-college"],
+        whyHelpsPerson: null,
+        whyICanHelp: null,
       },
     ]);
     interactions.listForGroup.mockResolvedValue([

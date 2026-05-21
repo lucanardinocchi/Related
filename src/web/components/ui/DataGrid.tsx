@@ -35,9 +35,9 @@ interface DataGridProps<T> {
 
 /**
  * Notion-style table grid for the dense list views (Relationships index,
- * Calendar list, Commitments). Header row sits above; body rows reveal
- * subtle hover state. Columns specify their own widths so the layout is
- * declarative and matches across header and rows.
+ * Calendar list). Header row sits above; body rows reveal subtle hover
+ * state. Columns specify their own widths so the layout is declarative and
+ * matches across header and rows.
  */
 export function DataGrid<T>({
   columns,
