@@ -8,15 +8,27 @@ Receives a `chatId`, loads the transcript through the User's authenticated Supab
 
 ## File layout
 
-The function is split across four modules so the prompt, context loader, and tool surface can evolve independently:
+The function is split across modules so the prompt, context loader, and tool surface can evolve independently:
 
 | File | Responsibility |
 | --- | --- |
 | `index.ts` | Request handler, message-history conversion, Anthropic streaming loop, SSE wire format. |
 | `prompt.ts` | `SYSTEM_PROMPT_BASE` (cached) + `renderContextBlock(snapshot)` (per-turn). |
 | `contextLoader.ts` | `loadConversationContext(supabase)` — one-shot snapshot of the User's world. |
+| `queries.ts` | Shared read layer: Supabase select strings, snapshot/tool query builders, row-to-domain mappers. |
 | `tools.ts` | Read-only tool definitions and dispatcher. |
 | `types.ts` | Shared interfaces. |
+
+### Read module (`queries.ts`)
+
+All Supabase read shapes for Relationships, Groups, Open Threads, Interactions, and User Context (Goals & Values, Situational State, Transient Intent) are defined once in `queries.ts`. Each entity exposes:
+
+- **Select strings** — e.g. `RELATIONSHIP_SELECT_SNAPSHOT` (compact, for context preload) vs `RELATIONSHIP_SELECT_TOOL` (full profile fields for tool responses).
+- **Snapshot fetchers** — used by `contextLoader.ts` (`fetchRelationshipsSnapshot`, `fetchOpenThreadsSnapshot`, …).
+- **Tool query builders** — used by `tools.ts` (`buildRelationshipsListQuery`, `buildOpenThreadsListQuery`, …).
+- **Mappers** — raw PostgREST rows → domain summaries (`mapRelationshipsToSummaries`, …).
+
+`contextLoader.ts` and `tools.ts` must not duplicate join shapes; add or change a select in `queries.ts` and wire both call sites from there.
 
 The two system blocks are sent together. `SYSTEM_PROMPT_BASE` carries `cache_control: ephemeral` so subsequent turns in the same chat hit Anthropic's prompt cache. The per-turn context block is not cached because Open Threads and Interactions can change between turns.
 
