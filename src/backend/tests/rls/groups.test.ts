@@ -311,6 +311,49 @@ describe("Group RLS", () => {
     ]);
   });
 
+  test("listMembers query with contact(name) order works", async () => {
+    // GroupsClient.listMembers relies on this exact PostgREST order clause.
+    const { data: aGroup, error: gErr } = await adminClient
+      .from("groups")
+      .insert({ owner_id: userA.id, name: "circle" })
+      .select("id")
+      .single();
+    if (gErr || !aGroup) throw new Error(gErr?.message);
+
+    const { data: c1, error: c1Err } = await adminClient
+      .from("contacts")
+      .insert({ owner_id: userA.id, name: "Zara" })
+      .select("id")
+      .single();
+    if (c1Err || !c1) throw new Error(c1Err?.message);
+
+    const { data: c2, error: c2Err } = await adminClient
+      .from("contacts")
+      .insert({ owner_id: userA.id, name: "Alice" })
+      .select("id")
+      .single();
+    if (c2Err || !c2) throw new Error(c2Err?.message);
+
+    await userA.client.rpc("add_group_member", {
+      p_group_id: aGroup.id,
+      p_contact_id: c1.id,
+    });
+    await userA.client.rpc("add_group_member", {
+      p_group_id: aGroup.id,
+      p_contact_id: c2.id,
+    });
+
+    const { data, error } = await userA.client
+      .from("contact_groups")
+      .select("contact:contacts(id, name, phone, email, created_at)")
+      .eq("group_id", aGroup.id)
+      .order("contact(name)", { ascending: true });
+    expect(error).toBeNull();
+    expect(
+      (data as { contact: { name: string } }[] | null)?.map((r) => r.contact.name),
+    ).toEqual(["Alice", "Zara"]);
+  });
+
   test("User A can rename their own Group", async () => {
     // 20260520000003_crud_rls_policies.sql added the UPDATE policy for groups.
     const { data: aGroup } = await adminClient
