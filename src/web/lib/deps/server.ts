@@ -10,6 +10,7 @@ import {
   RelationshipsClient,
   UserContextClient,
   UserProviderTokensClient,
+  ValuesAlignmentClient,
   MessagesClient,
 } from "@related/shared";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -40,6 +41,7 @@ export async function getServerDeps() {
     candidates: new CandidatesClient(supabase),
     chats: new ChatsClient(supabase),
     userContext: new UserContextClient(supabase, resolveOwnerId),
+    valuesAlignment: new ValuesAlignmentClient(supabase, resolveOwnerId),
     onboarding: new OnboardingClient(supabase, resolveOwnerId),
     userProviderTokens: new UserProviderTokensClient(supabase, resolveOwnerId),
     messages: new MessagesClient(supabase),

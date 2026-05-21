@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Calendar as CalendarIcon,
   CircleCheck,
+  HeartHandshake,
   LogOut,
   MessageSquareText,
   PanelLeftClose,
@@ -33,6 +34,7 @@ const PRIMARY: NavItem[] = [
 
 const SETTINGS: NavItem[] = [
   { href: "/context", label: "Context", icon: Sparkles },
+  { href: "/values", label: "Values", icon: HeartHandshake },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

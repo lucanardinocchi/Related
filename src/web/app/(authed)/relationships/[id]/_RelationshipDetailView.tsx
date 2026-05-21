@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type {
-  CandidateSet,
   CommitmentCommunicationStatus,
   CommitmentOrigin,
   Interaction,
@@ -19,7 +18,6 @@ import { KeyDetailsSection, type GroupSummary } from "./_KeyDetailsSection";
 import { OpenThreadsSection } from "./_OpenThreadsSection";
 import { ContextTimelineSection } from "./_ContextTimelineSection";
 import type { AddContextResult } from "./_AddContextModal";
-import { RecentCandidateSection } from "./_RecentCandidateSection";
 import { CommsSection } from "./_CommsSection";
 
 interface Props {
@@ -27,7 +25,6 @@ interface Props {
   interactions: Interaction[];
   openThreads: OpenThread[];
   groupMemberships: GroupSummary[];
-  latestCandidateSet: CandidateSet | null;
 }
 
 export function RelationshipDetailView({
@@ -35,7 +32,6 @@ export function RelationshipDetailView({
   interactions: initialInteractions,
   openThreads: initialOpenThreads,
   groupMemberships,
-  latestCandidateSet,
 }: Props) {
   const deps = getBrowserDeps();
   const [relationship, setRelationship] = useState(initialRelationship);
@@ -294,10 +290,6 @@ export function RelationshipDetailView({
         onWhatsappWaIdResolved={saveWhatsappWaId}
         onTikTokOpenIdResolved={saveTikTokOpenId}
       />
-
-      {latestCandidateSet ? (
-        <RecentCandidateSection candidateSet={latestCandidateSet} />
-      ) : null}
 
       <OpenThreadsSection
         threads={openThreads}

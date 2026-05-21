@@ -16,7 +16,7 @@ export default async function RelationshipDetailPage({
   params: Promise<Params>;
 }) {
   const { id } = await params;
-  const { relationships, interactions, openThreads, groups, candidates } =
+  const { relationships, interactions, openThreads, groups } =
     await getServerDeps();
 
   let relationship;
@@ -26,13 +26,11 @@ export default async function RelationshipDetailPage({
     notFound();
   }
 
-  const [interactionHistory, threads, groupMemberships, latestCandidateSet] =
-    await Promise.all([
-      interactions.listForContact(relationship.contact.id),
-      openThreads.listOpenForRelationship(relationship.id),
-      groups.listForContact(relationship.contact.id),
-      candidates.getLatestForRelationship(relationship.id),
-    ]);
+  const [interactionHistory, threads, groupMemberships] = await Promise.all([
+    interactions.listForContact(relationship.contact.id),
+    openThreads.listOpenForRelationship(relationship.id),
+    groups.listForContact(relationship.contact.id),
+  ]);
 
   return (
     <div className="space-y-2">
@@ -52,7 +50,6 @@ export default async function RelationshipDetailPage({
           name: g.group.name,
           relationshipId: g.id,
         }))}
-        latestCandidateSet={latestCandidateSet}
       />
     </div>
   );

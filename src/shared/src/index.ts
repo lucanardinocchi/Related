@@ -159,6 +159,20 @@ export type {
 } from "./user-context/UserContextClient";
 
 export {
+  VALUES_CHARACTERS,
+  getValuesCharacter,
+} from "./values/valuesCharacters";
+export type { ValuesCharacter } from "./values/valuesCharacters";
+
+export { ValuesAlignmentClient } from "./values/ValuesAlignmentClient";
+export type {
+  CharacterValuesAlignment,
+  InferenceCharacter,
+  InferencePayload,
+  ValuesAlignmentClientConfig,
+} from "./values/ValuesAlignmentClient";
+
+export {
   tryUpdateSituationalState,
   defaultLifeChangeDetector,
 } from "./user-context/silentWrite";

@@ -21,6 +21,20 @@ export function fmtTime(iso: string): string {
   });
 }
 
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+/** Time only for messages within the last 24 hours; date otherwise. */
+export function fmtCommsSentAt(iso: string, now: Date = new Date()): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+
+  if (now.getTime() - parsed.getTime() < TWENTY_FOUR_HOURS_MS) {
+    return fmtTime(iso);
+  }
+
+  return fmtDate(iso);
+}
+
 export function toLocalDtInput(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");

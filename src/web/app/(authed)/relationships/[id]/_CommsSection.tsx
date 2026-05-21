@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   type CommsTimelineItem,
@@ -23,8 +23,14 @@ import {
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { EmptyState, Section } from "@/components/ui";
-import { fmtDay, fmtTime } from "./_dateFormat";
+import { fmtCommsSentAt } from "./_dateFormat";
 import { CommsPlatformIcon } from "./_commsIcons";
+
+const INITIAL_VISIBLE = 24;
+const LOAD_MORE_BATCH = 24;
+const MIN_GAP_PX = 14;
+const MAX_GAP_PX = 112;
+const LOAD_MORE_GAP_PX = 40;
 
 interface ContactIdentifiers {
   id: string;
@@ -69,6 +75,26 @@ function hasAnyContactIdentifier(contact: ContactIdentifiers): boolean {
   );
 }
 
+/** Map elapsed time between messages to vertical spacing on the spine. */
+function gapPxBetween(sentAtA: string, sentAtB: string): number {
+  const a = new Date(sentAtA).getTime();
+  const b = new Date(sentAtB).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return MIN_GAP_PX;
+
+  const deltaMs = Math.abs(b - a);
+  const minutes = deltaMs / 60_000;
+
+  if (minutes < 3) return MIN_GAP_PX;
+  if (minutes < 30) return MIN_GAP_PX + ((minutes - 3) / 27) * 18;
+  if (minutes < 180) return 32 + ((minutes - 30) / 150) * 24;
+
+  const hours = minutes / 60;
+  if (hours < 24) return 56 + (hours / 24) * 28;
+
+  const days = hours / 24;
+  return Math.min(MAX_GAP_PX, 84 + days * 10);
+}
+
 export function CommsSection({
   contact,
   onInstagramScopedIdResolved,
@@ -78,6 +104,7 @@ export function CommsSection({
 }: Props) {
   const [items, setItems] = useState<CommsTimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
 
   const loadComms = useCallback(async () => {
     setLoading(true);
@@ -283,6 +310,7 @@ export function CommsSection({
 
     await Promise.allSettled(loaders);
     setItems(mergeCommsTimelineItems(collected));
+    setVisibleCount(INITIAL_VISIBLE);
     setLoading(false);
   }, [
     contact,
@@ -296,6 +324,24 @@ export function CommsSection({
     void loadComms();
   }, [loadComms]);
 
+  // mergeCommsTimelineItems already returns newest-first.
+  const visibleItems = useMemo(
+    () => items.slice(0, visibleCount),
+    [items, visibleCount],
+  );
+
+  const gaps = useMemo(() => {
+    const next: number[] = [];
+    for (let i = 0; i < visibleItems.length - 1; i += 1) {
+      next.push(
+        gapPxBetween(visibleItems[i + 1]!.sentAt, visibleItems[i]!.sentAt),
+      );
+    }
+    return next;
+  }, [visibleItems]);
+
+  const hasMore = visibleCount < items.length;
+  const hiddenCount = items.length - visibleItems.length;
   const hasIdentifiers = hasAnyContactIdentifier(contact);
 
   return (
@@ -325,52 +371,182 @@ export function CommsSection({
           }
         />
       ) : (
-        <ol className="divide-y divide-divider">
-          {items.map((item) => (
-            <CommsTimelineRow key={item.id} item={item} />
-          ))}
-        </ol>
+        <CommsSpine
+          contactName={contact.name}
+          gaps={gaps}
+          hasMore={hasMore}
+          hiddenCount={hiddenCount}
+          items={visibleItems}
+          onLoadMore={() =>
+            setVisibleCount((count) =>
+              Math.min(count + LOAD_MORE_BATCH, items.length),
+            )
+          }
+        />
       )}
     </Section>
   );
 }
 
-function CommsTimelineRow({ item }: { item: CommsTimelineItem }) {
-  if (item.platform === "email") {
-    return <EmailCommsRow item={item} />;
-  }
-  return <StandardCommsRow item={item} />;
-}
-
-function StandardCommsRow({ item }: { item: CommsTimelineItem }) {
+function CommsSpine({
+  contactName,
+  items,
+  gaps,
+  hasMore,
+  hiddenCount,
+  onLoadMore,
+}: {
+  contactName: string;
+  items: CommsTimelineItem[];
+  gaps: number[];
+  hasMore: boolean;
+  hiddenCount: number;
+  onLoadMore: () => void;
+}) {
   return (
-    <li className="grid grid-cols-[150px_1fr] items-start gap-4 py-3 first:pt-0 last:pb-0">
-      <div className="select-none pt-[1px] font-[family-name:var(--font-jetbrains-mono)] text-[12px] leading-[18px] tabular-nums text-fg-muted">
-        <div>{fmtDay(item.sentAt)}</div>
-        <div className="text-fg-subtle">{fmtTime(item.sentAt)}</div>
-      </div>
-      <div className="min-w-0">
-        <div className="flex items-start gap-2.5">
-          <CommsPlatformIcon platform={item.platform} />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <DirectionBadge direction={item.direction} />
-            </div>
-            <p className="mt-1 whitespace-pre-wrap text-[13px] text-fg">
-              {item.body}
-            </p>
-          </div>
+    <div className="relative mx-auto max-w-xl py-2">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-border-strong"
+      />
+
+      <ol className="relative z-10 list-none">
+        {items.map((item, index) => (
+          <li key={item.id}>
+            <CommsSpineNode contactName={contactName} item={item} />
+            {index < items.length - 1 ? (
+              <div style={{ height: gaps[index] }} aria-hidden />
+            ) : null}
+          </li>
+        ))}
+      </ol>
+
+      {hasMore ? (
+        <div className="relative z-10 flex flex-col items-center">
+          <div style={{ height: LOAD_MORE_GAP_PX }} aria-hidden />
+          <button
+            type="button"
+            onClick={onLoadMore}
+            className="rounded-full border border-border-strong bg-surface px-3 py-1 font-[family-name:var(--font-jetbrains-mono)] text-[15px] leading-none tracking-[0.35em] text-fg-muted transition-colors hover:border-fg-subtle hover:bg-hover hover:text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+            aria-label={`Load ${Math.min(hiddenCount, LOAD_MORE_BATCH)} older messages`}
+          >
+            ···
+          </button>
         </div>
-      </div>
-    </li>
+      ) : null}
+    </div>
   );
 }
 
-function EmailCommsRow({ item }: { item: CommsTimelineItem }) {
+function PlatformIconBadge({ platform }: { platform: CommsTimelineItem["platform"] }) {
+  return (
+    <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center text-fg-muted">
+      <CommsPlatformIcon platform={platform} />
+    </div>
+  );
+}
+
+const SPINE_GAP_CLASS = "gap-x-4";
+/** Half spine column (0.625rem) + gap-x-4 (1rem), center of circle → card edge */
+const CONNECTOR_WIDTH = "calc(0.3125rem + 1rem)";
+
+function CommsSpineNode({
+  item,
+  contactName,
+}: {
+  item: CommsTimelineItem;
+  contactName: string;
+}) {
+  const fromContact = item.direction === "received";
+
+  return (
+    <div
+      className={`grid grid-cols-[minmax(0,1fr)_0.625rem_minmax(0,1fr)] items-start ${SPINE_GAP_CLASS}`}
+    >
+      <div className="min-w-0">
+        {fromContact ? (
+          <div className="flex justify-end gap-2">
+            <PlatformIconBadge platform={item.platform} />
+            <MessageCard contactName={contactName} item={item} side="left" />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex justify-center self-start pt-[1.125rem]">
+        <div className="relative h-2.5 w-2.5 shrink-0">
+          <div
+            aria-hidden
+            className={`absolute top-1/2 h-px -translate-y-1/2 bg-border-strong ${
+              fromContact
+                ? "right-1/2"
+                : "left-1/2"
+            }`}
+            style={{ width: CONNECTOR_WIDTH }}
+          />
+          <div
+            aria-hidden
+            className="relative z-10 h-2.5 w-2.5 rounded-full border-2 border-border-strong bg-surface shadow-[0_0_0_4px_var(--color-surface)]"
+          />
+        </div>
+      </div>
+
+      <div className="min-w-0">
+        {!fromContact ? (
+          <div className="flex justify-start gap-2">
+            <MessageCard contactName={contactName} item={item} side="right" />
+            <PlatformIconBadge platform={item.platform} />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MessageCard({
+  item,
+  contactName,
+  side,
+}: {
+  item: CommsTimelineItem;
+  contactName: string;
+  side: "left" | "right";
+}) {
+  if (item.platform === "email") {
+    return <EmailMessageCard item={item} side={side} />;
+  }
+
+  return (
+    <div className="max-w-[min(100%,16rem)] rounded-lg border border-border bg-surface px-3 py-2 text-left">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+        {side === "left" ? contactName : "You"}
+      </p>
+      <p className="mt-1 whitespace-pre-wrap text-[13px] leading-[1.45] text-fg">
+        {item.body}
+      </p>
+      <time
+        className={`mt-2 block font-[family-name:var(--font-jetbrains-mono)] text-[10px] tabular-nums text-fg-subtle ${
+          side === "left" ? "text-left" : "text-right"
+        }`}
+      >
+        {fmtCommsSentAt(item.sentAt)}
+      </time>
+    </div>
+  );
+}
+
+function EmailMessageCard({
+  item,
+  side,
+}: {
+  item: CommsTimelineItem;
+  side: "left" | "right";
+}) {
   const [expanded, setExpanded] = useState(false);
   const [loadingBody, setLoadingBody] = useState(false);
   const [fullBody, setFullBody] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const preview = item.snippet || item.subject || item.body;
 
   async function toggleExpanded() {
     const next = !expanded;
@@ -379,12 +555,7 @@ function EmailCommsRow({ item }: { item: CommsTimelineItem }) {
       setFullBody(item.emailFullBody);
       return;
     }
-    if (
-      next &&
-      item.emailMessageId &&
-      fullBody === null &&
-      !loadingBody
-    ) {
+    if (next && item.emailMessageId && fullBody === null && !loadingBody) {
       setLoadingBody(true);
       setLoadError(null);
       try {
@@ -403,71 +574,50 @@ function EmailCommsRow({ item }: { item: CommsTimelineItem }) {
     }
   }
 
-  const preview = item.snippet || item.subject || item.body;
-
   return (
-    <li className="grid grid-cols-[150px_1fr] items-start gap-4 py-3 first:pt-0 last:pb-0">
-      <div className="select-none pt-[1px] font-[family-name:var(--font-jetbrains-mono)] text-[12px] leading-[18px] tabular-nums text-fg-muted">
-        <div>{fmtDay(item.sentAt)}</div>
-        <div className="text-fg-subtle">{fmtTime(item.sentAt)}</div>
-      </div>
-      <div className="min-w-0">
-        <button
-          type="button"
-          onClick={() => void toggleExpanded()}
-          className="flex w-full items-start gap-2.5 rounded-md text-left transition-colors hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-          aria-expanded={expanded}
-        >
-          <CommsPlatformIcon platform="email" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <DirectionBadge direction={item.direction} />
-                  {expanded ? (
-                    <ChevronDown size={14} className="text-fg-subtle" />
-                  ) : (
-                    <ChevronRight size={14} className="text-fg-subtle" />
-                  )}
-                </div>
-                <p className="mt-1 truncate text-[13px] font-medium text-fg">
-                  {item.subject ?? "(no subject)"}
-                </p>
-                {!expanded && preview ? (
-                  <p className="mt-0.5 line-clamp-2 text-[13px] text-fg-muted">
-                    {preview}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </button>
-        {expanded ? (
-          <div className="ml-[30px] mt-2 space-y-2 border-l border-divider pl-3">
-            {loadingBody ? (
-              <p className="text-[13px] text-fg-muted">Loading body…</p>
-            ) : loadError ? (
-              <p className="text-[13px] text-danger">{loadError}</p>
-            ) : (
-              <p className="whitespace-pre-wrap text-[13px] text-fg">
-                {fullBody ?? preview}
-              </p>
-            )}
-          </div>
+    <div className="max-w-[min(100%,18rem)] rounded-lg border border-border bg-surface text-left">
+      <button
+        type="button"
+        onClick={() => void toggleExpanded()}
+        className="w-full px-3 py-2 text-left transition-colors hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-start gap-1.5">
+          <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-fg">
+            {item.subject ?? "(no subject)"}
+          </p>
+          {expanded ? (
+            <ChevronDown size={14} className="mt-0.5 shrink-0 text-fg-subtle" />
+          ) : (
+            <ChevronRight size={14} className="mt-0.5 shrink-0 text-fg-subtle" />
+          )}
+        </div>
+        {!expanded && preview ? (
+          <p className="mt-0.5 line-clamp-2 text-[12px] text-fg-muted">{preview}</p>
         ) : null}
+      </button>
+      {expanded ? (
+        <div className="border-t border-divider px-3 py-2">
+          {loadingBody ? (
+            <p className="text-[12px] text-fg-muted">Loading body…</p>
+          ) : loadError ? (
+            <p className="text-[12px] text-danger">{loadError}</p>
+          ) : (
+            <p className="whitespace-pre-wrap text-[12px] leading-[1.5] text-fg">
+              {fullBody ?? preview}
+            </p>
+          )}
+        </div>
+      ) : null}
+      <div
+        className={`border-t border-divider px-3 py-1.5 ${
+          side === "left" ? "text-left" : "text-right"
+        }`}
+      >
+        <time className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] tabular-nums text-fg-subtle">
+          {fmtCommsSentAt(item.sentAt)}
+        </time>
       </div>
-    </li>
-  );
-}
-
-function DirectionBadge({
-  direction,
-}: {
-  direction: CommsTimelineItem["direction"];
-}) {
-  return (
-    <span className="shrink-0 rounded bg-surface px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-fg-subtle">
-      {direction === "sent" ? "Sent" : "Received"}
-    </span>
+    </div>
   );
 }
