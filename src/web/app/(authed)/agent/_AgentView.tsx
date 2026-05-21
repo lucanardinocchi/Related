@@ -21,7 +21,7 @@ import type {
   ExtractionResult,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
-import { Button, EmptyState } from "@/components/ui";
+import { Badge, Button, EmptyState } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { usePersistedBoolean } from "@/lib/usePersistedBoolean";
 import { startMicCapture, type MicCaptureHandle } from "../talk/_recorder";
@@ -399,7 +399,7 @@ export function AgentView({ initialChats }: AgentViewProps) {
   };
 
   return (
-    <div className="-my-8 -mx-10 flex h-[calc(100vh-0px)] flex-row">
+    <div className="-my-8 -mx-10 flex h-screen flex-row bg-bg">
       {/* Chat list rail — collapsible like the app nav sidebar */}
       <aside
         data-collapsed={chatsRailCollapsed ? "true" : "false"}
@@ -411,19 +411,21 @@ export function AgentView({ initialChats }: AgentViewProps) {
       >
         <div
           className={cn(
-            "flex items-center py-3",
+            "flex items-center pt-5 pb-3",
             chatsRailCollapsed
               ? "flex-col gap-2 px-1"
               : "justify-between px-3",
           )}
         >
           {chatsRailCollapsed ? null : (
-            <span className="text-[13px] font-medium text-fg">Chats</span>
+            <span className="px-1.5 text-[13px] font-medium text-fg">
+              Chats
+            </span>
           )}
           <div
             className={cn(
               "flex items-center",
-              chatsRailCollapsed ? "flex-col gap-1" : "gap-1",
+              chatsRailCollapsed ? "flex-col gap-1" : "gap-0.5",
             )}
           >
             <button
@@ -457,9 +459,9 @@ export function AgentView({ initialChats }: AgentViewProps) {
           </div>
         </div>
         {chatsRailCollapsed ? null : (
-          <div className="flex-1 overflow-y-auto px-1 pb-2">
+          <div className="flex-1 overflow-y-auto px-2 pb-3">
             {chats.length === 0 ? (
-              <div className="px-3 py-2 text-[12px] text-fg-subtle">
+              <div className="px-2 py-2 text-[12px] text-fg-subtle">
                 No chats yet.
               </div>
             ) : (
@@ -470,24 +472,24 @@ export function AgentView({ initialChats }: AgentViewProps) {
                       type="button"
                       onClick={() => setSelectedId(chat.id)}
                       className={cn(
-                        "w-full rounded-md px-2 py-2 text-left transition-colors",
+                        "w-full rounded-md px-2.5 py-2 text-left transition-colors",
                         chat.id === selectedId
                           ? "bg-active text-fg"
                           : "text-fg-muted hover:bg-hover hover:text-fg",
                       )}
                     >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-[13px] font-medium">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[13px] font-medium leading-[18px]">
                           {chat.title ?? "Untitled chat"}
                         </span>
                         {chat.closedAt ? (
-                          <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
+                          <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
                             {chat.extractedAt ? "extracted" : "closed"}
                           </span>
                         ) : null}
                       </div>
                       {chat.lastMessagePreview ? (
-                        <div className="mt-0.5 truncate text-[12px] text-fg-subtle">
+                        <div className="mt-1 truncate text-[12px] leading-[16px] text-fg-subtle">
                           {chat.lastMessagePreview}
                         </div>
                       ) : null}
@@ -501,30 +503,38 @@ export function AgentView({ initialChats }: AgentViewProps) {
       </aside>
 
       {/* Thread + composer */}
-      <section className="flex h-full flex-1 flex-col">
+      <section className="flex h-full min-w-0 flex-1 flex-col bg-bg">
         {selectedChat ? (
           <>
-            <header className="flex items-center justify-between border-b border-border px-6 py-3">
-              <div className="min-w-0">
-                <div className="truncate text-[14px] font-medium text-fg">
+            <header className="flex items-center justify-between gap-3 border-b border-divider px-6 pt-5 pb-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <h2 className="truncate text-[15px] font-medium leading-[20px] text-fg">
                   {selectedChat.title ?? "Untitled chat"}
-                </div>
-                <div className="text-[11px] text-fg-subtle">
+                </h2>
+                <Badge
+                  tone={
+                    selectedChat.closedAt
+                      ? selectedChat.extractedAt
+                        ? "approved"
+                        : "neutral"
+                      : "info"
+                  }
+                >
                   {selectedChat.closedAt
-                    ? `Closed ${new Date(selectedChat.closedAt).toLocaleString()}${
-                        selectedChat.extractedAt ? " · extracted" : ""
-                      }`
+                    ? selectedChat.extractedAt
+                      ? "Extracted"
+                      : "Closed"
                     : "Open"}
-                </div>
+                </Badge>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-0.5">
                 {!selectedChat.closedAt ? (
                   <button
                     type="button"
                     onClick={handleClose}
                     disabled={working}
                     title="Close chat (runs Extraction Pass over the transcript)"
-                    className="inline-flex h-7 items-center gap-1 rounded px-2 text-[12px] text-fg-subtle hover:bg-hover hover:text-fg disabled:opacity-50"
+                    className="inline-flex h-7 items-center gap-1 rounded px-2 text-[12px] text-fg-muted hover:bg-hover hover:text-fg disabled:opacity-50"
                   >
                     <Archive size={14} />
                     Close
@@ -542,20 +552,17 @@ export function AgentView({ initialChats }: AgentViewProps) {
               </div>
             </header>
 
-            <div
-              ref={transcriptRef}
-              className="flex-1 overflow-y-auto px-6 py-4"
-            >
+            <div ref={transcriptRef} className="flex-1 overflow-y-auto">
               {loadingMessages ? (
-                <div className="text-[13px] text-fg-subtle">
+                <div className="px-6 py-6 text-[13px] text-fg-subtle">
                   Loading messages…
                 </div>
               ) : messages.length === 0 ? (
-                <div className="mx-auto max-w-prose pt-12 text-center">
+                <div className="mx-auto max-w-prose px-6 pt-16 text-center">
                   <div className="text-[15px] font-medium text-fg">
                     Start the conversation
                   </div>
-                  <p className="mt-2 text-[13px] text-fg-muted">
+                  <p className="mt-2 text-[13px] leading-[20px] text-fg-muted">
                     The agent reads your Relationships, Open Threads, Calendar,
                     and User Context to answer. Anything you say here will feed
                     your Situational State and Transient Intent when you close
@@ -563,21 +570,23 @@ export function AgentView({ initialChats }: AgentViewProps) {
                   </p>
                 </div>
               ) : (
-                <ul className="mx-auto flex max-w-[760px] flex-col gap-4">
-                  {messages.map((m) => (
-                    <li key={m.id}>
-                      <MessageBubble message={m} />
-                    </li>
-                  ))}
-                  {agentResponding ? (
-                    <li>
-                      <div className="flex items-center gap-2 text-[12px] text-fg-subtle">
-                        <Loader2 size={14} className="animate-spin" />
-                        Agent is reading your data…
-                      </div>
-                    </li>
-                  ) : null}
-                </ul>
+                <div className="flex min-h-full flex-col justify-end px-6 pt-6 pb-4">
+                  <ul className="mx-auto flex w-full max-w-[760px] flex-col gap-5">
+                    {messages.map((m) => (
+                      <li key={m.id}>
+                        <MessageBubble message={m} />
+                      </li>
+                    ))}
+                    {agentResponding ? (
+                      <li>
+                        <div className="flex items-center gap-2 text-[12px] text-fg-subtle">
+                          <Loader2 size={14} className="animate-spin" />
+                          Agent is reading your data…
+                        </div>
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>
               )}
             </div>
 
@@ -654,32 +663,39 @@ function extractionToast(result: {
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
   const toolCalls = (message.toolCalls ?? []) as ToolCallSummary[];
+  const hasContent = message.content.trim().length > 0;
+  const time = new Date(message.createdAt).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
   return (
     <div
       className={cn(
-        "flex flex-col gap-1.5",
+        "group flex flex-col gap-1.5",
         isUser ? "items-end" : "items-start",
       )}
     >
       {!isUser && toolCalls.length > 0 ? (
-        <div className="flex w-full max-w-[760px] flex-col gap-1">
+        <div className="flex w-full max-w-full flex-col gap-1">
           {toolCalls.map((tc, idx) => (
             <ToolCallBlock key={`${tc.id}-${idx}`} call={tc} />
           ))}
         </div>
       ) : null}
-      <div
-        className={cn(
-          "max-w-[85%] rounded-lg px-3 py-2 text-[14px] leading-[22px] whitespace-pre-wrap",
-          isUser
-            ? "bg-accent text-fg-on-accent"
-            : "bg-surface-2 text-fg",
-        )}
-      >
-        {message.content}
-      </div>
-      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
-        {message.role} · {new Date(message.createdAt).toLocaleTimeString()}
+      {hasContent ? (
+        <div
+          className={cn(
+            "max-w-[85%] rounded-2xl px-3.5 py-2 text-[14px] leading-[22px] whitespace-pre-wrap break-words",
+            isUser
+              ? "bg-accent text-fg-on-accent shadow-1"
+              : "bg-surface-2 text-fg",
+          )}
+        >
+          {message.content}
+        </div>
+      ) : null}
+      <div className="px-1 text-[11px] text-fg-subtle opacity-0 transition-opacity group-hover:opacity-100">
+        {time}
       </div>
     </div>
   );
@@ -689,7 +705,7 @@ function ToolCallBlock({ call }: { call: ToolCallSummary }) {
   const [open, setOpen] = useState(false);
   const inputJson = JSON.stringify(call.input ?? {});
   return (
-    <div className="rounded-md border border-border bg-surface text-[12px]">
+    <div className="rounded-md border border-divider bg-surface text-[12px]">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -707,7 +723,7 @@ function ToolCallBlock({ call }: { call: ToolCallSummary }) {
         ) : null}
       </button>
       {open ? (
-        <div className="border-t border-border px-2.5 py-2 text-[11px] text-fg-muted">
+        <div className="border-t border-divider px-2.5 py-2 text-[11px] text-fg-muted">
           {Object.keys(call.input ?? {}).length > 0 ? (
             <div className="mb-1.5">
               <div className="mb-0.5 text-[10px] uppercase tracking-wider text-fg-subtle">
@@ -763,14 +779,14 @@ function Composer({
   };
   if (closed) {
     return (
-      <div className="border-t border-border bg-surface px-6 py-3 text-[12px] text-fg-subtle">
+      <div className="border-t border-divider bg-surface px-6 py-3 text-center text-[12px] text-fg-subtle">
         This Chat is closed and read-only. Start a new Chat to keep talking.
       </div>
     );
   }
   return (
-    <div className="border-t border-border bg-bg px-4 py-3">
-      <div className="mx-auto flex max-w-[760px] items-end gap-2 rounded-lg border border-border bg-surface px-3 py-2">
+    <div className="bg-bg px-4 pb-5 pt-2">
+      <div className="mx-auto flex max-w-[760px] items-end gap-1.5 rounded-2xl border border-border-strong bg-surface px-3 py-2 shadow-1 transition-shadow focus-within:border-accent focus-within:shadow-2">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -784,7 +800,7 @@ function Composer({
                 : "Message the agent…"
           }
           disabled={disabled || voiceState !== "idle"}
-          className="flex-1 resize-none bg-transparent text-[14px] leading-[22px] text-fg placeholder:text-fg-subtle focus:outline-none disabled:opacity-50"
+          className="flex-1 resize-none bg-transparent py-1 text-[14px] leading-[22px] text-fg placeholder:text-fg-subtle focus:outline-none disabled:opacity-50"
           style={{ maxHeight: "200px" }}
         />
         <button
@@ -802,7 +818,7 @@ function Composer({
                 : "Voice input"
           }
           className={cn(
-            "inline-flex h-8 w-8 items-center justify-center rounded transition-colors",
+            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
             voiceState === "recording"
               ? "bg-danger text-fg-on-accent hover:bg-danger/90"
               : voiceState === "transcribing"
@@ -824,9 +840,9 @@ function Composer({
           disabled={disabled || draft.trim().length === 0}
           aria-label="Send"
           title="Send (Enter)"
-          className="inline-flex h-8 w-8 items-center justify-center rounded bg-accent text-fg-on-accent hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-fg-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <SendHorizontal size={16} />
+          <SendHorizontal size={14} />
         </button>
       </div>
     </div>
