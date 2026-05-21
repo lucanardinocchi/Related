@@ -103,7 +103,8 @@ export function CalendarView({
   ownerId,
 }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
-  const [pastOpen, setPastOpen] = useState(true);
+  // Default: surface what's next, hide the past behind a click.
+  const [pastOpen, setPastOpen] = useState(false);
   const [futureOpen, setFutureOpen] = useState(true);
 
   // Local override map so optimistic updates show immediately without a
@@ -253,6 +254,12 @@ export function CalendarView({
   function StatusSelect({ row }: { row: CalendarRow }) {
     const key = `${row.kind}:${row.kind === "external" ? row.externalEventId : row.id}`;
     const past = isPast(row.time, now);
+    // Future events are always planned — no User choice. Show a locked
+    // badge instead of a Select so the row reads as committed-state, not
+    // a pending decision.
+    if (!past) {
+      return <Badge tone={STATUS_TONE.planned}>planned</Badge>;
+    }
     const value = row.status ?? "";
     return (
       <Select
@@ -267,17 +274,13 @@ export function CalendarView({
         className="min-w-[120px]"
       >
         <option value="" disabled>
-          {past ? "Set status…" : "—"}
+          Set status…
         </option>
-        {past
-          ? PAST_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))
-          : (
-            <option value="planned">planned</option>
-          )}
+        {PAST_STATUSES.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
       </Select>
     );
   }
@@ -346,13 +349,20 @@ export function CalendarView({
     {
       key: "category",
       header: "Type",
-      width: "150px",
-      cell: (r) => <CategorySelect row={r} />,
+      width: "160px",
+      // Right padding gives the Type and Status pickers breathing room —
+      // without it the two adjacent <Select> chevrons sit visually
+      // touching at desktop widths.
+      cell: (r) => (
+        <div className="pr-3">
+          <CategorySelect row={r} />
+        </div>
+      ),
     },
     {
       key: "status",
       header: "Status",
-      width: "150px",
+      width: "160px",
       cell: (r) => <StatusSelect row={r} />,
     },
   ];
@@ -469,25 +479,6 @@ export function CalendarView({
       </div>
 
       <CollapsibleSection
-        title="Past"
-        count={past.length}
-        open={pastOpen}
-        onToggle={() => setPastOpen((v) => !v)}
-      >
-        <DataGrid
-          columns={columns}
-          rows={past}
-          rowKey={(r) => `past:${r.kind}:${r.id}`}
-          emptyState={
-            <EmptyState
-              title="No past entries in window"
-              description="Past Interactions and Google events from the last 30 days will appear here."
-            />
-          }
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
         title="Upcoming"
         count={future.length}
         open={futureOpen}
@@ -501,6 +492,25 @@ export function CalendarView({
             <EmptyState
               title="Nothing upcoming"
               description="Planned Interactions and Google events for the next 30 days will appear here."
+            />
+          }
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Past"
+        count={past.length}
+        open={pastOpen}
+        onToggle={() => setPastOpen((v) => !v)}
+      >
+        <DataGrid
+          columns={columns}
+          rows={past}
+          rowKey={(r) => `past:${r.kind}:${r.id}`}
+          emptyState={
+            <EmptyState
+              title="No past entries in window"
+              description="Past Interactions and Google events from the last 30 days will appear here."
             />
           }
         />

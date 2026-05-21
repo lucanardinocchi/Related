@@ -12,8 +12,11 @@ import { cumulativeGrowth } from "@related/shared";
 import { Card, Eyebrow, H2, Pill } from "@/components/ui";
 
 type Tab =
+  | { axis: "all"; label: string }
   | { axis: "status"; value: InteractionStatus; label: string }
   | { axis: "category"; value: InteractionCategory; label: string };
+
+const ALL_TAB: Tab = { axis: "all", label: "All" };
 
 const STATUS_TABS: Tab[] = [
   { axis: "status", value: "attended", label: "Attended" },
@@ -44,17 +47,22 @@ function fmtAxis(date: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function tabKey(t: Tab): string {
+  return t.axis === "all" ? "all" : `${t.axis}:${t.value}`;
+}
+
 /**
  * Cumulative line chart for Calendar entries — mirrors the screenshot
  * reference: monospace y-axis ticks, dashed gridlines, orange accent
- * line. Hand-rolled SVG (no charting dep). Two filter axes:
+ * line. Hand-rolled SVG (no charting dep). Three filter axes:
  *
  *  - Scope pills (Past / Future) pick the 30-day window relative to today.
- *  - Tabs in the upper-right pick which series to plot — a status
- *    (attended / missed / cancelled / upcoming) or a category.
- *
- * "Upcoming" only makes sense for the future scope; the other status
- * tabs only show in the past scope. Categories work in both scopes.
+ *  - Status tabs in the upper-right pick a series (attended / missed /
+ *    cancelled / upcoming). Past scope hides "Upcoming"; future scope
+ *    only shows "Upcoming".
+ *  - Type pills below the chart further narrow to one category, or
+ *    "All" for the unfiltered total. Defaults to "All" so the chart
+ *    shows the User's whole calendar before any narrowing.
  */
 export function CumulativeGrowthChart({
   interactions,
@@ -63,20 +71,29 @@ export function CumulativeGrowthChart({
   now,
 }: Props) {
   const [scope, setScope] = useState<Scope>("past");
-  // Default tab depends on scope.
-  const [statusTab, setStatusTab] = useState<Tab>(STATUS_TABS[0]);
-  const [categoryTab, setCategoryTab] = useState<Tab | null>(null);
-  // The currently-selected tab — categoryTab wins if set, else the
-  // status tab valid for this scope.
-  const activeTab: Tab = useMemo(() => {
-    if (categoryTab) return categoryTab;
-    if (scope === "future") {
-      return (
-        STATUS_TABS.find((t) => t.value === "planned") ?? STATUS_TABS[0]
+  const [activeTab, setActiveTab] = useState<Tab>(ALL_TAB);
+
+  // Tabs available for the right-hand status switcher in the current scope.
+  const scopeStatusTabs = useMemo(
+    () =>
+      scope === "past"
+        ? STATUS_TABS.filter((t) => t.axis === "status" && t.value !== "planned")
+        : STATUS_TABS.filter((t) => t.axis === "status" && t.value === "planned"),
+    [scope],
+  );
+
+  function selectScope(next: Scope) {
+    setScope(next);
+    // If the current status tab isn't valid in the new scope, fall back to All.
+    if (activeTab.axis === "status") {
+      const stillValid = (
+        next === "past"
+          ? activeTab.value !== "planned"
+          : activeTab.value === "planned"
       );
+      if (!stillValid) setActiveTab(ALL_TAB);
     }
-    return statusTab.value === "planned" ? STATUS_TABS[0] : statusTab;
-  }, [categoryTab, scope, statusTab]);
+  }
 
   const [from, to] = useMemo(() => {
     const day = 24 * 60 * 60 * 1000;
@@ -86,29 +103,32 @@ export function CumulativeGrowthChart({
     return [now, new Date(now.getTime() + 30 * day)];
   }, [scope, now]);
 
-  const buckets = useMemo(
-    () =>
-      cumulativeGrowth({
-        from: from.toISOString(),
-        to: to.toISOString(),
-        interactions,
-        externalEvents,
-        overlays,
-        filter: { axis: activeTab.axis, value: activeTab.value } as
-          | { axis: "status"; value: InteractionStatus }
-          | { axis: "category"; value: InteractionCategory },
-      }),
-    [activeTab, externalEvents, from, interactions, overlays, to],
-  );
+  const buckets = useMemo(() => {
+    const filter =
+      activeTab.axis === "all"
+        ? { axis: "all" as const }
+        : activeTab.axis === "status"
+          ? { axis: "status" as const, value: activeTab.value }
+          : { axis: "category" as const, value: activeTab.value };
+    return cumulativeGrowth({
+      from: from.toISOString(),
+      to: to.toISOString(),
+      interactions,
+      externalEvents,
+      overlays,
+      filter,
+    });
+  }, [activeTab, externalEvents, from, interactions, overlays, to]);
 
   const max = Math.max(1, ...buckets.map((b) => b.count));
-  // Round the upper bound up to a friendly tick (10 for <=10, etc.).
   const niceMax = max <= 3 ? 3 : max <= 6 ? 6 : max <= 10 ? 10 : Math.ceil(max / 5) * 5;
-  // Y ticks at 0, niceMax/3-ish marks. Three intermediates so the grid
-  // matches the reference (10 / 6 / 3 / 0 style).
-  const yTicks = [0, Math.round(niceMax / 3), Math.round((niceMax * 2) / 3), niceMax];
+  const yTicks = [
+    0,
+    Math.round(niceMax / 3),
+    Math.round((niceMax * 2) / 3),
+    niceMax,
+  ];
 
-  // SVG layout: viewBox-driven so it scales fluidly.
   const W = 1000;
   const H = 240;
   const PAD_L = 56;
@@ -127,10 +147,22 @@ export function CumulativeGrowthChart({
     .map((b, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(b.count).toFixed(1)}`)
     .join(" ");
 
-  // X labels — every ~6th day so we don't overcrowd the axis.
   const xLabelIndices = buckets
     .map((_, i) => i)
-    .filter((i) => buckets.length <= 1 || i % Math.max(1, Math.floor((buckets.length - 1) / 4)) === 0);
+    .filter(
+      (i) =>
+        buckets.length <= 1 ||
+        i % Math.max(1, Math.floor((buckets.length - 1) / 4)) === 0,
+    );
+
+  const description =
+    activeTab.axis === "all"
+      ? `Total accumulated over the ${scope === "past" ? "last" : "next"} 30 days`
+      : activeTab.axis === "status"
+        ? `${activeTab.label} — ${scope === "past" ? "last" : "next"} 30 days`
+        : `${activeTab.label} events — ${scope === "past" ? "last" : "next"} 30 days`;
+
+  const activeKey = tabKey(activeTab);
 
   return (
     <Card>
@@ -139,52 +171,53 @@ export function CumulativeGrowthChart({
           <Eyebrow>Activity</Eyebrow>
           <H2 className="mt-1">Cumulative Growth</H2>
           <p className="mt-1 text-[13px] leading-[20px] text-fg-muted">
-            Total accumulated over the {scope === "past" ? "last" : "next"} 30 days
-            {activeTab.axis === "status"
-              ? ` — ${activeTab.label.toLowerCase()}`
-              : ` — ${activeTab.label.toLowerCase()} events`}
+            {description}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 rounded-pill bg-bg p-1">
-          {(scope === "past" ? STATUS_TABS.filter((t) => t.value !== "planned") : [STATUS_TABS[3]]).map((t) => (
-            <button
-              key={`status-${t.value}`}
-              type="button"
-              onClick={() => {
-                setStatusTab(t);
-                setCategoryTab(null);
-              }}
-              className={
-                activeTab === t
-                  ? "rounded-pill bg-surface px-3 py-1 text-[13px] font-medium text-fg shadow-sm"
-                  : "rounded-pill px-3 py-1 text-[13px] font-medium text-fg-muted hover:text-fg"
-              }
-            >
-              {t.label}
-            </button>
-          ))}
+          {[ALL_TAB, ...scopeStatusTabs].map((t) => {
+            const key = tabKey(t);
+            const active = activeKey === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(t)}
+                className={
+                  active
+                    ? "rounded-pill bg-surface px-3 py-1 text-[13px] font-medium text-fg shadow-sm"
+                    : "rounded-pill px-3 py-1 text-[13px] font-medium text-fg-muted hover:text-fg"
+                }
+              >
+                {t.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Pill active={scope === "past"} onClick={() => setScope("past")}>
+        <Pill active={scope === "past"} onClick={() => selectScope("past")}>
           Past 30 days
         </Pill>
-        <Pill active={scope === "future"} onClick={() => setScope("future")}>
+        <Pill active={scope === "future"} onClick={() => selectScope("future")}>
           Next 30 days
         </Pill>
         <span className="mx-2 h-4 w-px bg-border" />
         <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
           Type:
         </span>
-        <Pill active={categoryTab === null} onClick={() => setCategoryTab(null)}>
+        <Pill
+          active={activeTab.axis !== "category"}
+          onClick={() => setActiveTab(ALL_TAB)}
+        >
           All
         </Pill>
         {CATEGORY_TABS.map((t) => (
           <Pill
-            key={`cat-${t.value}`}
-            active={categoryTab?.value === t.value}
-            onClick={() => setCategoryTab(t)}
+            key={tabKey(t)}
+            active={activeKey === tabKey(t)}
+            onClick={() => setActiveTab(t)}
           >
             {t.label}
           </Pill>
@@ -198,7 +231,6 @@ export function CumulativeGrowthChart({
           aria-label={`Cumulative ${activeTab.label} growth`}
           className="block w-full"
         >
-          {/* Y gridlines */}
           {yTicks.map((t) => (
             <g key={`y-${t}`}>
               <line
@@ -222,7 +254,6 @@ export function CumulativeGrowthChart({
             </g>
           ))}
 
-          {/* Line */}
           {buckets.length > 0 && (
             <path
               d={path}
@@ -234,7 +265,6 @@ export function CumulativeGrowthChart({
             />
           )}
 
-          {/* X tick labels */}
           {xLabelIndices.map((i) => (
             <text
               key={`x-${i}`}
