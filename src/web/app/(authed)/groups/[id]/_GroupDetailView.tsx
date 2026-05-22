@@ -1,30 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import type {
   Group,
   GroupRelationship,
   Interaction,
-  InteractionCategory,
-  InteractionStatus,
   OpenThread,
   RelationshipAnalytics,
-  CommitmentCommunicationStatus,
-  CommitmentOrigin,
 } from "@related/shared";
-import {
-  contextCaptureInputFromModal,
-  resolveContextCapture,
-  writeContextCapture,
-  type InteractionCaptureWrite,
-  type OpenThreadCaptureWrite,
-} from "@related/shared";
-import { getBrowserDeps } from "@/lib/deps/client";
 import { Eyebrow, H1 } from "@/components/ui";
+import { useRelationshipDetailMutations } from "@/hooks/useRelationshipDetailMutations";
 import { TouchpointsChart } from "../../relationships/[id]/_TouchpointsChart";
 import { OpenThreadsSection } from "../../relationships/[id]/_OpenThreadsSection";
 import { ContextTimelineSection } from "../../relationships/[id]/_ContextTimelineSection";
-import type { AddContextResult } from "../../relationships/[id]/_AddContextModal";
 import { RelationshipAnalyticsSection } from "../../relationships/[id]/_RelationshipAnalyticsSection";
 import { GroupKeyDetailsSection } from "./_GroupKeyDetailsSection";
 import { GroupCommsSection } from "./_GroupCommsSection";
@@ -48,240 +35,16 @@ export function GroupDetailView({
   openThreads: initialOpenThreads,
   analytics,
 }: Props) {
-  const deps = getBrowserDeps();
-  const [group, setGroup] = useState(initialGroup);
-  const [interactions, setInteractions] = useState<Interaction[]>(
-    initialInteractions,
-  );
-  const [openThreads, setOpenThreads] = useState<OpenThread[]>(
-    initialOpenThreads,
-  );
-  const [members, setMembers] = useState(initialMembers);
+  const m = useRelationshipDetailMutations({
+    target: "group",
+    relationship,
+    group: initialGroup,
+    members: initialMembers,
+    interactions: initialInteractions,
+    openThreads: initialOpenThreads,
+  });
 
-  async function saveName(next: string) {
-    const trimmed = next.trim();
-    if (trimmed === "" || trimmed === group.name) return;
-    const updated = await deps.groups.updateGroup(group.id, { name: trimmed });
-    setGroup(updated);
-  }
-
-  async function saveMember(
-    contactId: string,
-    field: "phone" | "xUsername" | "tiktokUsername",
-    next: string,
-  ) {
-    const value =
-      next.trim() === ""
-        ? null
-        : field === "phone"
-          ? next.trim()
-          : next.trim().replace(/^@/, "");
-    const updated = await deps.relationships.updateContact(contactId, {
-      [field]: value,
-    });
-    setMembers((current) =>
-      current.map((m) =>
-        m.id === contactId
-          ? {
-              ...m,
-              phone: updated.phone,
-              xUsername: updated.xUsername,
-              tiktokUsername: updated.tiktokUsername,
-            }
-          : m,
-      ),
-    );
-  }
-
-  async function saveXConversationId(conversationId: string) {
-    const updated = await deps.groups.updateGroup(group.id, {
-      xDmConversationId: conversationId,
-    });
-    setGroup(updated);
-  }
-
-  async function saveWhatsAppGroupId(whatsappGroupId: string) {
-    const updated = await deps.groups.updateGroup(group.id, {
-      whatsappGroupId,
-    });
-    setGroup(updated);
-  }
-
-  async function saveTikTokConversationId(conversationId: string) {
-    const updated = await deps.groups.updateGroup(group.id, {
-      tiktokDmConversationId: conversationId,
-    });
-    setGroup(updated);
-  }
-
-  async function addThread(description: string): Promise<void> {
-    const id = await deps.openThreads.createOpenThread({
-      description,
-      direction: "me_owes_them",
-      relationshipIds: [relationship.id],
-    });
-    const created: OpenThread = {
-      id,
-      description,
-      direction: "me_owes_them",
-      origin: null,
-      communicationStatus: "not_communicated",
-      createdAt: new Date().toISOString(),
-      closedAt: null,
-      relationshipIds: [relationship.id],
-      whyHelpsPerson: null,
-      whyICanHelp: null,
-      captureSource: "manual",
-      sourceChatId: null,
-    };
-    setOpenThreads((ts) => [...ts, created]);
-  }
-
-  async function patchThreadDescription(id: string, description: string) {
-    const updated = await deps.openThreads.updateOpenThread(id, {
-      description,
-    });
-    setOpenThreads((ts) => ts.map((t) => (t.id === id ? updated : t)));
-  }
-
-  async function patchThreadOrigin(
-    id: string,
-    origin: CommitmentOrigin | "",
-  ) {
-    const updated = await deps.openThreads.setCommitmentMeta(id, {
-      origin: origin === "" ? null : origin,
-    });
-    setOpenThreads((ts) => ts.map((t) => (t.id === id ? updated : t)));
-  }
-
-  async function patchThreadStatus(
-    id: string,
-    communicationStatus: CommitmentCommunicationStatus,
-  ) {
-    const updated = await deps.openThreads.setCommitmentMeta(id, {
-      communicationStatus,
-    });
-    setOpenThreads((ts) => ts.map((t) => (t.id === id ? updated : t)));
-  }
-
-  async function closeThread(id: string) {
-    await deps.openThreads.closeOpenThread(id);
-    setOpenThreads((ts) => ts.filter((t) => t.id !== id));
-  }
-
-  async function addContext(input: {
-    time: string;
-    kind: string;
-    category: InteractionCategory;
-    notes: string | null;
-    status: InteractionStatus;
-  }): Promise<void> {
-    const id = await deps.interactions.createInteraction({
-      ...input,
-      contactIds: members.map((m) => m.id),
-      groupId: group.id,
-    });
-    const created: Interaction = {
-      id,
-      time: input.time,
-      kind: input.kind,
-      category: input.category,
-      notes: input.notes,
-      status: input.status,
-      contacts: members.map((m) => ({ id: m.id, name: m.name })),
-      captureSource: "manual",
-      sourceChatId: null,
-    };
-    setInteractions((xs) =>
-      [created, ...xs].sort(
-        (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
-      ),
-    );
-  }
-
-  async function patchContext(
-    id: string,
-    patch: Partial<{
-      time: string;
-      kind: string;
-      category: InteractionCategory;
-      notes: string | null;
-      status: InteractionStatus;
-    }>,
-  ) {
-    const updated = await deps.interactions.updateInteraction(id, patch);
-    setInteractions((xs) =>
-      xs
-        .map((i) => (i.id === id ? updated : i))
-        .sort(
-          (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
-        ),
-    );
-  }
-
-  async function deleteContext(id: string) {
-    await deps.interactions.deleteInteraction(id);
-    setInteractions((xs) => xs.filter((i) => i.id !== id));
-  }
-
-  async function addContextFromModal(result: AddContextResult): Promise<void> {
-    const captureInput = contextCaptureInputFromModal(result);
-    const write = resolveContextCapture(captureInput, {
-      captureSource: "manual",
-      relationshipTarget: {
-        mode: "group",
-        relationshipId: relationship.id,
-        groupId: group.id,
-        memberContactIds: members.map((m) => m.id),
-      },
-    });
-    const written = await writeContextCapture(write, {
-      mode: "manual",
-      interactions: deps.interactions,
-      openThreads: deps.openThreads,
-    });
-
-    if (written.table === "open_threads") {
-      const w = write as OpenThreadCaptureWrite;
-      setOpenThreads((ts) => [
-        ...ts,
-        {
-          id: written.id,
-          description: w.description,
-          direction: w.direction,
-          origin: w.origin,
-          communicationStatus: w.communicationStatus,
-          createdAt: new Date().toISOString(),
-          closedAt: null,
-          relationshipIds: w.relationshipIds,
-          whyHelpsPerson: null,
-          whyICanHelp: null,
-          captureSource: w.captureSource,
-          sourceChatId: w.sourceChatId,
-        },
-      ]);
-      return;
-    }
-
-    const w = write as InteractionCaptureWrite;
-    const created: Interaction = {
-      id: written.id,
-      time: w.time,
-      kind: w.kind,
-      category: w.category,
-      notes: w.notes,
-      status: w.status,
-      contacts: members.map((m) => ({ id: m.id, name: m.name })),
-      ],
-      captureSource: w.captureSource,
-      sourceChatId: w.sourceChatId,
-    };
-    setInteractions((xs) =>
-      [created, ...xs].sort(
-        (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
-      ),
-    );
-  }
+  const group = m.group!;
 
   return (
     <div className="space-y-2">
@@ -291,68 +54,74 @@ export function GroupDetailView({
       </header>
 
       <TouchpointsChart
-        interactions={interactions}
-        openThreads={openThreads}
+        interactions={m.interactions}
+        openThreads={m.openThreads}
       />
 
       <GroupKeyDetailsSection
         name={group.name}
-        members={members}
-        memberMessaging={members.map((m) => ({
-          id: m.id,
-          name: m.name,
-          relationshipId: m.relationshipId,
-          phone: m.phone,
-          xUsername: m.xUsername ?? null,
-          tiktokUsername: m.tiktokUsername ?? null,
+        members={m.members}
+        memberMessaging={m.members.map((member) => ({
+          id: member.id,
+          name: member.name,
+          relationshipId: member.relationshipId,
+          phone: member.phone,
+          xUsername: member.xUsername ?? null,
+          tiktokUsername: member.tiktokUsername ?? null,
         }))}
-        onSaveName={saveName}
-        onSaveMember={saveMember}
+        onSaveName={m.patchGroupName}
+        onSaveMember={m.patchGroupMemberField}
       />
 
       <GroupCommsSection
         groupId={group.id}
         groupName={group.name}
-        members={members.map((m) => ({
-          id: m.id,
-          name: m.name,
-          phone: m.phone,
-          xUsername: m.xUsername ?? null,
-          xUserId: m.xUserId ?? null,
-          tiktokUsername: m.tiktokUsername ?? null,
-          tiktokOpenId: m.tiktokOpenId ?? null,
+        members={m.members.map((member) => ({
+          id: member.id,
+          name: member.name,
+          phone: member.phone,
+          xUsername: member.xUsername ?? null,
+          xUserId: member.xUserId ?? null,
+          tiktokUsername: member.tiktokUsername ?? null,
+          tiktokOpenId: member.tiktokOpenId ?? null,
         }))}
         xDmConversationId={group.xDmConversationId}
         whatsappGroupId={group.whatsappGroupId}
         tiktokDmConversationId={group.tiktokDmConversationId}
-        onXConversationIdResolved={saveXConversationId}
-        onWhatsAppGroupIdResolved={saveWhatsAppGroupId}
-        onTikTokConversationIdResolved={saveTikTokConversationId}
+        onXConversationIdResolved={(id) =>
+          m.patchGroupChannelId("xDmConversationId", id)
+        }
+        onWhatsAppGroupIdResolved={(id) =>
+          m.patchGroupChannelId("whatsappGroupId", id)
+        }
+        onTikTokConversationIdResolved={(id) =>
+          m.patchGroupChannelId("tiktokDmConversationId", id)
+        }
       />
 
       <GroupEventsSection
         groupName={group.name}
-        groupMemberIds={members.map((m) => m.id)}
+        groupMemberIds={m.members.map((member) => member.id)}
       />
 
       <RelationshipAnalyticsSection analytics={analytics} />
 
       <OpenThreadsSection
-        threads={openThreads}
-        onAdd={addThread}
-        onEditDescription={patchThreadDescription}
-        onSetOrigin={patchThreadOrigin}
-        onSetStatus={patchThreadStatus}
-        onClose={closeThread}
+        threads={m.openThreads}
+        onAdd={m.addOpenThread}
+        onEditDescription={m.patchOpenThreadDescription}
+        onSetOrigin={m.patchOpenThreadOrigin}
+        onSetStatus={m.patchOpenThreadStatus}
+        onClose={m.closeOpenThread}
       />
 
       <ContextTimelineSection
-        interactions={interactions}
-        openThreads={openThreads}
-        onAdd={addContext}
-        onAddFromModal={addContextFromModal}
-        onEdit={patchContext}
-        onDelete={deleteContext}
+        interactions={m.interactions}
+        openThreads={m.openThreads}
+        onAdd={m.addTimelineContext}
+        onAddFromModal={m.addContextFromModal}
+        onEdit={m.patchTimelineContext}
+        onDelete={m.deleteTimelineContext}
       />
     </div>
   );

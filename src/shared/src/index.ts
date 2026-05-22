@@ -30,6 +30,13 @@ export type {
   UpdateRelationshipInput,
   RelationshipsClientConfig,
 } from "./relationships/RelationshipsClient";
+export {
+  MANUAL_CAPTURE_SOURCE,
+  buildManualInteraction,
+  buildManualOpenThread,
+  sortInteractionsByTime,
+  trimToNullable,
+} from "./relationships/detailMutations";
 
 export { OpenThreadsClient } from "./open-threads/OpenThreadsClient";
 export type {
