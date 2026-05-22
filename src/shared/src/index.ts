@@ -160,15 +160,17 @@ export type {
 export type {
   UserContextSnapshot,
   AmbientUserContextSnapshot,
-  CalendarDensitySignal,
-  SleepSignal,
   GoalEntry,
   SituationalStateSnapshot,
   OperatorStrengthEntry,
-  GroupSummary as UserContextGroupSummary,
-  RelationshipSummary as UserContextRelationshipSummary,
-  CharacterValuesAlignmentEntry,
 } from "./agent/UserContextBuilder";
+export type {
+  CalendarDensitySignal,
+  SleepSignal,
+  UserContextGroupSummary,
+  UserContextRelationshipSummary,
+  CharacterValuesAlignmentEntry,
+} from "./agent/userContextCore";
 export { resolveSendMessageRecipients } from "./agent/executor/sendMessageRecipients";
 export type { ContactAddresses } from "./agent/executor/sendMessageRecipients";
 export { Executor } from "./agent/Executor";
@@ -531,7 +533,6 @@ export type {
   PocketSyncSummary,
   PocketSpeakerAmbiguity,
   PocketIntegrationStatus,
-  PocketSpeakerAssignment,
 } from "./integrations/PocketClient";
 
 export {

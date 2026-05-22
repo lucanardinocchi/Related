@@ -45,14 +45,17 @@ export interface PocketIntegrationStatus {
   pendingAmbiguityCount: number;
 }
 
-interface AmbiguityRow {
+interface AmbiguityRowBase {
   id: string;
   recording_id: string;
   recording_title: string | null;
   recording_created_at: string | null;
   speakers: string[];
-  transcript_segments: PocketTranscriptSegment[] | null;
   created_at: string;
+}
+
+interface AmbiguityRow extends AmbiguityRowBase {
+  transcript_segments?: PocketTranscriptSegment[] | null;
 }
 
 interface IntegrationRow {
@@ -173,24 +176,30 @@ export class PocketClient {
   }
 
   async listPendingAmbiguities(): Promise<PocketSpeakerAmbiguity[]> {
-    let { data, error } = await this.client
+    const primary = await this.client
       .from("pocket_speaker_ambiguities")
       .select(
         "id, recording_id, recording_title, recording_created_at, speakers, transcript_segments, created_at",
       )
       .is("resolved_at", null)
       .order("created_at", { ascending: false });
+
+    let rows: AmbiguityRow[] | null = (primary.data as AmbiguityRow[] | null);
+    let error = primary.error;
+
     if (error?.code === "42703") {
-      ({ data, error } = await this.client
+      const fallback = await this.client
         .from("pocket_speaker_ambiguities")
         .select(
           "id, recording_id, recording_title, recording_created_at, speakers, created_at",
         )
         .is("resolved_at", null)
-        .order("created_at", { ascending: false }));
+        .order("created_at", { ascending: false });
+      rows = (fallback.data as AmbiguityRow[] | null);
+      error = fallback.error;
     }
     if (error) throw error;
-    return ((data ?? []) as AmbiguityRow[]).map((row) => ({
+    return (rows ?? []).map((row) => ({
       id: row.id,
       recordingId: row.recording_id,
       recordingTitle: row.recording_title,
