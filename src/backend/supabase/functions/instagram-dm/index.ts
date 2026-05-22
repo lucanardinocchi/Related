@@ -11,6 +11,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
+import { upsertInstagramMessage } from "../_shared/instagramMessages.ts";
 
 const INSTAGRAM_GRAPH = "https://graph.instagram.com";
 const INSTAGRAM_SCOPE_BASIC = "instagram_business_basic";
@@ -285,10 +286,87 @@ async function fetchMessageDetail(
   };
 }
 
+function rowToSummary(
+  row: {
+    ig_message_id: string;
+    direction: string;
+    from_username: string | null;
+    text: string;
+    sent_at: string;
+  },
+  accountId: string,
+  contactUsername: string | null,
+): InstagramMessageSummary {
+  const direction: "sent" | "received" =
+    row.direction === "outbound" ? "sent" : "received";
+  return {
+    id: row.ig_message_id,
+    text: row.text,
+    fromUsername:
+      direction === "sent"
+        ? null
+        : row.from_username ?? contactUsername,
+    toUsername: direction === "sent" ? contactUsername : null,
+    sentAt: row.sent_at,
+    direction,
+  };
+}
+
+async function listMessagesFromDb(
+  supabase: any,
+  ownerId: string,
+  contactId: string,
+  accountId: string,
+  contactUsername: string | null,
+): Promise<InstagramMessageSummary[]> {
+  const { data, error } = await supabase
+    .from("instagram_messages")
+    .select("ig_message_id, direction, from_username, text, sent_at")
+    .eq("owner_id", ownerId)
+    .eq("contact_id", contactId)
+    .order("sent_at", { ascending: true })
+    .limit(100);
+
+  if (error || !data) return [];
+  return (data as Array<{
+    ig_message_id: string;
+    direction: string;
+    from_username: string | null;
+    text: string;
+    sent_at: string;
+  }>).map((row) => rowToSummary(row, accountId, contactUsername));
+}
+
+async function persistApiMessages(
+  supabase: any,
+  ownerId: string,
+  contactId: string,
+  accountId: string,
+  messages: InstagramMessageSummary[],
+  contactScopedId: string | null,
+): Promise<void> {
+  for (const message of messages) {
+    await upsertInstagramMessage(supabase, {
+      ownerId,
+      contactId,
+      message: {
+        ig_message_id: message.id,
+        direction: message.direction === "sent" ? "outbound" : "inbound",
+        from_username: message.fromUsername,
+        from_scoped_id:
+          message.direction === "sent" ? accountId : contactScopedId,
+        text: message.text,
+        sent_at: message.sentAt || new Date().toISOString(),
+      },
+    });
+  }
+}
+
 async function listMessagesForContact(
   supabase: any,
   tokenRow: TokenRow,
   input: ListRequest,
+  ownerId: string,
 ): Promise<{ messages: InstagramMessageSummary[]; resolvedScopedId: string | null }> {
   const accountId = tokenRow.provider_account_id;
   if (!accountId) {
@@ -302,13 +380,22 @@ async function listMessagesForContact(
     scopedId = await resolveScopedIdFromUsername(supabase, tokenRow, username);
   }
 
+  const contactUsername = username?.replace(/^@/, "") ?? null;
+  const cached = await listMessagesFromDb(
+    supabase,
+    ownerId,
+    input.contactId,
+    accountId,
+    contactUsername,
+  );
+
   if (!scopedId) {
-    return { messages: [], resolvedScopedId: null };
+    return { messages: cached, resolvedScopedId: null };
   }
 
   const conversationId = await findConversationId(supabase, tokenRow, scopedId);
   if (!conversationId) {
-    return { messages: [], resolvedScopedId: scopedId };
+    return { messages: cached, resolvedScopedId: scopedId };
   }
 
   const convUrl =
@@ -337,13 +424,35 @@ async function listMessagesForContact(
     ),
   );
 
-  const messages = summaries
+  const apiMessages = summaries
     .filter((m): m is InstagramMessageSummary => m !== null)
     .sort(
       (a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime(),
     );
 
-  return { messages, resolvedScopedId: scopedId };
+  if (apiMessages.length > 0) {
+    await persistApiMessages(
+      supabase,
+      ownerId,
+      input.contactId,
+      accountId,
+      apiMessages,
+      scopedId,
+    );
+  }
+
+  const merged = await listMessagesFromDb(
+    supabase,
+    ownerId,
+    input.contactId,
+    accountId,
+    contactUsername,
+  );
+
+  return {
+    messages: merged.length > 0 ? merged : apiMessages,
+    resolvedScopedId: scopedId,
+  };
 }
 
 async function sendMessage(
@@ -478,6 +587,7 @@ Deno.serve(async (req) => {
         adminClient,
         tokenRow,
         body,
+        ownerId,
       );
 
       if (
@@ -507,6 +617,23 @@ Deno.serve(async (req) => {
       instagramScopedId: body.instagramScopedId.trim(),
       text: body.text.trim(),
     });
+
+    const accountId = tokenRow.provider_account_id;
+    if (accountId && messageId) {
+      await upsertInstagramMessage(adminClient, {
+        ownerId,
+        contactId: body.contactId,
+        message: {
+          ig_message_id: messageId,
+          direction: "outbound",
+          from_username: null,
+          from_scoped_id: accountId,
+          text: body.text.trim(),
+          sent_at: new Date().toISOString(),
+        },
+      });
+    }
+
     return jsonResponse(200, { status: "ok", messageId });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

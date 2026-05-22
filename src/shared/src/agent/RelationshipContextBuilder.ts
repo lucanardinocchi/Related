@@ -1,10 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { CommsTimelineItem } from "../comms/relationshipCommsTimeline";
 import type {
   CommitmentCommunicationStatus,
   CommitmentOrigin,
   ThreadDirection,
 } from "../open-threads/OpenThreadsClient";
 import type { InteractionCategory, InteractionStatus } from "../interactions/InteractionsClient";
+import {
+  loadRelationshipAmbientExtras,
+  type RelationshipContextEvent,
+  type SuggestedActionHistoryEntry,
+} from "./loadRelationshipAmbientContext.ts";
 
 const CONTACT_COLUMNS =
   "id, name, phone, email, birthday, area, latitude, longitude, occupation, education, instagram_username, instagram_scoped_id, x_username, x_user_id, tiktok_username, tiktok_open_id, whatsapp_wa_id, created_at, updated_at";
@@ -24,8 +30,7 @@ const OPEN_THREAD_SELECT =
 
 const GROUP_MEMBER_SELECT = `contact_groups(contact_id, contacts(${CONTACT_COLUMNS}))`;
 
-const INTERACTION_LIMIT = 50;
-const OPEN_THREAD_LIMIT = 50;
+export type { RelationshipContextEvent, SuggestedActionHistoryEntry };
 
 /** Contact profile fields loaded for agent Relationship context. */
 export interface RelationshipContextContact {
@@ -119,6 +124,12 @@ export interface RelationshipContextSnapshot {
   openThreads: RelationshipContextOpenThreadLink[];
   contact: RelationshipContextContact | null;
   groupMembers: RelationshipContextGroupMember[];
+  /** Cached platform messages (email, social, iMessage relay) for this Relationship. */
+  platformComms: CommsTimelineItem[];
+  /** Calendar events where a focal Contact (or Group member) is an attendee. */
+  calendarEvents: RelationshipContextEvent[];
+  /** All past Candidate Actions for this Relationship with approval / execution flags. */
+  suggestedActionHistory: SuggestedActionHistoryEntry[];
 }
 
 export interface RelationshipContextBuilderOptions {
@@ -281,6 +292,9 @@ export class RelationshipContextBuilder {
         openThreads: [],
         contact: null,
         groupMembers: [],
+        platformComms: [],
+        calendarEvents: [],
+        suggestedActionHistory: [],
       };
     }
 
@@ -304,7 +318,7 @@ export class RelationshipContextBuilder {
         : Promise.resolve([]),
     ]);
 
-    return {
+    const base: RelationshipContextSnapshot = {
       relationship: mappedRelationship,
       interactions,
       openThreads,
@@ -313,7 +327,17 @@ export class RelationshipContextBuilder {
           ? mapContact(row.contact)
           : null,
       groupMembers,
+      platformComms: [],
+      calendarEvents: [],
+      suggestedActionHistory: [],
     };
+
+    const extras = await loadRelationshipAmbientExtras(
+      this.supabase,
+      base,
+      relationshipId,
+    );
+    return { ...base, ...extras };
   }
 
   private async loadInteractions(
@@ -326,8 +350,7 @@ export class RelationshipContextBuilder {
         .from("interactions")
         .select(INTERACTION_SELECT)
         .eq("group_id", row.target_group_id)
-        .order("time", { ascending: false })
-        .limit(INTERACTION_LIMIT);
+        .order("time", { ascending: false });
       if (error) throw error;
       return ((data ?? []) as unknown as InteractionRow[]).map(mapInteraction);
     }
@@ -339,8 +362,7 @@ export class RelationshipContextBuilder {
           `${INTERACTION_SELECT}, interaction_contacts!inner(contact_id, contacts(id, name))`,
         )
         .eq("interaction_contacts.contact_id", row.target_contact_id)
-        .order("time", { ascending: false })
-        .limit(INTERACTION_LIMIT);
+        .order("time", { ascending: false });
       if (error) throw error;
       return ((data ?? []) as unknown as InteractionRow[]).map(mapInteraction);
     }
@@ -357,8 +379,7 @@ export class RelationshipContextBuilder {
       .from("open_thread_relationships")
       .select(OPEN_THREAD_SELECT)
       .eq("relationship_id", relationshipId)
-      .order("open_threads(created_at)", { ascending: true })
-      .limit(OPEN_THREAD_LIMIT);
+      .order("open_threads(created_at)", { ascending: true });
     if (error) throw error;
     return ((data ?? []) as unknown as OpenThreadLinkRow[]).map(
       mapOpenThreadLink,

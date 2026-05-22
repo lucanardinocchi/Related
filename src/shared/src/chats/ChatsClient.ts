@@ -11,9 +11,12 @@ import {
  * Chat is read-only and Extraction Pass runs exactly once over the
  * transcript.
  */
+export type ChatSource = "conversational" | "pocket";
+
 export interface Chat {
   id: string;
   title: string | null;
+  source: ChatSource;
   createdAt: string;
   closedAt: string | null;
   /**
@@ -109,6 +112,7 @@ export interface ChatsClientOptions {
 interface ChatRow {
   id: string;
   title: string | null;
+  source?: ChatSource;
   created_at: string;
   closed_at: string | null;
   extracted_at: string | null;
@@ -124,7 +128,9 @@ interface MessageRow {
   created_at: string;
 }
 
-const CHAT_COLUMNS = "id, title, created_at, closed_at, extracted_at";
+const CHAT_COLUMNS =
+  "id, title, source, created_at, closed_at, extracted_at";
+const CHAT_COLUMNS_LEGACY = "id, title, created_at, closed_at, extracted_at";
 const MESSAGE_COLUMNS =
   "id, chat_id, role, content, tool_calls, tool_call_id, created_at";
 
@@ -132,10 +138,77 @@ function toChat(row: ChatRow): Chat {
   return {
     id: row.id,
     title: row.title,
+    source: row.source ?? "conversational",
     createdAt: row.created_at,
     closedAt: row.closed_at,
     extractedAt: row.extracted_at,
   };
+}
+
+async function selectChatsOrdered(
+  client: SupabaseClient,
+  filterSource?: ChatSource,
+): Promise<ChatRow[]> {
+  const build = (columns: string, withSourceFilter: boolean) => {
+    let q = client.from("chats").select(columns);
+    if (withSourceFilter && filterSource) {
+      q = q.eq("source", filterSource);
+    }
+    return q.order("created_at", { ascending: false });
+  };
+
+  let { data, error } = await build(CHAT_COLUMNS, true);
+  if (error?.code === "42703") {
+    ({ data, error } = await build(CHAT_COLUMNS_LEGACY, false));
+  }
+  if (error) throw error;
+  return (data ?? []) as unknown as ChatRow[];
+}
+
+async function hydrateChatSummaries(
+  client: SupabaseClient,
+  chats: Chat[],
+): Promise<ChatSummary[]> {
+  if (chats.length === 0) return [];
+
+  const ids = chats.map((c) => c.id);
+  const { data: msgData, error: msgError } = await client
+    .from("chat_messages")
+    .select("chat_id, content, created_at")
+    .in("chat_id", ids)
+    .order("created_at", { ascending: false });
+  if (msgError) throw msgError;
+
+  const previews = new Map<
+    string,
+    { content: string; createdAt: string; count: number }
+  >();
+  for (const row of (msgData ?? []) as Array<{
+    chat_id: string;
+    content: string;
+    created_at: string;
+  }>) {
+    const existing = previews.get(row.chat_id);
+    if (!existing) {
+      previews.set(row.chat_id, {
+        content: row.content,
+        createdAt: row.created_at,
+        count: 1,
+      });
+    } else {
+      existing.count += 1;
+    }
+  }
+
+  return chats.map((c) => {
+    const p = previews.get(c.id);
+    return {
+      ...c,
+      lastMessagePreview: p?.content ?? null,
+      lastMessageAt: p?.createdAt ?? null,
+      messageCount: p?.count ?? 0,
+    };
+  });
 }
 
 function toMessage(row: MessageRow): ChatMessage {
@@ -186,64 +259,16 @@ export class ChatsClient {
     return `${url.replace(/\/$/, "")}/functions/v1`;
   }
 
+  /** Conversational Chats only (legacy surfaces). */
   async listChats(): Promise<ChatSummary[]> {
-    // Pocket integration hides imported transcripts from the Conversational
-    // rail. Fall back to an unfiltered list when migration 20260530000001
-    // has not landed yet so a web deploy cannot take /agent down.
-    let { data: chatsData, error: chatsError } = await this.client
-      .from("chats")
-      .select(CHAT_COLUMNS)
-      .eq("source", "conversational")
-      .order("created_at", { ascending: false });
-    if (chatsError?.code === "42703") {
-      ({ data: chatsData, error: chatsError } = await this.client
-        .from("chats")
-        .select(CHAT_COLUMNS)
-        .order("created_at", { ascending: false }));
-    }
-    if (chatsError) throw chatsError;
-    const chats = ((chatsData ?? []) as ChatRow[]).map(toChat);
+    const rows = await selectChatsOrdered(this.client, "conversational");
+    return hydrateChatSummaries(this.client, rows.map(toChat));
+  }
 
-    if (chats.length === 0) return [];
-
-    const ids = chats.map((c) => c.id);
-    const { data: msgData, error: msgError } = await this.client
-      .from("chat_messages")
-      .select("chat_id, content, created_at")
-      .in("chat_id", ids)
-      .order("created_at", { ascending: false });
-    if (msgError) throw msgError;
-
-    const previews = new Map<
-      string,
-      { content: string; createdAt: string; count: number }
-    >();
-    for (const row of (msgData ?? []) as Array<{
-      chat_id: string;
-      content: string;
-      created_at: string;
-    }>) {
-      const existing = previews.get(row.chat_id);
-      if (!existing) {
-        previews.set(row.chat_id, {
-          content: row.content,
-          createdAt: row.created_at,
-          count: 1,
-        });
-      } else {
-        existing.count += 1;
-      }
-    }
-
-    return chats.map((c) => {
-      const p = previews.get(c.id);
-      return {
-        ...c,
-        lastMessagePreview: p?.content ?? null,
-        lastMessageAt: p?.createdAt ?? null,
-        messageCount: p?.count ?? 0,
-      };
-    });
+  /** All Chats for /agent — Conversational + imported Pocket transcripts. */
+  async listAgentChats(): Promise<ChatSummary[]> {
+    const rows = await selectChatsOrdered(this.client);
+    return hydrateChatSummaries(this.client, rows.map(toChat));
   }
 
   async getChat(id: string): Promise<Chat> {

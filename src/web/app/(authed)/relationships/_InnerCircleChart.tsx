@@ -99,7 +99,7 @@ function InnerCircleSvg({ contacts }: { contacts: InnerCircleContact[] }) {
       viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
       role="img"
       aria-label="Inner circle closeness"
-      className="mx-auto block w-full max-w-[220px]"
+      className="mx-auto block w-full max-w-[260px]"
     >
       {RING_RADII.map((r, i) => (
         <circle
@@ -314,9 +314,9 @@ export function InnerCircleChart({
           No closeness signals in this period yet.
         </p>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,200px)_1fr] sm:items-start sm:gap-3">
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,260px)_1fr] sm:items-center sm:gap-3">
           <InnerCircleSvg contacts={rankings.contacts} />
-          <ol className="min-h-0 space-y-0.5">
+          <ol className="min-h-0 space-y-0.5 sm:pt-3">
             {rankings.contacts.map((person, i) => (
               <li
                 key={person.contactId}

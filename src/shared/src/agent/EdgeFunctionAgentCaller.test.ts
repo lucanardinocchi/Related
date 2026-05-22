@@ -11,19 +11,9 @@ function samplePrompt(): AgentPrompt {
     userContext: {
       userId: "u-1",
       asOf: "2026-05-19T00:00:00Z",
-      transientIntent: [],
       situationalState: null,
       goalsAndValues: [],
       operatorStrengths: [],
-      inferredSignals: {
-        calendarDensity: null,
-        sleep: null,
-        calendarEvents: [],
-        sleepRecords: [],
-      },
-      groups: [],
-      otherRelationships: [],
-      characterValuesAlignment: [],
     },
   };
 }

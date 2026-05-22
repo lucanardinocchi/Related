@@ -15,19 +15,9 @@ function samplePrompt(over: Partial<AgentPrompt> = {}): AgentPrompt {
     userContext: {
       userId: "u-1",
       asOf: "2026-05-19T00:00:00Z",
-      transientIntent: [],
       situationalState: null,
       goalsAndValues: [],
       operatorStrengths: [],
-      inferredSignals: {
-        calendarDensity: null,
-        sleep: null,
-        calendarEvents: [],
-        sleepRecords: [],
-      },
-      groups: [],
-      otherRelationships: [],
-      characterValuesAlignment: [],
     },
     ...over,
   };
@@ -106,7 +96,6 @@ describe("ClaudeAgent.propose", () => {
       userContext: {
         userId: "u-1",
         asOf: "2026-05-19T00:00:00Z",
-        transientIntent: ["plan a low-key catch-up"],
         situationalState: {
           id: "ss-1",
           content: "Just moved to Sydney",
@@ -129,15 +118,6 @@ describe("ClaudeAgent.propose", () => {
             updatedAt: "2026-05-01T00:00:00Z",
           },
         ],
-        inferredSignals: {
-          calendarDensity: null,
-          sleep: null,
-          calendarEvents: [],
-          sleepRecords: [],
-        },
-        groups: [],
-        otherRelationships: [],
-        characterValuesAlignment: [],
       },
     });
 
@@ -150,7 +130,6 @@ describe("ClaudeAgent.propose", () => {
     expect(body).toContain("Sam");
     expect(body).toContain("promised to send the book");
     expect(body).toContain("cs-prev");
-    expect(body).toContain("plan a low-key catch-up");
     expect(body).toContain("Just moved to Sydney");
     expect(body).toContain("Be more present with family");
   });

@@ -66,6 +66,7 @@ export async function recordAmbiguity(
   ownerId: string,
   recording: PocketRecordingSummary,
   speakers: string[],
+  transcriptSegments?: Array<{ speaker?: string | null; text?: string | null }>,
 ): Promise<void> {
   await supabase.from("pocket_speaker_ambiguities").upsert(
     {
@@ -74,12 +75,17 @@ export async function recordAmbiguity(
       recording_title: recording.title ?? null,
       recording_created_at: recording.created_at ?? null,
       speakers,
+      transcript_segments: transcriptSegments ?? null,
       resolved_at: null,
       resolved_speaker: null,
     },
     { onConflict: "owner_id,recording_id" },
   );
 }
+
+export type PocketSpeakerAssignmentPayload =
+  | { kind: "self" }
+  | { kind: "contact"; contactId: string };
 
 export async function importRecording(
   supabase: SupabaseServiceClient,
@@ -89,34 +95,51 @@ export async function importRecording(
   recording: PocketRecordingSummary,
   apiKey: string,
   accountDisplayName: string,
-  userSpeakerOverride?: string,
+  options?: {
+    userSpeakerOverride?: string;
+    speakerAssignments?: Record<string, PocketSpeakerAssignmentPayload>;
+    contactNamesById?: Record<string, string>;
+    /** When resolving from stored ambiguity preview, skip Pocket API fetch. */
+    transcript?: unknown;
+  },
 ): Promise<
   | { status: "imported"; chatId: string }
   | { status: "ambiguous"; speakers: string[] }
   | { status: "skipped"; reason: string }
 > {
-  const detail = await pocketFetch<{ data?: Record<string, unknown> }>(
-    apiKey,
-    `/recordings/${recording.id}`,
-    {
-      include_transcript: "true",
-      include_summarizations: "false",
-    },
-  );
-  const data = detail.data ?? {};
+  let transcript: unknown = options?.transcript;
+  if (transcript === undefined) {
+    const detail = await pocketFetch<{ data?: Record<string, unknown> }>(
+      apiKey,
+      `/recordings/${recording.id}`,
+      {
+        include_transcript: "true",
+        include_summarizations: "false",
+      },
+    );
+    transcript = detail.data?.transcript;
+  }
 
   const pipeline = runPocketImportPipeline({
-    transcript: data.transcript,
+    transcript,
     accountDisplayName,
     recordingTitle: recording.title,
-    userSpeakerOverride,
+    userSpeakerOverride: options?.userSpeakerOverride,
+    speakerAssignments: options?.speakerAssignments,
+    contactNamesById: options?.contactNamesById,
   });
 
   if (pipeline.status === "skipped") {
     return { status: "skipped", reason: pipeline.reason };
   }
   if (pipeline.status === "ambiguous") {
-    await recordAmbiguity(supabase, ownerId, recording, pipeline.speakers);
+    await recordAmbiguity(
+      supabase,
+      ownerId,
+      recording,
+      pipeline.speakers,
+      pipeline.segments,
+    );
     return { status: "ambiguous", speakers: pipeline.speakers };
   }
 
@@ -235,6 +258,14 @@ export async function processPendingImportForOwner(
     }
   }
 
+  const ambiguityRes = await service
+    .from("pocket_speaker_ambiguities")
+    .select("transcript_segments")
+    .eq("owner_id", ownerId)
+    .eq("recording_id", recordingId)
+    .is("resolved_at", null)
+    .maybeSingle();
+
   return importRecording(
     service,
     supabaseUrl,
@@ -243,6 +274,9 @@ export async function processPendingImportForOwner(
     recording,
     tokenRes.data.access_token as string,
     integrationRes.data.account_display_name as string,
-    userSpeakerOverride,
+    {
+      userSpeakerOverride,
+      transcript: ambiguityRes.data?.transcript_segments ?? undefined,
+    },
   );
 }

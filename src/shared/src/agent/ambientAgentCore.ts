@@ -7,9 +7,9 @@ import {
   TOOL_NAME_TO_ACTION_TYPE,
   ensureDoNothingPeer,
   type ParsedAmbientAction,
-} from "./ambientTools";
+} from "./ambientTools.ts";
 
-export { AMBIENT_TOOLS, type ParsedAmbientAction } from "./ambientTools";
+export { AMBIENT_TOOLS, type ParsedAmbientAction } from "./ambientTools.ts";
 
 export interface AmbientPromptInput {
   mode: "baseline" | "triggered" | "engaged";
@@ -30,6 +30,7 @@ Rules:
 - Edits the User has already made on a previous candidate are signal: respect them. Decisions the User declined are signal: don't re-propose unchanged.
 - Engaged mode: reason against the User's live Transient Intent if present. Baseline / Triggered: there is no live intent.
 - Capability fit: \`userContext.operatorStrengths\` lists what the User is positioned to offer (e.g. domains of expertise, kinds of help they're willing to give). When the list is non-empty, every concrete Candidate Action you emit must route through one of these strengths — propose help the User can actually deliver, not help they cannot. If you identify a need for the Relationship but no candidate fits the User's strengths, emit DoNothing with a 'why' that names the gap (e.g. "they need legal advice; outside the User's declared strengths"). When the list is empty, treat the User as unrestricted, but don't invent capabilities the User hasn't declared.
+- \`relationshipContext\` includes full interaction and open-thread history, platform comms, per-relationship calendar events, and \`suggestedActionHistory\` (past suggestions with approved / executed flags). \`userContext\` is only Goals & Values, Situational State, and Operator Strengths.
 
 Output: exactly one tool_use block.`;
 

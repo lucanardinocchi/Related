@@ -58,12 +58,12 @@ supabase functions deploy instagram-dm
 
 ## Architecture
 
-Mirrors the Gmail stack:
-
 ```
 Settings OAuth → user_provider_tokens (provider=instagram)
+       ↓ subscribe messages webhooks (instagram-oauth)
+Meta webhook → instagram-webhook → instagram_messages (+ Realtime)
        ↓
-InstagramClient → instagram-dm Edge Function → graph.instagram.com
+InstagramClient → instagram-dm (DB + Graph API backfill / send)
        ↓
-_InstagramSection on /relationships/[id]
+_InstagramSection + Comms spine on /relationships/[id]
 ```

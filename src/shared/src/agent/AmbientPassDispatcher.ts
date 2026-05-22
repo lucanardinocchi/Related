@@ -104,13 +104,22 @@ export class AmbientPassDispatcher {
   }
 
   async canDispatchAmbientPasses(): Promise<boolean> {
-    const [{ data, error }, enabled] = await Promise.all([
-      this.supabase.from("user_subscriptions").select("status").maybeSingle(),
-      this.preferences.isEnabled(),
-    ]);
+    const [{ data: authData, error: authErr }, { data, error }, enabled] =
+      await Promise.all([
+        this.supabase.auth.getUser(),
+        this.supabase.from("user_subscriptions").select("status").maybeSingle(),
+        this.preferences.isEnabled(),
+      ]);
+    if (authErr) throw authErr;
     if (error) throw error;
     const status = (data?.status ?? "inactive") as SubscriptionStatus;
-    return canRunAmbientIntelligence({ status }, { enabled });
+    return canRunAmbientIntelligence(
+      { status },
+      {
+        enabled,
+        accountCreatedAt: authData.user?.created_at,
+      },
+    );
   }
 
   /** @deprecated Use canDispatchAmbientPasses — subscription-only check. */

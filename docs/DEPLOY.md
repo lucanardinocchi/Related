@@ -67,6 +67,12 @@ Done. Refresh the Vercel URL → `/talk` → pick a Relationship → press mic �
 
 Voice requires Tier 3 secrets too — without them the STT/TTS adapters error. If you only want text-mode Engaged Pass for now, that's fine: you can type into the transcript stub. Otherwise jump to Tier 3.
 
+## Tier 2.5 — Messaging platform OAuth (Instagram, WhatsApp, X, TikTok)
+
+Settings → Integrations on web. Each platform needs a developer app, `NEXT_PUBLIC_*` env vars on Vercel/local, Supabase Edge Function secrets, and function deploys. Step-by-step: **[MESSAGING_INTEGRATIONS.md](./MESSAGING_INTEGRATIONS.md)**.
+
+iMessage/SMS is separate — **Tier 5** (Mac relay), not provider OAuth.
+
 ## Tier 2 — Calendar OAuth (~20 min, mostly Google Cloud setup)
 
 ### 2.1 Google Cloud OAuth client
@@ -225,10 +231,10 @@ Creates `relay_devices`, `message_threads`, `messages`, `outbound_queue`, and en
 
 ```sh
 cd src/backend
-supabase functions deploy relay-pair relay-sync relay-outbound-pull relay-outbound-ack
+supabase functions deploy relay-pair relay-sync relay-outbound-pull relay-outbound-ack --no-verify-jwt
 ```
 
-No extra secrets — device auth uses hashed credentials stored in `relay_devices`.
+`relay-pair` still validates the User JWT inside the handler for `create_code`; Mac `exchange` and device sync/outbound calls use relay device headers instead.
 
 ### 5.3 Install the Mac relay daemon
 

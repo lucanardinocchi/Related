@@ -19,19 +19,9 @@ type Resolved<T> = { data: T; error: null } | { data: null; error: { message: st
 const emptyUserContext = (userId = "u-1"): UserContextSnapshot => ({
   userId,
   asOf: "2026-05-19T00:00:00.000Z",
-  transientIntent: [],
   goalsAndValues: [],
   situationalState: null,
   operatorStrengths: [],
-  inferredSignals: {
-    calendarDensity: null,
-    sleep: null,
-    calendarEvents: [],
-    sleepRecords: [],
-  },
-  groups: [],
-  otherRelationships: [],
-  characterValuesAlignment: [],
 });
 
 function makeQueryMock() {
@@ -361,7 +351,7 @@ describe("PassEngine.runPass", () => {
     );
   });
 
-  it("excludes the current relationship from userContext.otherRelationships", async () => {
+  it("loads ambient user context (goals, situational, strengths only)", async () => {
     const { q, engine, userContextBuilder } = withEngine([{ type: "DoNothing" }]);
     primeWrites(q);
 
@@ -370,7 +360,6 @@ describe("PassEngine.runPass", () => {
     expect(userContextBuilder.buildUserContext).toHaveBeenCalledWith(
       "u-1",
       expect.any(Date),
-      expect.objectContaining({ excludeRelationshipId: "r-1" }),
     );
   });
 });

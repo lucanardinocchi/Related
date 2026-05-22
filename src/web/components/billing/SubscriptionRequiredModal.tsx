@@ -44,7 +44,7 @@ export function SubscriptionRequiredModal({ open, onClose }: Props) {
       open={open}
       onClose={onClose}
       title="Subscription required"
-      subtitle="Ambient Intelligence runs in the background to surface candidate actions for your relationships."
+      subtitle="Your free trial has ended. Subscribe to keep Ambient Intelligence running in the background."
       footer={
         <>
           <Button type="button" variant="ghost" onClick={onClose} disabled={working}>
@@ -59,7 +59,7 @@ export function SubscriptionRequiredModal({ open, onClose }: Props) {
       <p className="text-[14px] leading-[22px] text-fg-subtle">
         Related&apos;s background agent processes your relationship context on a
         schedule and when new activity arrives, then recommends actions you can
-        accept or decline. A subscription unlocks that ambient intelligence loop.
+        accept or decline. Subscribe to continue after your free trial.
       </p>
       {error && (
         <p className="mt-3 text-[13px] text-red-600" role="alert">

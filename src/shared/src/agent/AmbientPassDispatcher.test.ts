@@ -13,6 +13,7 @@ function makeSupabaseMock(
     }>;
     subscriptionStatus?: string;
     ambientEnabled?: boolean | null;
+    accountCreatedAt?: string;
     rpcError?: { message: string } | null;
   } = {},
 ) {
@@ -57,14 +58,17 @@ function makeSupabaseMock(
     throw new Error(`unexpected table ${table}`);
   });
 
+  const createdAt =
+    overrides.accountCreatedAt ?? "2020-01-01T00:00:00.000Z";
+
   return {
     supabase: {
       from,
       rpc,
       auth: {
-        getUser: jest
-          .fn()
-          .mockResolvedValue({ data: { user: { id: "u-1" } } }),
+        getUser: jest.fn().mockResolvedValue({
+          data: { user: { id: "u-1", created_at: createdAt } },
+        }),
       },
     } as unknown as SupabaseClient,
     rpc,
@@ -73,7 +77,7 @@ function makeSupabaseMock(
 }
 
 describe("AmbientPassDispatcher", () => {
-  test("returns null without an active subscription", async () => {
+  test("returns null without an active subscription after the trial", async () => {
     const { supabase, runPass } = makeSupabaseMock({
       pending: [
         {
@@ -91,6 +95,39 @@ describe("AmbientPassDispatcher", () => {
 
     await expect(dispatcher.dispatchNextPendingPass()).resolves.toBeNull();
     expect(runPass).not.toHaveBeenCalled();
+  });
+
+  test("runs during the free trial without a subscription", async () => {
+    const { supabase, rpc, runPass } = makeSupabaseMock({
+      pending: [
+        {
+          id: "p-trial",
+          relationship_id: "r-1",
+          mode: "baseline",
+          reason: "baseline_schedule",
+          created_at: "2026-05-19T00:00:00Z",
+        },
+      ],
+      subscriptionStatus: "inactive",
+      accountCreatedAt: new Date().toISOString(),
+    });
+    runPass.mockResolvedValue({
+      id: "cs-trial",
+      ownerId: "u-1",
+      relationshipId: "r-1",
+      mode: "baseline",
+      createdAt: "2026-05-19T00:00:00Z",
+      actions: [],
+    });
+    const engine = { runPass } as unknown as PassEngine;
+    const dispatcher = new AmbientPassDispatcher({ supabase, passEngine: engine });
+
+    const result = await dispatcher.dispatchNextPendingPass();
+    expect(result?.id).toBe("cs-trial");
+    expect(runPass).toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("complete_scheduled_pass", {
+      p_pass_id: "p-trial",
+    });
   });
 
   test("returns null when Ambient Intelligence is turned off", async () => {

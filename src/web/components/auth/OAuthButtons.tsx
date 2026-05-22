@@ -2,16 +2,21 @@
 
 import { useState } from "react";
 import type { OAuthSignInProvider } from "@related/shared";
-import { Button } from "@/components/ui/Button";
+import { ProviderSignInButton } from "@/components/auth/ProviderSignInButton";
 import { buildAuthOAuthRedirectTo } from "@/lib/auth/oauthRedirect";
 import { getBrowserDeps } from "@/lib/deps/client";
 
 interface OAuthButtonsProps {
   /** Post-auth path passed through `/auth/callback` (default `/relationships`). */
   nextPath?: string;
+  /** Affects button copy ("Sign in with …" vs "Sign up with …"). */
+  action?: "sign-in" | "sign-up";
 }
 
-export function OAuthButtons({ nextPath = "/relationships" }: OAuthButtonsProps) {
+export function OAuthButtons({
+  nextPath = "/relationships",
+  action = "sign-in",
+}: OAuthButtonsProps) {
   const [error, setError] = useState<string | null>(null);
   const [loadingProvider, setLoadingProvider] =
     useState<OAuthSignInProvider | null>(null);
@@ -33,26 +38,20 @@ export function OAuthButtons({ nextPath = "/relationships" }: OAuthButtonsProps)
 
   return (
     <div className="space-y-3">
-      <Button
-        type="button"
-        variant="secondary"
-        className="w-full"
+      <ProviderSignInButton
+        provider="google"
+        action={action}
         loading={loadingProvider === "google"}
         disabled={loadingProvider !== null}
         onClick={() => void startOAuth("google")}
-      >
-        Continue with Google
-      </Button>
-      <Button
-        type="button"
-        variant="secondary"
-        className="w-full"
+      />
+      <ProviderSignInButton
+        provider="apple"
+        action={action}
         loading={loadingProvider === "apple"}
         disabled={loadingProvider !== null}
         onClick={() => void startOAuth("apple")}
-      >
-        Continue with Apple
-      </Button>
+      />
       {error ? <p className="text-sm text-danger">{error}</p> : null}
     </div>
   );

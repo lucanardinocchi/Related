@@ -2,7 +2,7 @@
 // messages to send via imsg. Device auth required.
 //
 // Deploy:
-//   supabase functions deploy relay-outbound-pull
+//   supabase functions deploy relay-outbound-pull --no-verify-jwt
 //
 // deno-lint-ignore-file no-explicit-any
 

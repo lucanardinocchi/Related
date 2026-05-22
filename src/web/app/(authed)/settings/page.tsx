@@ -18,8 +18,11 @@ import { RelaySection } from "./_RelaySection";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const { userProviderTokens, subscriptions, pocket, ambientIntelligencePreferences } =
+  const { supabase, userProviderTokens, subscriptions, pocket, ambientIntelligencePreferences } =
     await getServerDeps();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const subscription = await subscriptions.getState();
   const ambientPrefs = await ambientIntelligencePreferences.getPreferences();
   const googleToken = await userProviderTokens.getForProvider("google");
@@ -54,10 +57,12 @@ export default async function SettingsPage() {
         initialCurrentPeriodEnd={subscription.currentPeriodEnd}
         initialCancelAtPeriodEnd={subscription.cancelAtPeriodEnd}
         initialHasCustomer={subscription.stripeCustomerId !== null}
+        accountCreatedAt={user?.created_at ?? null}
       />
       <AmbientIntelligenceSection
         initialEnabled={ambientPrefs?.enabled ?? true}
         initialIsSubscribed={subscription.isActive}
+        accountCreatedAt={user?.created_at ?? null}
       />
       <IntegrationsSection
         initialCalendarConnected={tokenHasCalendarAccess(googleToken?.scopes)}

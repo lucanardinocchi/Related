@@ -94,6 +94,23 @@ async function findGroupForConversation(
 }
 
 Deno.serve(async (req) => {
+  // GET handshake. TikTok's docs across product surfaces are inconsistent
+  // about whether a verification challenge is sent; we mirror the Meta pattern
+  // and safely echo any `challenge` query param so re-registration just works.
+  // If no challenge is present we still 200 OK (rather than 405) because some
+  // TikTok surfaces health-check the URL with a bare GET.
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    const challenge = url.searchParams.get("challenge");
+    if (challenge) {
+      return new Response(challenge, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      });
+    }
+    return new Response("OK", { status: 200 });
+  }
+
   if (req.method !== "POST") {
     return jsonResponse({ error: "method not allowed" }, 405);
   }
@@ -105,9 +122,19 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "invalid JSON" }, 400);
   }
 
+  // Tighten client_key validation: if TIKTOK_CLIENT_KEY is set, the payload
+  // MUST include a matching client_key. If the secret is unset we warn and
+  // accept (local dev). Mirrors the Meta APP_SECRET behaviour.
   const clientKey = payload.client_key as string | undefined;
-  if (CLIENT_KEY && clientKey && clientKey !== CLIENT_KEY) {
-    return jsonResponse({ error: "invalid client_key" }, 403);
+  if (CLIENT_KEY) {
+    if (!clientKey || clientKey !== CLIENT_KEY) {
+      return jsonResponse({ error: "invalid client_key" }, 401);
+    }
+  } else {
+    console.warn(
+      "[tiktok-webhook] TIKTOK_CLIENT_KEY not set — accepting webhook without client_key check. " +
+        "This is INSECURE. Set the secret in production.",
+    );
   }
 
   const event = payload.event as string | undefined;

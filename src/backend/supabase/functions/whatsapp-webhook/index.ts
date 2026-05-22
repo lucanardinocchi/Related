@@ -12,10 +12,12 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
+import { verifyMetaSignature } from "../_shared/metaWebhookSignature.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
+const APP_SECRET = Deno.env.get("WHATSAPP_APP_SECRET");
 
 function normalizePhoneDigits(value: string | null | undefined): string {
   if (!value) return "";
@@ -269,6 +271,19 @@ Deno.serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
+  // Meta signs the raw bytes — read body as text BEFORE JSON.parse so the
+  // HMAC compare uses exactly what was sent over the wire.
+  const rawBody = await req.text();
+  const sig = await verifyMetaSignature({
+    rawBody,
+    signatureHeader: req.headers.get("x-hub-signature-256"),
+    appSecret: APP_SECRET,
+    provider: "whatsapp",
+  });
+  if (!sig.ok) {
+    return new Response(sig.reason, { status: sig.status });
+  }
+
   const adminClient = createClient(
     SUPABASE_URL ?? "",
     SERVICE_ROLE_KEY ?? "",
@@ -276,7 +291,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const payload = await req.json();
+    const payload = JSON.parse(rawBody);
     if (payload.object === "whatsapp_business_account") {
       await handleWebhookPayload(adminClient, payload);
     }

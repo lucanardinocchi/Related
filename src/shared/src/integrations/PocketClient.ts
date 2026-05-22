@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type {
+  PocketSpeakerAssignment,
+  PocketTranscriptSegment,
+} from "./pocket/pocketSpeakerMatch.ts";
 
 export interface PocketConnectResult {
   status: "ok" | "error";
@@ -25,8 +29,11 @@ export interface PocketSpeakerAmbiguity {
   recordingTitle: string | null;
   recordingCreatedAt: string | null;
   speakers: string[];
+  transcriptSegments: PocketTranscriptSegment[];
   createdAt: string;
 }
+
+export type { PocketSpeakerAssignment };
 
 export interface PocketIntegrationStatus {
   connected: boolean;
@@ -44,6 +51,7 @@ interface AmbiguityRow {
   recording_title: string | null;
   recording_created_at: string | null;
   speakers: string[];
+  transcript_segments: PocketTranscriptSegment[] | null;
   created_at: string;
 }
 
@@ -118,6 +126,29 @@ export class PocketClient {
     return (data ?? { status: "error" }) as PocketSyncSummary;
   }
 
+  async resolveSpeakers(input: {
+    recordingId: string;
+    assignments: Record<string, PocketSpeakerAssignment>;
+  }): Promise<{ chatId: string }> {
+    const { data, error } = await this.client.functions.invoke("pocket-sync", {
+      body: {
+        action: "resolveSpeakers",
+        recordingId: input.recordingId,
+        assignments: input.assignments,
+      },
+    });
+    if (error) {
+      const errMsg =
+        (error as { message?: string }).message ?? "pocket-resolve failed";
+      throw new Error(errMsg);
+    }
+    const result = (data ?? {}) as { status?: string; chatId?: string; error?: string };
+    if (result.status !== "ok" || !result.chatId) {
+      throw new Error(result.error ?? "Failed to resolve speakers");
+    }
+    return { chatId: result.chatId };
+  }
+
   async resolveSpeaker(input: {
     recordingId: string;
     speaker: string;
@@ -142,13 +173,22 @@ export class PocketClient {
   }
 
   async listPendingAmbiguities(): Promise<PocketSpeakerAmbiguity[]> {
-    const { data, error } = await this.client
+    let { data, error } = await this.client
       .from("pocket_speaker_ambiguities")
       .select(
-        "id, recording_id, recording_title, recording_created_at, speakers, created_at",
+        "id, recording_id, recording_title, recording_created_at, speakers, transcript_segments, created_at",
       )
       .is("resolved_at", null)
       .order("created_at", { ascending: false });
+    if (error?.code === "42703") {
+      ({ data, error } = await this.client
+        .from("pocket_speaker_ambiguities")
+        .select(
+          "id, recording_id, recording_title, recording_created_at, speakers, created_at",
+        )
+        .is("resolved_at", null)
+        .order("created_at", { ascending: false }));
+    }
     if (error) throw error;
     return ((data ?? []) as AmbiguityRow[]).map((row) => ({
       id: row.id,
@@ -156,6 +196,7 @@ export class PocketClient {
       recordingTitle: row.recording_title,
       recordingCreatedAt: row.recording_created_at,
       speakers: row.speakers,
+      transcriptSegments: row.transcript_segments ?? [],
       createdAt: row.created_at,
     }));
   }

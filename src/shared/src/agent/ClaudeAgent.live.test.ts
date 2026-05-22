@@ -61,9 +61,6 @@ describe("ClaudeAgent.propose — live Anthropic call", () => {
       userContext: {
         userId: "u-1",
         asOf: "2026-05-19T00:00:00Z",
-        transientIntent: [
-          "I want to plan a low-key catch-up with Sam this week",
-        ],
         situationalState: {
           id: "ss-1",
           content: "Just moved to Sydney; settling in",
@@ -92,15 +89,6 @@ describe("ClaudeAgent.propose — live Anthropic call", () => {
             updatedAt: "2026-05-02T00:00:00Z",
           },
         ],
-        inferredSignals: {
-          calendarDensity: null,
-          sleep: null,
-          calendarEvents: [],
-          sleepRecords: [],
-        },
-        groups: [],
-        otherRelationships: [],
-        characterValuesAlignment: [],
       },
       liveContext: { sessionId: "sess-test", userTurn: "what should I do about Sam" },
     };

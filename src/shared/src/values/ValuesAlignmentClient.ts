@@ -102,7 +102,9 @@ export class ValuesAlignmentClient {
   async pollValuesCharacterGeneration(
     payload: GenerateValuesCharacterPollPayload,
   ): Promise<GenerateValuesCharacterStartResult> {
-    return this.invokeGenerateValuesCharacter(payload);
+    return this.invokeGenerateValuesCharacter(
+      payload as unknown as Record<string, unknown>,
+    );
   }
 
   private async invokeGenerateValuesCharacter(

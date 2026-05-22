@@ -18,7 +18,12 @@ function makeQuery() {
   const eqForDelete = jest.fn(() =>
     Promise.resolve({ data: null, error: null }),
   );
-  const eqForSelect = jest.fn(() => ({ single, order }));
+  const selectTerminator = { single, order };
+  const eqForSelect: jest.Mock = jest.fn();
+  eqForSelect.mockImplementation(() => ({
+    ...selectTerminator,
+    eq: eqForSelect,
+  }));
 
   const update = jest.fn(() => ({ eq: eqForUpdate }));
   const del = jest.fn(() => ({ eq: eqForDelete }));
@@ -107,6 +112,7 @@ function sseResponse(chunks: string[]): Response {
 const CHAT_ROW = {
   id: "c-1",
   title: null,
+  source: "conversational",
   created_at: "2026-05-21T10:00:00Z",
   closed_at: null,
   extracted_at: null,
@@ -127,6 +133,7 @@ describe("ChatsClient", () => {
     expect(chat).toEqual({
       id: "c-1",
       title: "Birthday plans",
+      source: "conversational",
       createdAt: "2026-05-21T10:00:00Z",
       closedAt: null,
       extractedAt: null,
@@ -193,6 +200,7 @@ describe("ChatsClient", () => {
       {
         id: "c-1",
         title: null,
+        source: "conversational",
         createdAt: "2026-05-21T10:00:00Z",
         closedAt: null,
         extractedAt: null,

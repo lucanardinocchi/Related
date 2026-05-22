@@ -92,24 +92,21 @@ export interface CharacterValuesAlignmentEntry {
   updatedAt: string;
 }
 
-/** Ambient Pass projection — full User Context per ADR-0002. */
-export interface UserContextSnapshot {
+/**
+ * User Context slice for Ambient Intelligence passes — Goals & Values,
+ * Situational State, and Operator Strengths only. Relationship-local data
+ * (comms, events, history) lives in RelationshipContextSnapshot.
+ */
+export interface AmbientUserContextSnapshot {
   userId: string;
   asOf: string;
-  transientIntent: string[];
   goalsAndValues: GoalEntry[];
   situationalState: SituationalStateSnapshot | null;
   operatorStrengths: OperatorStrengthEntry[];
-  inferredSignals: {
-    calendarDensity: CalendarDensitySignal | null;
-    sleep: SleepSignal | null;
-    calendarEvents: RawCalendarEvent[];
-    sleepRecords: RawSleepRecord[];
-  };
-  groups: UserContextGroupSummary[];
-  otherRelationships: UserContextRelationshipSummary[];
-  characterValuesAlignment: CharacterValuesAlignmentEntry[];
 }
+
+/** @deprecated Alias — use AmbientUserContextSnapshot */
+export type UserContextSnapshot = AmbientUserContextSnapshot;
 
 /** Loaded once from Supabase; projected per consumer via forAmbientPass / forConversationalTurn. */
 export interface UserContextCoreSnapshot {

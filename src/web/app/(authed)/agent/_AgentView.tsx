@@ -22,6 +22,12 @@ import { formatExtractionResult } from "@related/shared";
 import { useConversationalChat } from "@related/shared/chats/useConversationalChat";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Badge, Button, EmptyState } from "@/components/ui";
+import type { PocketSpeakerAmbiguity } from "@related/shared";
+import {
+  SpeakerResolutionFlow,
+  SpeakerResolutionPromptModal,
+  useSpeakerResolutionPrompt,
+} from "./_SpeakerResolutionFlow";
 import { cn } from "@/lib/cn";
 import { usePersistedBoolean } from "@/lib/usePersistedBoolean";
 import { startMicCapture, type MicCaptureHandle } from "../talk/_recorder";
@@ -54,7 +60,7 @@ const APP_SIDEBAR_COLLAPSED_KEY = "related.sidebar.collapsed";
  *   Pass) once. Toast surfaces what got written. Idempotent server-side.
  */
 export function AgentView({ initialChats }: AgentViewProps) {
-  const { chats: chatsClient, sttAdapter } = useMemo(
+  const { chats: chatsClient, sttAdapter, pocket, relationships } = useMemo(
     () => getBrowserDeps(),
     [],
   );
@@ -78,6 +84,28 @@ export function AgentView({ initialChats }: AgentViewProps) {
   const [appSidebarCollapsed] = usePersistedBoolean(
     APP_SIDEBAR_COLLAPSED_KEY,
   );
+  const [ambiguities, setAmbiguities] = useState<PocketSpeakerAmbiguity[]>([]);
+  const [resolutionOpen, setResolutionOpen] = useState(false);
+  const [resolveRecordingId, setResolveRecordingId] = useState<string | null>(
+    null,
+  );
+
+  const { promptOpen, dismissPrompt } = useSpeakerResolutionPrompt(
+    ambiguities.length,
+  );
+
+  const refreshAmbiguities = useCallback(async () => {
+    try {
+      const rows = await pocket.listPendingAmbiguities();
+      setAmbiguities(rows);
+    } catch {
+      setAmbiguities([]);
+    }
+  }, [pocket]);
+
+  useEffect(() => {
+    void refreshAmbiguities();
+  }, [refreshAmbiguities]);
 
   const selectedChat = useMemo(
     () => chats.find((c) => c.id === selectedId) ?? null,
@@ -136,9 +164,22 @@ export function AgentView({ initialChats }: AgentViewProps) {
   }, [messages, agentResponding]);
 
   const refreshChats = useCallback(async () => {
-    const list = await chatsClient.listChats();
+    const list = await chatsClient.listAgentChats();
     setChats(list);
   }, [chatsClient]);
+
+  const handleSpeakerResolved = useCallback(
+    async (chatId: string) => {
+      await refreshChats();
+      await refreshAmbiguities();
+      setSelectedId(chatId);
+      setToast({
+        kind: "success",
+        text: "Transcript imported. Relationship context extracted.",
+      });
+    },
+    [refreshChats, refreshAmbiguities],
+  );
 
   const handleNewChat = async () => {
     setWorking(true);
@@ -325,6 +366,24 @@ export function AgentView({ initialChats }: AgentViewProps) {
             <Plus size={16} />
           </button>
         </div>
+        {ambiguities.length > 0 ? (
+          <div className="mx-2 mb-2 rounded-md border border-amber-200/80 bg-amber-50 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/40">
+            <p className="text-[12px] leading-[16px] text-fg">
+              {ambiguities.length} Pocket recording
+              {ambiguities.length === 1 ? "" : "s"} need speaker labels.
+            </p>
+            <button
+              type="button"
+              className="mt-1 text-[12px] font-medium text-accent hover:underline"
+              onClick={() => {
+                setResolveRecordingId(null);
+                setResolutionOpen(true);
+              }}
+            >
+              Resolve speakers
+            </button>
+          </div>
+        ) : null}
         <div className="flex-1 overflow-y-auto px-2 pb-3">
           {chats.length === 0 ? (
             <div className="px-2 py-2 text-[12px] text-fg-subtle">
@@ -348,11 +407,18 @@ export function AgentView({ initialChats }: AgentViewProps) {
                       <span className="truncate text-[13px] font-medium leading-[18px]">
                         {chat.title ?? "Untitled chat"}
                       </span>
-                      {chat.closedAt ? (
-                        <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
-                          {chat.extractedAt ? "extracted" : "closed"}
-                        </span>
-                      ) : null}
+                      <span className="flex shrink-0 items-center gap-1">
+                        {chat.source === "pocket" ? (
+                          <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
+                            Pocket
+                          </span>
+                        ) : null}
+                        {chat.closedAt ? (
+                          <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
+                            {chat.extractedAt ? "extracted" : "closed"}
+                          </span>
+                        ) : null}
+                      </span>
                     </div>
                     {chat.lastMessagePreview ? (
                       <div className="mt-1 truncate text-[12px] leading-[16px] text-fg-subtle">
@@ -376,6 +442,9 @@ export function AgentView({ initialChats }: AgentViewProps) {
                 <h2 className="truncate text-[15px] font-medium leading-[20px] text-fg">
                   {selectedChat.title ?? "Untitled chat"}
                 </h2>
+                {selectedChat.source === "pocket" ? (
+                  <Badge tone="neutral">Pocket</Badge>
+                ) : null}
                 <Badge
                   tone={
                     selectedChat.closedAt
@@ -429,9 +498,9 @@ export function AgentView({ initialChats }: AgentViewProps) {
                   </div>
                   <p className="mt-2 text-[13px] leading-[20px] text-fg-muted">
                     The agent reads your Relationships, Open Threads, Calendar,
-                    and User Context to answer. Anything you say here will feed
-                    your Situational State and Transient Intent when you close
-                    this Chat — Extraction runs once per closed Chat.
+                    and User Context to answer. When you close this Chat,
+                    extraction writes notes, interactions, and commitments onto
+                    your relationship timelines.
                   </p>
                 </div>
               ) : (
@@ -461,8 +530,19 @@ export function AgentView({ initialChats }: AgentViewProps) {
               onSend={handleSend}
               onMicToggle={handleVoiceToggle}
               voiceState={voiceState}
-              disabled={working || !!selectedChat.closedAt}
-              closed={!!selectedChat.closedAt}
+              disabled={
+                working ||
+                !!selectedChat.closedAt ||
+                selectedChat.source === "pocket"
+              }
+              closed={
+                !!selectedChat.closedAt || selectedChat.source === "pocket"
+              }
+              closedHint={
+                selectedChat.source === "pocket"
+                  ? "Pocket import — read-only transcript."
+                  : undefined
+              }
             />
 
             {toast ? (
@@ -499,6 +579,29 @@ export function AgentView({ initialChats }: AgentViewProps) {
           </div>
         )}
       </section>
+
+      <SpeakerResolutionPromptModal
+        count={ambiguities.length}
+        open={promptOpen && !resolutionOpen}
+        onResolveNow={() => {
+          dismissPrompt();
+          setResolveRecordingId(null);
+          setResolutionOpen(true);
+        }}
+        onLater={dismissPrompt}
+      />
+      <SpeakerResolutionFlow
+        pocket={pocket}
+        relationships={relationships}
+        ambiguities={ambiguities}
+        open={resolutionOpen}
+        onClose={() => {
+          setResolutionOpen(false);
+          setResolveRecordingId(null);
+        }}
+        onResolved={(chatId) => void handleSpeakerResolved(chatId)}
+        initialRecordingId={resolveRecordingId}
+      />
     </div>
   );
 }
@@ -603,6 +706,7 @@ interface ComposerProps {
   voiceState: "idle" | "recording" | "transcribing";
   disabled: boolean;
   closed: boolean;
+  closedHint?: string;
 }
 
 function Composer({
@@ -613,6 +717,7 @@ function Composer({
   voiceState,
   disabled,
   closed,
+  closedHint,
 }: ComposerProps) {
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -623,7 +728,8 @@ function Composer({
   if (closed) {
     return (
       <div className="border-t border-divider bg-surface px-6 py-3 text-center text-[12px] text-fg-subtle">
-        This Chat is closed and read-only. Start a new Chat to keep talking.
+        {closedHint ??
+          "This Chat is closed and read-only. Start a new Chat to keep talking."}
       </div>
     );
   }

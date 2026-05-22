@@ -97,6 +97,77 @@ export function transcriptToChatMessages(
   return messages;
 }
 
+/** Key used in speaker assignment maps when Pocket omits a diarized label. */
+export const POCKET_UNLABELED_SPEAKER = "__unlabeled__";
+
+export type PocketSpeakerAssignment =
+  | { kind: "self" }
+  | { kind: "contact"; contactId: string };
+
+export function normalizeSpeakerKey(speaker: string | null | undefined): string {
+  const trimmed = speaker?.trim();
+  return trimmed ? trimmed : POCKET_UNLABELED_SPEAKER;
+}
+
+export function speakerKeysFromTranscript(
+  segments: PocketTranscriptSegment[],
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const seg of segments) {
+    const key = normalizeSpeakerKey(seg.speaker);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
+}
+
+/**
+ * Build chat messages from explicit per-speaker assignments. Self → user
+ * role; contacts → assistant with `[label]: text` so extraction sees names.
+ */
+export function transcriptToChatMessagesWithAssignments(
+  segments: PocketTranscriptSegment[],
+  assignments: Record<string, PocketSpeakerAssignment>,
+  contactNamesById: Record<string, string>,
+): Array<{ role: "user" | "assistant"; content: string }> {
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+
+  for (const seg of segments) {
+    const text = seg.text?.trim();
+    if (!text) continue;
+
+    const key = normalizeSpeakerKey(seg.speaker);
+    const assignment = assignments[key];
+    if (!assignment) continue;
+
+    const role: "user" | "assistant" =
+      assignment.kind === "self" ? "user" : "assistant";
+
+    let content: string;
+    if (assignment.kind === "self") {
+      content = text;
+    } else {
+      const contactName =
+        contactNamesById[assignment.contactId]?.trim() ?? "Unknown";
+      const label = seg.speaker?.trim()
+        ? `${seg.speaker.trim()} (${contactName})`
+        : contactName;
+      content = `[${label}]: ${text}`;
+    }
+
+    const last = messages[messages.length - 1];
+    if (last && last.role === role) {
+      last.content += `\n${content}`;
+    } else {
+      messages.push({ role, content });
+    }
+  }
+
+  return messages;
+}
+
 export function formatUtcDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }

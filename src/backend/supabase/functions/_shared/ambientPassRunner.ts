@@ -102,9 +102,7 @@ export async function runAmbientPass(
     };
   }
 
-  const userContext = await buildUserContext(service, ownerId, new Date(), {
-    excludeRelationshipId: relationshipId,
-  });
+  const userContext = await buildUserContext(service, ownerId, new Date());
 
   const prompt: AgentPrompt = {
     mode,

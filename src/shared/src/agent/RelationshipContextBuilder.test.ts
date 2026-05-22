@@ -6,12 +6,20 @@ import {
   type RelationshipContextOpenThreadLink,
 } from "./RelationshipContextBuilder";
 
+jest.mock("./loadRelationshipAmbientContext", () => ({
+  loadRelationshipAmbientExtras: jest.fn().mockResolvedValue({
+    platformComms: [],
+    calendarEvents: [],
+    suggestedActionHistory: [],
+  }),
+}));
+
 type Resolved<T> = { data: T; error: null } | { data: null; error: { message: string } };
 
 function makeQueryMock() {
   const single = jest.fn<Promise<Resolved<unknown>>, []>();
   const limit = jest.fn<Promise<Resolved<unknown>>, []>();
-  const order = jest.fn(() => ({ limit }));
+  const order = jest.fn<Promise<Resolved<unknown>>, []>();
   const eqInner = jest.fn(() => ({ single, order, limit }));
   const eq = jest.fn(() => ({ single, order, limit, eq: eqInner }));
   const select = jest.fn(() => ({ single, order, eq, limit }));
@@ -53,6 +61,9 @@ describe("RelationshipContextBuilder.buildRelationshipContext", () => {
       openThreads: [],
       contact: null,
       groupMembers: [],
+      platformComms: [],
+      calendarEvents: [],
+      suggestedActionHistory: [],
     });
   });
 
@@ -101,7 +112,7 @@ describe("RelationshipContextBuilder.buildRelationshipContext", () => {
     ];
 
     q.single.mockResolvedValueOnce({ data: relationship, error: null });
-    q.limit
+    q.order
       .mockResolvedValueOnce({ data: interactions, error: null })
       .mockResolvedValueOnce({ data: openThreads, error: null });
 
@@ -159,7 +170,7 @@ describe("RelationshipContextBuilder.buildRelationshipContext", () => {
         data: { contact_groups: groupMembers },
         error: null,
       });
-    q.limit
+    q.order
       .mockResolvedValueOnce({ data: [], error: null })
       .mockResolvedValueOnce({ data: [], error: null });
 

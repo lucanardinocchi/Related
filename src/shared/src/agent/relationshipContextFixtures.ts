@@ -66,6 +66,9 @@ export function testRelationshipContextSnapshot(
     openThreads: [],
     contact,
     groupMembers: [],
+    platformComms: [],
+    calendarEvents: [],
+    suggestedActionHistory: [],
     ...over,
   };
 }

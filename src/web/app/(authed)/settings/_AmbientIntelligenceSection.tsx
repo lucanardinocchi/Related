@@ -1,24 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { format } from "date-fns";
 import { Sparkles } from "lucide-react";
+import {
+  AMBIENT_TRIAL_DAYS,
+  getAmbientTrialDaysRemaining,
+  getAmbientTrialEndsAt,
+  isWithinAmbientTrial,
+  SUBSCRIPTION_PRICE_LABEL,
+} from "@related/shared";
 import { Card, Checkbox, Section } from "@/components/ui";
 import { getBrowserDeps } from "@/lib/deps/client";
 
 interface Props {
   initialEnabled: boolean;
   initialIsSubscribed: boolean;
+  accountCreatedAt: string | null;
 }
 
 export function AmbientIntelligenceSection({
   initialEnabled,
   initialIsSubscribed,
+  accountCreatedAt,
 }: Props) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const trialActive = useMemo(
+    () => isWithinAmbientTrial(accountCreatedAt),
+    [accountCreatedAt],
+  );
+  const trialEndsAt = useMemo(
+    () => (accountCreatedAt ? getAmbientTrialEndsAt(accountCreatedAt) : null),
+    [accountCreatedAt],
+  );
+  const trialDaysRemaining = useMemo(
+    () => getAmbientTrialDaysRemaining(accountCreatedAt),
+    [accountCreatedAt],
+  );
+  const canEnable = initialIsSubscribed || trialActive;
+  const canTurnOn = canEnable && !enabled;
+
   async function handleToggle(next: boolean) {
+    if (next && !canEnable) {
+      setError(
+        `Subscribe (${SUBSCRIPTION_PRICE_LABEL}) to turn Ambient Intelligence back on.`,
+      );
+      return;
+    }
+
     setSaving(true);
     setError(null);
     const previous = enabled;
@@ -51,19 +83,42 @@ export function AmbientIntelligenceSection({
               to accept or decline. Turn off to pause all baseline and triggered
               passes.
             </p>
-            {!initialIsSubscribed && (
+            {trialActive && !initialIsSubscribed && (
               <p className="mt-2 text-[13px] text-fg-subtle">
-                An active subscription is required for passes to run, even when
-                this is on.
+                Free trial —{" "}
+                {trialDaysRemaining === 0
+                  ? "ends today"
+                  : `${trialDaysRemaining} day${trialDaysRemaining === 1 ? "" : "s"} left`}
+                {trialEndsAt ? (
+                  <>
+                    {" "}
+                    (through {format(trialEndsAt, "MMM d")})
+                  </>
+                ) : null}
+                . Subscribe anytime to keep it running after your{" "}
+                {AMBIENT_TRIAL_DAYS}-day trial.
+              </p>
+            )}
+            {!trialActive && !initialIsSubscribed && (
+              <p className="mt-2 text-[13px] text-fg-subtle">
+                Your {AMBIENT_TRIAL_DAYS}-day free trial has ended. Subscribe (
+                {SUBSCRIPTION_PRICE_LABEL}) to turn Ambient Intelligence on.
+              </p>
+            )}
+            {initialIsSubscribed && (
+              <p className="mt-2 text-[13px] text-fg-subtle">
+                Included with your subscription.
               </p>
             )}
           </div>
         </div>
 
-        <label className="flex cursor-pointer items-center gap-3">
+        <label
+          className={`flex items-center gap-3 ${canTurnOn || enabled ? "cursor-pointer" : "cursor-not-allowed opacity-70"}`}
+        >
           <Checkbox
             checked={enabled}
-            disabled={saving}
+            disabled={saving || (!enabled && !canEnable)}
             onChange={(event) => void handleToggle(event.target.checked)}
             aria-describedby="ambient-intelligence-toggle-desc"
           />

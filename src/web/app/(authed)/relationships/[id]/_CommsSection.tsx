@@ -8,9 +8,11 @@ import {
   fromGmailMessage,
   fromImessageMessage,
   fromInstagramMessage,
+  fromInstagramRow,
   fromCommsPlatformMessage,
   fromTikTokMessage,
   fromTikTokRow,
+  fromXRow,
   fromWhatsAppMessage,
   fromWhatsAppRow,
   fromXMessage,
@@ -25,6 +27,11 @@ import { getBrowserDeps } from "@/lib/deps/client";
 import { EmptyState, Section } from "@/components/ui";
 import { fmtCommsSentAt } from "./_dateFormat";
 import { CommsPlatformIcon } from "./_commsIcons";
+import {
+  CommsComposeBar,
+  type AvailablePlatform,
+  type ComposePlatform,
+} from "./_CommsComposeBar";
 
 const INITIAL_VISIBLE = 24;
 const LOAD_MORE_BATCH = 24;
@@ -105,6 +112,19 @@ export function CommsSection({
   const [items, setItems] = useState<CommsTimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<{
+    gmail: boolean;
+    instagram: boolean;
+    whatsapp: boolean;
+    x: boolean;
+    tiktok: boolean;
+  }>({
+    gmail: false,
+    instagram: false,
+    whatsapp: false,
+    x: false,
+    tiktok: false,
+  });
 
   const loadComms = useCallback(async () => {
     setLoading(true);
@@ -119,6 +139,25 @@ export function CommsSection({
       tiktok,
       userProviderTokens,
     } = getBrowserDeps();
+
+    try {
+      const [googleTok, igTok, waTok, xTok, ttTok] = await Promise.all([
+        userProviderTokens.getForProvider("google"),
+        userProviderTokens.getForProvider("instagram"),
+        userProviderTokens.getForProvider("whatsapp"),
+        userProviderTokens.getForProvider("x"),
+        userProviderTokens.getForProvider("tiktok"),
+      ]);
+      setConnectedPlatforms({
+        gmail: !!googleTok && tokenHasGmailAccess(googleTok.scopes),
+        instagram: !!igTok && tokenHasInstagramAccess(igTok.scopes),
+        whatsapp: !!waTok && tokenHasWhatsAppAccess(waTok.scopes),
+        x: !!xTok && tokenHasXAccess(xTok.scopes),
+        tiktok: !!ttTok && tokenHasTikTokAccess(ttTok.scopes),
+      });
+    } catch {
+      // token fetch failed — treat all as disconnected
+    }
 
     const seen = new Set<string>();
     function addItems(next: CommsTimelineItem[]) {
@@ -140,6 +179,17 @@ export function CommsSection({
         .limit(100);
       if (error || !data) return;
       addItems(data.map((row) => fromCommsPlatformMessage(row)));
+    }
+
+    async function loadCachedInstagram() {
+      const { data, error } = await supabase
+        .from("instagram_messages")
+        .select("ig_message_id, direction, text, sent_at")
+        .eq("contact_id", contact.id)
+        .order("sent_at", { ascending: false })
+        .limit(100);
+      if (error || !data) return;
+      addItems(data.map((row) => fromInstagramRow(row)));
     }
 
     async function loadCachedWhatsApp() {
@@ -164,10 +214,23 @@ export function CommsSection({
       addItems(data.map((row) => fromTikTokRow(row)));
     }
 
+    async function loadCachedX() {
+      const { data, error } = await supabase
+        .from("x_messages")
+        .select("x_message_id, direction, text, sent_at")
+        .eq("contact_id", contact.id)
+        .order("sent_at", { ascending: false })
+        .limit(100);
+      if (error || !data) return;
+      addItems(data.map((row) => fromXRow(row)));
+    }
+
     const loaders: Array<Promise<void>> = [
       loadCachedPlatformMessages(),
+      loadCachedInstagram(),
       loadCachedWhatsApp(),
       loadCachedTikTok(),
+      loadCachedX(),
     ];
 
     if (contact.phone) {
@@ -324,6 +387,94 @@ export function CommsSection({
     void loadComms();
   }, [loadComms]);
 
+  useEffect(() => {
+    const { supabase } = getBrowserDeps();
+    const waChannel = supabase
+      .channel(`comms-whatsapp-${contact.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "whatsapp_messages",
+          filter: `contact_id=eq.${contact.id}`,
+        },
+        () => {
+          void loadComms();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(waChannel);
+    };
+  }, [contact.id, loadComms]);
+
+  useEffect(() => {
+    const { supabase } = getBrowserDeps();
+    const channel = supabase
+      .channel(`comms-tiktok-${contact.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "tiktok_messages",
+          filter: `contact_id=eq.${contact.id}`,
+        },
+        () => {
+          void loadComms();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [contact.id, loadComms]);
+
+  useEffect(() => {
+    const { supabase } = getBrowserDeps();
+    const channel = supabase
+      .channel(`comms-x-${contact.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "x_messages",
+          filter: `contact_id=eq.${contact.id}`,
+        },
+        () => {
+          void loadComms();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [contact.id, loadComms]);
+
+  useEffect(() => {
+    const { supabase } = getBrowserDeps();
+    const channel = supabase
+      .channel(`comms-instagram-${contact.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "instagram_messages",
+          filter: `contact_id=eq.${contact.id}`,
+        },
+        () => {
+          void loadComms();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [contact.id, loadComms]);
+
   // mergeCommsTimelineItems already returns newest-first.
   const visibleItems = useMemo(
     () => items.slice(0, visibleCount),
@@ -343,6 +494,141 @@ export function CommsSection({
   const hasMore = visibleCount < items.length;
   const hiddenCount = items.length - visibleItems.length;
   const hasIdentifiers = hasAnyContactIdentifier(contact);
+
+  const availablePlatforms = useMemo<AvailablePlatform[]>(() => {
+    const out: AvailablePlatform[] = [];
+    const waId = deriveWaId(contact.whatsappWaId, contact.phone);
+
+    if (contact.email && connectedPlatforms.gmail) {
+      out.push({ platform: "email", label: "Email" });
+    }
+    if (
+      (contact.instagramScopedId || contact.instagramUsername) &&
+      connectedPlatforms.instagram
+    ) {
+      out.push({
+        platform: "instagram",
+        label: "Instagram",
+        disabled: !contact.instagramScopedId,
+        disabledReason: !contact.instagramScopedId
+          ? "Waiting for them to message you on Instagram first."
+          : undefined,
+      });
+    }
+    if (waId && connectedPlatforms.whatsapp) {
+      out.push({ platform: "whatsapp", label: "WhatsApp" });
+    }
+    if ((contact.xUserId || contact.xUsername) && connectedPlatforms.x) {
+      out.push({
+        platform: "x",
+        label: "X",
+        disabled: !contact.xUserId,
+        disabledReason: !contact.xUserId
+          ? "Could not resolve their X user id yet."
+          : undefined,
+      });
+    }
+    if (
+      (contact.tiktokOpenId || contact.tiktokUsername) &&
+      connectedPlatforms.tiktok
+    ) {
+      out.push({
+        platform: "tiktok",
+        label: "TikTok",
+        disabled: !contact.tiktokOpenId,
+        disabledReason: !contact.tiktokOpenId
+          ? "They must DM you on TikTok first to enable replies."
+          : undefined,
+      });
+    }
+    // iMessage/SMS via the Mac relay queue. We don't gate on relay health
+    // here — the send is enqueued and will deliver when the relay reconnects.
+    // TODO: surface relay-offline state in the bar once we add a status query.
+    if (contact.phone) {
+      out.push({ platform: "imessage", label: "iMessage / SMS" });
+    }
+    return out;
+  }, [contact, connectedPlatforms]);
+
+  const handleSend = useCallback(
+    async (platform: ComposePlatform, text: string): Promise<void> => {
+      const deps = getBrowserDeps();
+      const waId = deriveWaId(contact.whatsappWaId, contact.phone);
+      switch (platform) {
+        case "email": {
+          if (!contact.email) throw new Error("No email on file.");
+          const result = await deps.gmail.send({
+            to: contact.email,
+            subject: "(no subject)",
+            body: text,
+          });
+          if (result.status !== "ok") throw new Error("Could not send email.");
+          break;
+        }
+        case "instagram": {
+          if (!contact.instagramScopedId) {
+            throw new Error("No Instagram conversation yet.");
+          }
+          const result = await deps.instagram.send({
+            contactId: contact.id,
+            instagramScopedId: contact.instagramScopedId,
+            text,
+          });
+          if (result.status !== "ok") {
+            throw new Error(
+              "Could not send — Instagram only allows replies within 24h of their last DM.",
+            );
+          }
+          break;
+        }
+        case "whatsapp": {
+          if (!waId) throw new Error("No WhatsApp id available.");
+          const result = await deps.whatsapp.send({
+            contactId: contact.id,
+            whatsappWaId: waId,
+            text,
+          });
+          if (result.status !== "ok") {
+            throw new Error("Could not send WhatsApp message.");
+          }
+          break;
+        }
+        case "x": {
+          if (!contact.xUserId) throw new Error("Unknown X user id.");
+          const result = await deps.x.send({
+            contactId: contact.id,
+            xUserId: contact.xUserId,
+            text,
+          });
+          if (result.status !== "ok") {
+            throw new Error("Could not send X DM.");
+          }
+          break;
+        }
+        case "tiktok": {
+          if (!contact.tiktokOpenId) throw new Error("Unknown TikTok open id.");
+          const result = await deps.tiktok.send({
+            contactId: contact.id,
+            tiktokOpenId: contact.tiktokOpenId,
+            text,
+          });
+          if (result.status !== "ok") {
+            throw new Error("Could not send TikTok DM.");
+          }
+          break;
+        }
+        case "imessage": {
+          await deps.messages.sendMessage({
+            contactId: contact.id,
+            body: text,
+          });
+          break;
+        }
+      }
+      await loadComms();
+    },
+    [contact, loadComms],
+  );
 
   return (
     <Section
@@ -384,6 +670,13 @@ export function CommsSection({
           }
         />
       )}
+      {hasIdentifiers && availablePlatforms.length > 0 ? (
+        <CommsComposeBar
+          availablePlatforms={availablePlatforms}
+          onSend={handleSend}
+          placeholder={`Write to ${contact.name}…`}
+        />
+      ) : null}
     </Section>
   );
 }

@@ -2,7 +2,7 @@
 // heartbeats. Device auth via X-Relay-Device-Id + X-Relay-Device-Secret.
 //
 // Deploy:
-//   supabase functions deploy relay-sync
+//   supabase functions deploy relay-sync --no-verify-jwt
 //
 // deno-lint-ignore-file no-explicit-any
 

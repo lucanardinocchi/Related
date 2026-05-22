@@ -20,10 +20,8 @@ import { ContextTimelineSection } from "../../relationships/[id]/_ContextTimelin
 import type { AddContextResult } from "../../relationships/[id]/_AddContextModal";
 import { RelationshipAnalyticsSection } from "../../relationships/[id]/_RelationshipAnalyticsSection";
 import { GroupKeyDetailsSection } from "./_GroupKeyDetailsSection";
-import { GroupMessagesSection } from "./_GroupMessagesSection";
-import { GroupXSection } from "./_GroupXSection";
-import { GroupTikTokSection } from "./_GroupTikTokSection";
-import { GroupWhatsAppSection } from "./_GroupWhatsAppSection";
+import { GroupCommsSection } from "./_GroupCommsSection";
+import { GroupEventsSection } from "./_GroupEventsSection";
 import type { GroupMemberSummary } from "./_GroupMembersWidget";
 
 interface Props {
@@ -274,52 +272,29 @@ export function GroupDetailView({
         onSaveMember={saveMember}
       />
 
-      <GroupMessagesSection
+      <GroupCommsSection
         groupId={group.id}
         groupName={group.name}
         members={members.map((m) => ({
           id: m.id,
           name: m.name,
           phone: m.phone,
-        }))}
-      />
-
-      <GroupXSection
-        groupId={group.id}
-        groupName={group.name}
-        xDmConversationId={group.xDmConversationId}
-        members={members.map((m) => ({
-          id: m.id,
-          name: m.name,
           xUsername: m.xUsername ?? null,
           xUserId: m.xUserId ?? null,
-        }))}
-        onConversationIdResolved={saveXConversationId}
-      />
-
-      <GroupWhatsAppSection
-        groupId={group.id}
-        groupName={group.name}
-        whatsappGroupId={group.whatsappGroupId}
-        members={members.map((m) => ({
-          id: m.id,
-          name: m.name,
-          phone: m.phone,
-        }))}
-        onGroupIdResolved={saveWhatsAppGroupId}
-      />
-
-      <GroupTikTokSection
-        groupId={group.id}
-        groupName={group.name}
-        tiktokDmConversationId={group.tiktokDmConversationId}
-        members={members.map((m) => ({
-          id: m.id,
-          name: m.name,
           tiktokUsername: m.tiktokUsername ?? null,
           tiktokOpenId: m.tiktokOpenId ?? null,
         }))}
-        onConversationIdResolved={saveTikTokConversationId}
+        xDmConversationId={group.xDmConversationId}
+        whatsappGroupId={group.whatsappGroupId}
+        tiktokDmConversationId={group.tiktokDmConversationId}
+        onXConversationIdResolved={saveXConversationId}
+        onWhatsAppGroupIdResolved={saveWhatsAppGroupId}
+        onTikTokConversationIdResolved={saveTikTokConversationId}
+      />
+
+      <GroupEventsSection
+        groupName={group.name}
+        groupMemberIds={members.map((m) => m.id)}
       />
 
       <RelationshipAnalyticsSection analytics={analytics} />

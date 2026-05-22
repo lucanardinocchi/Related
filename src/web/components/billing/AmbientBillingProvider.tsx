@@ -43,9 +43,16 @@ export function AmbientBillingProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const requestAmbientAccess = useCallback(async (): Promise<boolean> => {
-    const { subscriptions } = getBrowserDeps();
-    const state = await subscriptions.getState();
-    if (canRunAmbientIntelligence(state)) {
+    const { subscriptions, supabase } = getBrowserDeps();
+    const [{ data: authData }, state] = await Promise.all([
+      supabase.auth.getUser(),
+      subscriptions.getState(),
+    ]);
+    if (
+      canRunAmbientIntelligence(state, {
+        accountCreatedAt: authData.user?.created_at,
+      })
+    ) {
       promptedRef.current = false;
       return true;
     }

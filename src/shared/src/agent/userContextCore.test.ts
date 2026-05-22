@@ -1,7 +1,4 @@
-import {
-  projectForAmbientPass,
-  projectForConversationalTurn,
-} from "./userContextProjections";
+import { projectForAmbientPass, projectForConversationalTurn } from "./userContextProjections";
 
 describe("userContextProjections", () => {
   it("projectForConversationalTurn strips goals to content strings", () => {
@@ -31,39 +28,28 @@ describe("userContextProjections", () => {
     expect(projected.userContext.situationalState).toBe("New city");
   });
 
-  it("projectForAmbientPass maps transient to string[] and relationships to otherRelationships", () => {
+  it("projectForAmbientPass keeps only goals, situational, and operator strengths", () => {
     const core = {
       asOf: "2026-05-19T00:00:00.000Z",
       goalsAndValues: [],
       situationalState: null,
-      transientIntent: [
-        { content: "plan dinner", capturedAt: "2026-05-19T00:00:00Z", relationshipId: null },
-      ],
+      transientIntent: [],
       groups: [],
-      relationships: [
-        {
-          id: "r-2",
-          targetType: "contact" as const,
-          name: "Alex",
-          role: null,
-          cadence: null,
-        },
-      ],
-      relationshipsTotal: 1,
+      relationships: [],
+      relationshipsTotal: 0,
     };
     const snapshot = projectForAmbientPass(core, {
       userId: "u-1",
-      operatorStrengths: [],
-      inferredSignals: {
-        calendarDensity: null,
-        sleep: null,
-        calendarEvents: [],
-        sleepRecords: [],
-      },
-      characterValuesAlignment: [],
+      operatorStrengths: [{ id: "os-1", content: "coaching", createdAt: "", updatedAt: "" }],
     });
-    expect(snapshot.transientIntent).toEqual(["plan dinner"]);
-    expect(snapshot.otherRelationships).toHaveLength(1);
-    expect(snapshot.userId).toBe("u-1");
+    expect(snapshot).toEqual({
+      userId: "u-1",
+      asOf: "2026-05-19T00:00:00.000Z",
+      goalsAndValues: [],
+      situationalState: null,
+      operatorStrengths: [
+        { id: "os-1", content: "coaching", createdAt: "", updatedAt: "" },
+      ],
+    });
   });
 });

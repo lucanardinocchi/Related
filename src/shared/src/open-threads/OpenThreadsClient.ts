@@ -2,7 +2,7 @@ import {
   createClient,
   SupabaseClient,
 } from "@supabase/supabase-js";
-import type { ContextCaptureSource } from "../interactions/InteractionsClient.ts";
+import type { ContextCaptureSource } from "../interactions/InteractionsClient";
 
 export type ThreadDirection = "me_owes_them" | "they_owe_me";
 

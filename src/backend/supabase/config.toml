@@ -369,6 +369,20 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
+# Mac relay functions authenticate via device headers or pairing codes inside
+# the handler — not Supabase JWT at the gateway.
+[functions.relay-pair]
+verify_jwt = false
+
+[functions.relay-sync]
+verify_jwt = false
+
+[functions.relay-outbound-pull]
+verify_jwt = false
+
+[functions.relay-outbound-ack]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

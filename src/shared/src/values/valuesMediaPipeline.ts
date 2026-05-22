@@ -18,18 +18,31 @@ export function characterHasVideo(
 }
 
 /**
- * User may swipe the current card only when it has a clip and the 11th slot
- * (when present) is also ready — keeps a 10-character buffer plus the gate.
+ * User may swipe when the current card has a clip. When the queue already has
+ * 11 characters, the 11th must also be ready (10-ahead buffer + gate).
  */
 export function canSwipeValuesQueue(
   queue: Pick<ValuesCharacter, "videoUrl">[],
 ): boolean {
   if (queue.length === 0) return false;
   if (!characterHasVideo(queue[0]!)) return false;
-  if (queue.length < VALUES_SWIPE_PIPELINE_DEPTH) {
-    return queue.every(characterHasVideo);
-  }
+  if (queue.length < VALUES_SWIPE_PIPELINE_DEPTH) return true;
   return characterHasVideo(queue[VALUES_SWIPE_PIPELINE_DEPTH - 1]!);
+}
+
+/** True when background generation should keep running. */
+export function queueNeedsMediaWork(
+  queue: Pick<ValuesCharacter, "videoUrl">[],
+  options?: {
+    targetDepth?: number;
+    growQueue?: boolean;
+  },
+): boolean {
+  const depth = options?.targetDepth ?? VALUES_SWIPE_PIPELINE_DEPTH;
+  if (queue.length === 0) return true;
+  if (pipelineVideoPriorities(queue, depth).length > 0) return true;
+  if (options?.growQueue && queue.length < depth) return true;
+  return false;
 }
 
 /** Indices 0..depth-1 missing video, highest index first (11th before 1st). */

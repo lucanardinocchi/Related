@@ -9,6 +9,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
+import { subscribeInstagramWebhooks } from "../_shared/instagramMessages.ts";
 
 const INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const INSTAGRAM_GRAPH = "https://graph.instagram.com";
@@ -193,6 +194,15 @@ Deno.serve(async (req) => {
 
     if (upsertError) {
       return jsonResponse(500, { error: upsertError.message });
+    }
+
+    try {
+      await subscribeInstagramWebhooks(accountId, long.accessToken);
+    } catch (subscribeErr) {
+      console.warn(
+        "Instagram webhook subscribe failed:",
+        subscribeErr instanceof Error ? subscribeErr.message : subscribeErr,
+      );
     }
 
     return jsonResponse(200, {

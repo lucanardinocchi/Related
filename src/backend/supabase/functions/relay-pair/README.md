@@ -40,5 +40,7 @@ Store `deviceId` and `deviceSecret` locally; use them as relay device auth heade
 ## Deploy
 
 ```bash
-supabase functions deploy relay-pair
+supabase functions deploy relay-pair --no-verify-jwt
 ```
+
+JWT is checked inside the handler for `create_code`; `exchange` is unauthenticated at the gateway and validated via the one-time code.

@@ -1,20 +1,24 @@
 # sync-calendar
 
-Daily Edge Function that pulls each User's 7-day forward calendar window from Google Calendar and writes it to `inferred_signal_calendar`. Invoked by `pg_cron` at 10 AM UTC (see `20260519000011_calendar_daily_cron.sql`) and also callable on demand with `{ ownerId }` for a single-User sync (e.g. from a future "Sync now" button).
+Daily Edge Function that pulls each User's 7-day forward calendar window from their connected calendar provider(s) and writes it to `inferred_signal_calendar` plus the unified `events` table. Invoked by `pg_cron` at 10 AM UTC (see `20260519000011_calendar_daily_cron.sql`) and also callable on demand with `{ ownerId }` for a single-User sync — e.g. immediately after the Outlook OAuth callback, or from a future "Sync now" button.
 
-Per ADR-0006, the function iterates over every User who has a row in `user_provider_tokens` for `provider='google'`. Users without a Google integration are skipped silently.
+The function now syncs **both Google and Outlook** calendars. It iterates over every row in `user_provider_tokens` with `provider in ('google', 'outlook')` and dual-writes events with `source = 'google'` or `source = 'outlook'` accordingly. Users with neither integration are skipped silently.
 
 ## Deploy
 
 ```sh
 supabase secrets set GOOGLE_OAUTH_CLIENT_ID=...
 supabase secrets set GOOGLE_OAUTH_CLIENT_SECRET=...
+supabase secrets set MICROSOFT_CLIENT_ID=...
+supabase secrets set MICROSOFT_CLIENT_SECRET=...
 supabase functions deploy sync-calendar
 ```
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by the Edge Runtime.
 
 The `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` are the **same Google Cloud OAuth client** you configured in Supabase Auth → Providers → Google during Slice B. They're needed here because Supabase Auth gives us the refresh token but doesn't refresh on our behalf for non-auth API calls.
+
+The `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` are the Microsoft Entra ID app registration credentials used by `outlook-oauth` for the initial code exchange and reused here to refresh Outlook access tokens against `login.microsoftonline.com/common/oauth2/v2.0/token`. Without them, Outlook-connected users will hit `needs_reconsent` as soon as their first access token expires.
 
 ## Token-refresh behaviour
 

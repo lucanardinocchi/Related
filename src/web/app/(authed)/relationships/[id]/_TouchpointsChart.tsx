@@ -124,6 +124,41 @@ function earliestDataDay(
   return earliest;
 }
 
+function latestDataDay(
+  interactions: Interaction[],
+  openThreads: OpenThread[],
+  today: Date,
+): Date {
+  let latest = today;
+  for (const i of interactions) {
+    const t = utcStartOfDay(new Date(i.time));
+    if (t.getTime() > latest.getTime()) latest = t;
+  }
+  for (const t of openThreads) {
+    const d = utcStartOfDay(new Date(t.createdAt));
+    if (d.getTime() > latest.getTime()) latest = d;
+  }
+  return latest;
+}
+
+/** Minimum forward span so upcoming touchpoints have room on the axis. */
+function minFutureEnd(window: Window, today: Date): Date {
+  const days =
+    window === "30d" ? 7 : window === "12w" ? 14 : window === "6m" ? 28 : 0;
+  return new Date(today.getTime() + days * DAY_MS);
+}
+
+function rangeEndDay(
+  window: Window,
+  today: Date,
+  interactions: Interaction[],
+  openThreads: OpenThread[],
+): Date {
+  const latest = latestDataDay(interactions, openThreads, today);
+  const minFuture = minFutureEnd(window, today);
+  return latest.getTime() > minFuture.getTime() ? latest : minFuture;
+}
+
 function buildBuckets(
   window: Window,
   now: Date,
@@ -131,6 +166,7 @@ function buildBuckets(
   openThreads: OpenThread[],
 ): Bucket[] {
   const today = utcStartOfDay(now);
+  const endDay = rangeEndDay(window, today, interactions, openThreads);
   const buckets: Bucket[] = [];
   let nextAfterLast = 0;
 
@@ -145,29 +181,31 @@ function buildBuckets(
   });
 
   if (window === "30d") {
-    const days = 30;
-    const start = new Date(today.getTime() - (days - 1) * DAY_MS);
-    for (let i = 0; i < days; i++) {
+    const daysPast = 30;
+    const start = new Date(today.getTime() - (daysPast - 1) * DAY_MS);
+    const totalDays =
+      Math.floor((endDay.getTime() - start.getTime()) / DAY_MS) + 1;
+    for (let i = 0; i < totalDays; i++) {
       const s = new Date(start.getTime() + i * DAY_MS);
       buckets.push(emptyBucket(s, fmtDay(s)));
     }
-    nextAfterLast = today.getTime() + DAY_MS;
+    nextAfterLast = endDay.getTime() + DAY_MS;
   } else if (window === "12w" || window === "6m") {
-    const weeks = window === "12w" ? 12 : 26;
+    const weeksPast = window === "12w" ? 12 : 26;
     const start = utcStartOfWeek(
-      new Date(today.getTime() - (weeks - 1) * 7 * DAY_MS),
+      new Date(today.getTime() - (weeksPast - 1) * 7 * DAY_MS),
     );
-    for (let i = 0; i < weeks; i++) {
-      const s = new Date(start);
-      s.setUTCDate(s.getUTCDate() + i * 7);
-      buckets.push(emptyBucket(s, fmtDay(s)));
+    const endWeek = utcStartOfWeek(endDay);
+    let cursor = start;
+    while (cursor.getTime() <= endWeek.getTime()) {
+      buckets.push(emptyBucket(cursor, fmtDay(cursor)));
+      cursor = new Date(cursor.getTime() + 7 * DAY_MS);
     }
-    nextAfterLast =
-      new Date(buckets[buckets.length - 1].start).getTime() + 7 * DAY_MS;
+    nextAfterLast = endWeek.getTime() + 7 * DAY_MS;
   } else if (window === "all") {
     const earliest = earliestDataDay(interactions, openThreads, today);
     const start = utcStartOfMonth(earliest);
-    const end = utcStartOfMonth(today);
+    const end = utcStartOfMonth(endDay);
     let cursor = start;
     while (cursor.getTime() <= end.getTime()) {
       buckets.push(emptyBucket(cursor, fmtMonth(cursor)));
@@ -179,8 +217,8 @@ function buildBuckets(
       buckets.push(emptyBucket(end, fmtMonth(end)));
     }
     nextAfterLast = Date.UTC(
-      today.getUTCFullYear(),
-      today.getUTCMonth() + 1,
+      end.getUTCFullYear(),
+      end.getUTCMonth() + 1,
       1,
     );
   }
@@ -243,11 +281,11 @@ function bucketTotal(
 function windowLabel(window: Window): string {
   switch (window) {
     case "30d":
-      return "past 30 days";
+      return "last 30 days and upcoming";
     case "12w":
-      return "past 12 weeks";
+      return "last 12 weeks and upcoming";
     case "6m":
-      return "past 6 months";
+      return "last 6 months and upcoming";
     case "all":
       return "all time";
   }

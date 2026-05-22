@@ -142,7 +142,6 @@ export class PassEngine {
     const userContext = await this.userContextBuilder.buildUserContext(
       ownerId,
       new Date(),
-      { excludeRelationshipId: relationshipId },
     );
 
     const prompt: AgentPrompt = {

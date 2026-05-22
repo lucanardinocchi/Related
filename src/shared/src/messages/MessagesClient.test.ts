@@ -8,6 +8,10 @@ type Resolved<T> = Promise<
   { data: T; error: null } | { data: null; error: { message: string } }
 >;
 
+type InsertResult =
+  | { data: null; error: null }
+  | { data: null; error: { message: string; code?: string } };
+
 function makeQueryMock() {
   const single = jest.fn<Resolved<unknown>, []>();
   const order = jest.fn<Resolved<unknown[]>, []>();
@@ -17,15 +21,26 @@ function makeQueryMock() {
   const eqForList = jest.fn(() => ({ order }));
   const update = jest.fn(() => ({ eq: eqForUpdate }));
   const selectForList = jest.fn(() => ({ eq: eqForList, is: isFirst, order }));
-  const insert = jest.fn(() => ({ select: jest.fn(() => ({ single })) }));
-  const from = jest.fn((_table: string) => ({
-    insert,
-    select: selectForList,
-    update,
+  let insertResult: InsertResult = { data: null, error: null };
+  const insert = jest.fn(() => ({
+    select: jest.fn(() => ({ single })),
+    then(
+      onFulfilled?: (value: InsertResult) => unknown,
+      onRejected?: (reason: unknown) => unknown,
+    ) {
+      return Promise.resolve(insertResult).then(onFulfilled, onRejected);
+    },
   }));
   return {
-    from,
+    from: jest.fn((_table: string) => ({
+      insert,
+      select: selectForList,
+      update,
+    })),
     insert,
+    setInsertResult(result: InsertResult) {
+      insertResult = result;
+    },
     single,
     order,
     eqForList,
@@ -39,12 +54,12 @@ function makeQueryMock() {
 
 function withClient() {
   const q = makeQueryMock();
-  const invoke = jest.fn();
+  const getUser = jest.fn();
   const supa = {
+    auth: { getUser },
     from: q.from,
-    functions: { invoke },
   } as unknown as SupabaseClient;
-  return { q, invoke, messages: new MessagesClient(supa) };
+  return { q, getUser, messages: new MessagesClient(supa) };
 }
 
 const THREAD_ROW = {
@@ -95,34 +110,84 @@ describe("normalizePhone", () => {
 });
 
 describe("MessagesClient.createPairingCode", () => {
-  it("invokes relay-pair create_code and maps expiresAt", async () => {
-    const { invoke, messages } = withClient();
-    invoke.mockResolvedValue({
-      data: { code: "ABCD-1234", expires_at: "2026-05-22T11:00:00Z" },
+  it("inserts a pairing code for the signed-in user", async () => {
+    const { q, getUser, messages } = withClient();
+    getUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
       error: null,
     });
+    q.setInsertResult({ data: null, error: null });
 
     const result = await messages.createPairingCode();
 
-    expect(invoke).toHaveBeenCalledWith("relay-pair", {
-      body: { action: "create_code" },
-    });
-    expect(result).toEqual({
-      code: "ABCD-1234",
-      expiresAt: "2026-05-22T11:00:00Z",
-    });
+    expect(getUser).toHaveBeenCalled();
+    expect(q.from).toHaveBeenCalledWith("relay_pairing_codes");
+    expect(q.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner_id: "user-1",
+        code: expect.stringMatching(/^[A-Z2-9]{8}$/),
+        expires_at: expect.any(String),
+      }),
+    );
+    expect(result.code).toHaveLength(8);
+    expect(result.expiresAt).toEqual(
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    );
   });
 
-  it("throws when the edge function fails", async () => {
-    const { invoke, messages } = withClient();
-    invoke.mockResolvedValue({
-      data: null,
-      error: { message: "relay unavailable" },
+  it("retries on duplicate pairing codes", async () => {
+    const { q, getUser, messages } = withClient();
+    getUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+      error: null,
+    });
+    q.insert
+      .mockImplementationOnce(() => ({
+        select: jest.fn(),
+        then(onFulfilled?: (value: InsertResult) => unknown) {
+          return Promise.resolve({
+            data: null,
+            error: { code: "23505", message: "duplicate" },
+          }).then(onFulfilled);
+        },
+      }))
+      .mockImplementationOnce(() => ({
+        select: jest.fn(),
+        then(onFulfilled?: (value: InsertResult) => unknown) {
+          return Promise.resolve({ data: null, error: null }).then(onFulfilled);
+        },
+      }));
+
+    await expect(messages.createPairingCode()).resolves.toEqual(
+      expect.objectContaining({ code: expect.any(String) }),
+    );
+    expect(q.insert).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws when the user is not signed in", async () => {
+    const { getUser, messages } = withClient();
+    getUser.mockResolvedValue({
+      data: { user: null },
+      error: null,
     });
 
-    await expect(messages.createPairingCode()).rejects.toThrow(
-      "relay unavailable",
-    );
+    await expect(messages.createPairingCode()).rejects.toThrow("Not signed in");
+  });
+
+  it("throws when insert fails for a non-duplicate reason", async () => {
+    const { q, getUser, messages } = withClient();
+    getUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+      error: null,
+    });
+    q.setInsertResult({
+      data: null,
+      error: { code: "42501", message: "permission denied" },
+    });
+
+    await expect(messages.createPairingCode()).rejects.toMatchObject({
+      message: "permission denied",
+    });
   });
 });
 

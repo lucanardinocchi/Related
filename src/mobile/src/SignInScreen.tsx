@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import type { AuthClient, OAuthSignInProvider, Session } from "@related/shared";
+import { ProviderSignInButton } from "./auth/ProviderSignInButton";
 import { colors, fonts, fontSizes, lineHeights, radii } from "./ui/tokens";
 
 export interface SignInScreenProps {
@@ -125,33 +126,21 @@ export function SignInScreen({
           <View style={styles.card}>
             {mode !== "forgot-password" ? (
               <>
-                <Pressable
-                  accessibilityRole="button"
-                  style={[
-                    styles.oauthButton,
-                    oauthLoading === "google" && styles.oauthButtonDisabled,
-                  ]}
+                <ProviderSignInButton
+                  provider="google"
+                  action={mode === "sign-up" ? "sign-up" : "sign-in"}
                   onPress={() => void handleOAuth("google")}
                   disabled={submitting || oauthLoading !== null}
-                >
-                  <Text style={styles.oauthButtonLabel}>
-                    Continue with Google
-                  </Text>
-                </Pressable>
+                  loading={oauthLoading === "google"}
+                />
                 {showAppleSignIn ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    style={[
-                      styles.oauthButton,
-                      oauthLoading === "apple" && styles.oauthButtonDisabled,
-                    ]}
+                  <ProviderSignInButton
+                    provider="apple"
+                    action={mode === "sign-up" ? "sign-up" : "sign-in"}
                     onPress={() => void handleOAuth("apple")}
                     disabled={submitting || oauthLoading !== null}
-                  >
-                    <Text style={styles.oauthButtonLabel}>
-                      Continue with Apple
-                    </Text>
-                  </Pressable>
+                    loading={oauthLoading === "apple"}
+                  />
                 ) : null}
                 <Text style={styles.divider}>or continue with email</Text>
               </>
@@ -342,22 +331,6 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.body,
     lineHeight: lineHeights.body,
     fontFamily: fonts.sans,
-  },
-  oauthButton: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    paddingVertical: 12,
-    alignItems: "center",
-    backgroundColor: colors.bg,
-  },
-  oauthButtonDisabled: {
-    opacity: 0.5,
-  },
-  oauthButtonLabel: {
-    fontSize: fontSizes.body,
-    fontFamily: fonts.sansMedium,
-    color: colors.fg,
   },
   divider: {
     textAlign: "center",

@@ -2,7 +2,7 @@
 // for queued outbound messages. Device auth required.
 //
 // Deploy:
-//   supabase functions deploy relay-outbound-ack
+//   supabase functions deploy relay-outbound-ack --no-verify-jwt
 //
 // deno-lint-ignore-file no-explicit-any
 

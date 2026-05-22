@@ -1,6 +1,7 @@
 import {
   parseTranscriptSegments,
   transcriptToChatMessages,
+  transcriptToChatMessagesWithAssignments,
 } from "./pocketSpeakerMatch";
 import { runPocketImportPipeline } from "./pocketImportPipeline";
 
@@ -67,6 +68,27 @@ describe("transcriptToChatMessages", () => {
   });
 });
 
+describe("transcriptToChatMessagesWithAssignments", () => {
+  it("prefixes contact lines and keeps self as user", () => {
+    expect(
+      transcriptToChatMessagesWithAssignments(
+        [
+          { speaker: "Luca", text: "Hi" },
+          { speaker: "Sam", text: "Hey there" },
+        ],
+        {
+          Luca: { kind: "self" },
+          Sam: { kind: "contact", contactId: "c-sam" },
+        },
+        { "c-sam": "Sam Chen" },
+      ),
+    ).toEqual([
+      { role: "user", content: "Hi" },
+      { role: "assistant", content: "[Sam (Sam Chen)]: Hey there" },
+    ]);
+  });
+});
+
 describe("runPocketImportPipeline", () => {
   it("returns ready with parsed messages when speaker matches", () => {
     const result = runPocketImportPipeline({
@@ -86,6 +108,29 @@ describe("runPocketImportPipeline", () => {
       messages: [
         { role: "user", content: "Notes from the meeting" },
         { role: "assistant", content: "Follow up tomorrow" },
+      ],
+    });
+  });
+
+  it("imports with explicit speaker assignments", () => {
+    const result = runPocketImportPipeline({
+      transcript: [
+        { speaker: "Alice", text: "Plan the dinner" },
+        { speaker: "Bob", text: "I'll book it" },
+      ],
+      accountDisplayName: "Luca",
+      speakerAssignments: {
+        Alice: { kind: "self" },
+        Bob: { kind: "contact", contactId: "c-bob" },
+      },
+      contactNamesById: { "c-bob": "Bob Walsh" },
+      recordingTitle: "Dinner plan",
+    });
+    expect(result).toMatchObject({
+      status: "ready",
+      messages: [
+        { role: "user", content: "Plan the dinner" },
+        { role: "assistant", content: "[Bob (Bob Walsh)]: I'll book it" },
       ],
     });
   });
@@ -113,10 +158,13 @@ describe("runPocketImportPipeline", () => {
       accountDisplayName: "Luca Nardinocchi",
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "ambiguous",
       speakers: ["Alice", "Bob"],
     });
+    if (result.status === "ambiguous") {
+      expect(result.segments.length).toBeGreaterThan(0);
+    }
   });
 
   it("skips empty transcripts", () => {

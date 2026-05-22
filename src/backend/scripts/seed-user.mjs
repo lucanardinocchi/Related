@@ -90,6 +90,10 @@ const TABLES_OWNER = [
   "push_subscriptions",
   "notification_preferences",
   "user_provider_tokens",
+  "pocket_pending_imports",
+  "pocket_speaker_ambiguities",
+  "pocket_imports",
+  "pocket_integration",
 ];
 
 async function findUser() {
@@ -624,6 +628,77 @@ async function seed(ownerId, userClient) {
     },
   ]);
 
+  // --- Pocket: one imported transcript + one pending speaker resolution ---
+  const pocketSegmentsAmbiguous = [
+    { speaker: "Speaker A", text: "We need to follow up with the design agency." },
+    { speaker: "Speaker B", text: "I can intro you to their lead if helpful." },
+    { speaker: "Speaker A", text: "That would be great — loop me in next week." },
+  ];
+
+  const { data: pocketChat, error: pocketChatErr } = await admin
+    .from("chats")
+    .insert({
+      owner_id: ownerId,
+      title: "Pocket: Coffee with Sam",
+      source: "pocket",
+      external_id: "seed-pocket-imported-1",
+      closed_at: daysAgo(1),
+      extracted_at: daysAgo(1),
+      created_at: daysAgo(1),
+    })
+    .select("id")
+    .single();
+  if (pocketChatErr) throw pocketChatErr;
+
+  await admin.from("chat_messages").insert([
+    {
+      chat_id: pocketChat.id,
+      owner_id: ownerId,
+      role: "user",
+      content: "Sam mentioned the product launch moved to June.",
+    },
+    {
+      chat_id: pocketChat.id,
+      owner_id: ownerId,
+      role: "assistant",
+      content: "[Sam Chen (Sam Chen)]: Yeah, we should grab coffee after it lands.",
+    },
+    {
+      chat_id: pocketChat.id,
+      owner_id: ownerId,
+      role: "user",
+      content: "I'll text Priya about the venue.",
+    },
+  ]);
+
+  await admin.from("pocket_imports").insert({
+    owner_id: ownerId,
+    recording_id: "seed-pocket-imported-1",
+    chat_id: pocketChat.id,
+    recording_title: "Coffee with Sam",
+  });
+
+  await admin.from("pocket_integration").upsert(
+    {
+      owner_id: ownerId,
+      account_display_name: "Luca Nardinocchi",
+      connected_at: daysAgo(14),
+      last_synced_at: now,
+    },
+    { onConflict: "owner_id" },
+  );
+
+  await admin.from("pocket_speaker_ambiguities").insert({
+    owner_id: ownerId,
+    recording_id: "seed-pocket-ambiguous-1",
+    recording_title: "Agency follow-up call",
+    recording_created_at: daysAgo(0),
+    speakers: ["Speaker A", "Speaker B"],
+    transcript_segments: pocketSegmentsAmbiguous,
+    resolved_at: null,
+    resolved_speaker: null,
+  });
+
   // --- Onboarding + notifications ---
   await admin.from("onboarding_state").upsert(
     {
@@ -649,7 +724,8 @@ async function seed(ownerId, userClient) {
     contacts: contacts.length,
     groups: groups.length,
     relationships: relationships.length,
-    chats: 2,
+    chats: 3,
+    pocketAmbiguities: 1,
   };
 }
 

@@ -8,6 +8,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
+import { upsertXMessage } from "../_shared/xMessages.ts";
 
 const X_API = "https://api.twitter.com/2";
 const X_TOKEN_URL = "https://api.twitter.com/2/oauth2/token";
@@ -26,6 +27,7 @@ interface XMessageSummary {
   fromUsername: string | null;
   sentAt: string;
   direction: "sent" | "received";
+  conversationId?: string | null;
 }
 
 interface TokenRow {
@@ -209,6 +211,7 @@ function mapDmEvents(
     text?: string;
     sender_id?: string;
     created_at?: string;
+    dm_conversation_id?: string;
   }>;
   const users = (data.includes as { users?: Array<{ id: string; username?: string }> } | undefined)
     ?.users ?? [];
@@ -228,6 +231,7 @@ function mapDmEvents(
         fromUsername: usernameById.get(senderId) ?? null,
         sentAt: e.created_at ?? "",
         direction,
+        conversationId: e.dm_conversation_id ?? null,
       };
     })
     .sort(
@@ -262,7 +266,7 @@ async function listMessagesForContact(
 
   const limit = Math.min(input.maxResults ?? 20, 100);
   const path =
-    `/dm_conversations/with/${encodeURIComponent(userId)}/dm_events?max_results=${limit}&dm_event.fields=created_at,sender_id,text&event_types=MessageCreate&expansions=sender_id&user.fields=username`;
+    `/dm_conversations/with/${encodeURIComponent(userId)}/dm_events?max_results=${limit}&dm_event.fields=created_at,sender_id,text,dm_conversation_id&event_types=MessageCreate&expansions=sender_id&user.fields=username`;
 
   const response = await xFetch(supabase, tokenRow, path);
 
@@ -315,7 +319,7 @@ async function listMessagesForGroup(
 
   const limit = Math.min(input.maxResults ?? 20, 100);
   const path =
-    `/dm_conversations/${encodeURIComponent(conversationId)}/dm_events?max_results=${limit}&dm_event.fields=created_at,sender_id,text&event_types=MessageCreate&expansions=sender_id&user.fields=username`;
+    `/dm_conversations/${encodeURIComponent(conversationId)}/dm_events?max_results=${limit}&dm_event.fields=created_at,sender_id,text,dm_conversation_id&event_types=MessageCreate&expansions=sender_id&user.fields=username`;
 
   const response = await xFetch(supabase, tokenRow, path);
 
@@ -478,6 +482,107 @@ async function persistResolvedConversationId(
     .eq("owner_id", ownerId);
 }
 
+function rowToSummary(row: {
+  x_message_id: string;
+  direction: string;
+  text: string | null;
+  sent_at: string;
+  x_conversation_id: string | null;
+}, contactUsername: string | null): XMessageSummary {
+  const direction: "sent" | "received" =
+    row.direction === "sent" ? "sent" : "received";
+  return {
+    id: row.x_message_id,
+    text: row.text ?? "",
+    fromUsername: direction === "received" ? contactUsername : null,
+    sentAt: row.sent_at,
+    direction,
+    conversationId: row.x_conversation_id,
+  };
+}
+
+async function listMessagesFromDbForContact(
+  supabase: any,
+  ownerId: string,
+  contactId: string,
+  contactUsername: string | null,
+): Promise<XMessageSummary[]> {
+  const { data, error } = await supabase
+    .from("x_messages")
+    .select("x_message_id, direction, text, sent_at, x_conversation_id")
+    .eq("owner_id", ownerId)
+    .eq("contact_id", contactId)
+    .order("sent_at", { ascending: true })
+    .limit(100);
+  if (error || !data) return [];
+  return (data as Array<{
+    x_message_id: string;
+    direction: string;
+    text: string | null;
+    sent_at: string;
+    x_conversation_id: string | null;
+  }>).map((r) => rowToSummary(r, contactUsername));
+}
+
+async function listMessagesFromDbForGroup(
+  supabase: any,
+  ownerId: string,
+  groupId: string,
+): Promise<XMessageSummary[]> {
+  const { data, error } = await supabase
+    .from("x_messages")
+    .select("x_message_id, direction, text, sent_at, x_conversation_id")
+    .eq("owner_id", ownerId)
+    .eq("group_id", groupId)
+    .order("sent_at", { ascending: true })
+    .limit(100);
+  if (error || !data) return [];
+  return (data as Array<{
+    x_message_id: string;
+    direction: string;
+    text: string | null;
+    sent_at: string;
+    x_conversation_id: string | null;
+  }>).map((r) => rowToSummary(r, null));
+}
+
+async function persistApiMessages(
+  supabase: any,
+  input: {
+    ownerId: string;
+    contactId: string | null;
+    groupId: string | null;
+    fallbackConversationId: string | null;
+    messages: XMessageSummary[];
+  },
+): Promise<void> {
+  for (const message of input.messages) {
+    if (!message.id) continue;
+    await upsertXMessage(supabase, {
+      ownerId: input.ownerId,
+      contactId: input.contactId,
+      groupId: input.groupId,
+      xMessageId: message.id,
+      xConversationId: message.conversationId ?? input.fallbackConversationId,
+      direction: message.direction,
+      text: message.text,
+      sentAt: message.sentAt || new Date().toISOString(),
+    });
+  }
+}
+
+function mergeSummaries(
+  cached: XMessageSummary[],
+  fresh: XMessageSummary[],
+): XMessageSummary[] {
+  const byId = new Map<string, XMessageSummary>();
+  for (const m of cached) byId.set(m.id, m);
+  for (const m of fresh) byId.set(m.id, m);
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime(),
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -555,15 +660,35 @@ Deno.serve(async (req) => {
       if (!body.contactId) {
         return jsonResponse(400, { error: "missing contactId" });
       }
-      const { messages, resolvedUserId } = await listMessagesForContact(
+      const contactId = body.contactId as string;
+      const usernameInput = (body.xUsername as string | null | undefined) ?? null;
+      const contactUsername = usernameInput
+        ? usernameInput.trim().replace(/^@/, "")
+        : null;
+
+      const cached = await listMessagesFromDbForContact(
         adminClient,
-        tokenRow,
-        {
+        ownerId,
+        contactId,
+        contactUsername,
+      );
+
+      let apiMessages: XMessageSummary[] = [];
+      let resolvedUserId: string | null = null;
+      let apiError: string | null = null;
+      try {
+        const result = await listMessagesForContact(adminClient, tokenRow, {
           xUsername: body.xUsername as string | null | undefined,
           xUserId: body.xUserId as string | null | undefined,
           maxResults: body.maxResults as number | undefined,
-        },
-      );
+        });
+        apiMessages = result.messages;
+        resolvedUserId = result.resolvedUserId;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "needs_reconsent") throw err;
+        apiError = msg;
+      }
 
       if (
         resolvedUserId &&
@@ -572,16 +697,38 @@ Deno.serve(async (req) => {
         await persistResolvedUserId(
           adminClient,
           ownerId,
-          body.contactId as string,
+          contactId,
           resolvedUserId,
         );
       }
+
+      if (apiMessages.length > 0) {
+        await persistApiMessages(adminClient, {
+          ownerId,
+          contactId,
+          groupId: null,
+          fallbackConversationId: null,
+          messages: apiMessages,
+        });
+      }
+
+      const merged = apiMessages.length > 0
+        ? await listMessagesFromDbForContact(
+          adminClient,
+          ownerId,
+          contactId,
+          contactUsername,
+        )
+        : cached;
+
+      const messages = merged.length > 0 ? merged : apiMessages;
 
       return jsonResponse(200, {
         status:
           messages.length > 0 || resolvedUserId ? "ok" : "no_conversation",
         messages,
         resolvedUserId,
+        ...(apiError ? { apiError } : {}),
       });
     }
 
@@ -589,12 +736,27 @@ Deno.serve(async (req) => {
       if (!body.xUserId || !body.text || !(body.text as string).trim()) {
         return jsonResponse(400, { error: "missing xUserId or text" });
       }
+      const text = (body.text as string).trim();
       const messageId = await sendDirectMessage(
         adminClient,
         tokenRow,
         (body.xUserId as string).trim(),
-        (body.text as string).trim(),
+        text,
       );
+
+      if (messageId && body.contactId) {
+        await upsertXMessage(adminClient, {
+          ownerId,
+          contactId: body.contactId as string,
+          groupId: null,
+          xMessageId: messageId,
+          xConversationId: null,
+          direction: "sent",
+          text,
+          sentAt: new Date().toISOString(),
+        });
+      }
+
       return jsonResponse(200, { status: "ok", messageId });
     }
 
@@ -602,18 +764,33 @@ Deno.serve(async (req) => {
       if (!body.groupId) {
         return jsonResponse(400, { error: "missing groupId" });
       }
-      const { messages, resolvedConversationId } = await listMessagesForGroup(
+      const groupId = body.groupId as string;
+
+      const cached = await listMessagesFromDbForGroup(
         adminClient,
-        tokenRow,
-        {
+        ownerId,
+        groupId,
+      );
+
+      let apiMessages: XMessageSummary[] = [];
+      let resolvedConversationId: string | null = null;
+      let apiError: string | null = null;
+      try {
+        const result = await listMessagesForGroup(adminClient, tokenRow, {
           xDmConversationId: body.xDmConversationId as
             | string
             | null
             | undefined,
           memberXUserIds: body.memberXUserIds as string[] | undefined,
           maxResults: body.maxResults as number | undefined,
-        },
-      );
+        });
+        apiMessages = result.messages;
+        resolvedConversationId = result.resolvedConversationId;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "needs_reconsent") throw err;
+        apiError = msg;
+      }
 
       if (
         resolvedConversationId &&
@@ -623,10 +800,26 @@ Deno.serve(async (req) => {
         await persistResolvedConversationId(
           adminClient,
           ownerId,
-          body.groupId as string,
+          groupId,
           resolvedConversationId,
         );
       }
+
+      if (apiMessages.length > 0) {
+        await persistApiMessages(adminClient, {
+          ownerId,
+          contactId: null,
+          groupId,
+          fallbackConversationId: resolvedConversationId,
+          messages: apiMessages,
+        });
+      }
+
+      const merged = apiMessages.length > 0
+        ? await listMessagesFromDbForGroup(adminClient, ownerId, groupId)
+        : cached;
+
+      const messages = merged.length > 0 ? merged : apiMessages;
 
       return jsonResponse(200, {
         status:
@@ -635,6 +828,7 @@ Deno.serve(async (req) => {
             : "no_conversation",
         messages,
         resolvedConversationId,
+        ...(apiError ? { apiError } : {}),
       });
     }
 
@@ -643,12 +837,28 @@ Deno.serve(async (req) => {
         error: "missing xDmConversationId or text",
       });
     }
+    const conversationId = (body.xDmConversationId as string).trim();
+    const text = (body.text as string).trim();
     const messageId = await sendGroupMessage(
       adminClient,
       tokenRow,
-      (body.xDmConversationId as string).trim(),
-      (body.text as string).trim(),
+      conversationId,
+      text,
     );
+
+    if (messageId && body.groupId) {
+      await upsertXMessage(adminClient, {
+        ownerId,
+        contactId: null,
+        groupId: body.groupId as string,
+        xMessageId: messageId,
+        xConversationId: conversationId,
+        direction: "sent",
+        text,
+        sentAt: new Date().toISOString(),
+      });
+    }
+
     return jsonResponse(200, { status: "ok", messageId });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

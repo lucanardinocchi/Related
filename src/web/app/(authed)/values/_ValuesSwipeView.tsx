@@ -30,6 +30,7 @@ import {
   mergeCharacterRegistry,
   pipelineVideoPriorities,
   pollUntilCharacterReady,
+  queueNeedsMediaWork,
   toValuesCharacter,
   VALUES_SWIPE_PIPELINE_DEPTH,
   VALUES_LAUNCH_CHARACTER_IDS,
@@ -83,6 +84,8 @@ export function ValuesSwipeView({
   } | null>(null);
   const pipelineLock = useRef(false);
   const pipelineAbort = useRef<AbortController | null>(null);
+  const mediaErrorRef = useRef(mediaError);
+  mediaErrorRef.current = mediaError;
   const queueRef = useRef(queue);
   queueRef.current = queue;
 
@@ -122,24 +125,17 @@ export function ValuesSwipeView({
     [],
   );
 
-  const appendDraftToQueue = useCallback((draft: ValuesCharacter) => {
-    setRegistry((prev) => mergeCharacterRegistry(prev, [draft]));
-    setQueue((prev) => {
-      if (prev.some((c) => c.id === draft.id)) return prev;
-      return [...prev, draft];
-    });
+  const growPipeline = inferencePayload.aligned.length > 0;
+
+  const syncQueue = useCallback((next: ValuesCharacter[]) => {
+    queueRef.current = next;
+    setQueue(next);
   }, []);
 
-  const runMediaPipeline = useCallback(async () => {
-    if (pipelineLock.current) return;
-    pipelineLock.current = true;
-    setPipelineBusy(true);
-    setMediaError(null);
-
-    const abort = new AbortController();
-    pipelineAbort.current = abort;
-
-    try {
+  const runOneMediaStep = useCallback(
+    async (
+      abort: AbortController,
+    ): Promise<"done" | "error" | "progress"> => {
       const { valuesAlignment } = getBrowserDeps();
       let workingQueue = queueRef.current;
 
@@ -147,89 +143,95 @@ export function ValuesSwipeView({
         (c) => !seenIds.has(c.id) && alignments[c.id] === undefined,
       );
 
-      while (workingQueue.length < VALUES_SWIPE_PIPELINE_DEPTH) {
+      if (
+        growPipeline &&
+        workingQueue.length < VALUES_SWIPE_PIPELINE_DEPTH &&
+        inferencePayload.aligned.length > 0
+      ) {
         const slotIndex = workingQueue.length;
-        const needsAlignmentSuggest =
-          slotIndex === VALUES_SWIPE_PIPELINE_DEPTH - 1 &&
-          inferencePayload.aligned.length > 0;
+        const atAlignmentSlot =
+          slotIndex === VALUES_SWIPE_PIPELINE_DEPTH - 1;
 
-        if (needsAlignmentSuggest) break;
+        if (atAlignmentSlot) {
+          setPipelineMessage("Choosing a character from your alignments…");
+          const start = await valuesAlignment.startValuesCharacterGeneration({
+            ...inferencePayload,
+          });
+
+          if (start.status === "error") {
+            setMediaError({
+              code: start.code ?? "generation_failed",
+              message: start.message ?? "Character generation failed",
+            });
+            return "error";
+          }
+
+          const draft = toValuesCharacter({
+            id: start.character.id,
+            name: start.character.name,
+            source: start.character.source,
+            values: start.character.values,
+          });
+          let withUrl = start.videoUrl
+            ? applyVideoUrl(draft, start.videoUrl)
+            : draft;
+
+          const merged = workingQueue.some((c) => c.id === withUrl.id)
+            ? workingQueue.map((c) => (c.id === withUrl.id ? withUrl : c))
+            : [...workingQueue, withUrl];
+          syncQueue(merged);
+          setRegistry((prev) => mergeCharacterRegistry(prev, [withUrl]));
+          workingQueue = merged;
+
+          if (start.status === "processing" && start.predictionId) {
+            setPipelineMessage(`Generating video for ${withUrl.name}…`);
+            const finished = await pollUntilCharacterReady(
+              (payload) =>
+                valuesAlignment.pollValuesCharacterGeneration(payload),
+              start.predictionId,
+              withUrl,
+              { signal: abort.signal },
+            );
+
+            if (finished.status === "error") {
+              setMediaError({
+                code: finished.code ?? "generation_failed",
+                message: finished.message ?? "Video generation failed",
+              });
+              return "error";
+            }
+            if (finished.videoUrl) {
+              updateCharacterInQueue(withUrl.id, finished.videoUrl);
+            }
+          }
+          return "progress";
+        }
 
         const nextSeed = seedPool.find(
           (c) => !workingQueue.some((q) => q.id === c.id),
         );
-        if (!nextSeed) break;
-
-        workingQueue = [...workingQueue, nextSeed];
-        setQueue(workingQueue);
-      }
-
-      if (
-        workingQueue.length < VALUES_SWIPE_PIPELINE_DEPTH &&
-        inferencePayload.aligned.length > 0
-      ) {
-        setPipelineMessage("Choosing a character from your alignments…");
-        const start = await valuesAlignment.startValuesCharacterGeneration({
-          ...inferencePayload,
-        });
-
-        if (start.status === "error") {
-          setMediaError({
-            code: start.code ?? "generation_failed",
-            message: start.message ?? "Character generation failed",
-          });
-          return;
+        if (nextSeed) {
+          syncQueue([...workingQueue, nextSeed]);
+          setRegistry((prev) => mergeCharacterRegistry(prev, [nextSeed]));
+          return "progress";
         }
-
-        const draft = toValuesCharacter({
-          id: start.character.id,
-          name: start.character.name,
-          source: start.character.source,
-          values: start.character.values,
-        });
-        const withUrl = start.videoUrl
-          ? applyVideoUrl(draft, start.videoUrl)
-          : draft;
-
-        appendDraftToQueue(withUrl);
-        workingQueue = workingQueue.some((c) => c.id === withUrl.id)
-          ? workingQueue.map((c) => (c.id === withUrl.id ? withUrl : c))
-          : [...workingQueue, withUrl];
-
-        if (start.status === "processing" && start.predictionId) {
-          setPipelineMessage(`Generating video for ${withUrl.name}…`);
-          const finished = await pollUntilCharacterReady(
-            (payload) => valuesAlignment.pollValuesCharacterGeneration(payload),
-            start.predictionId,
-            withUrl,
-            { signal: abort.signal },
-          );
-
-          if (finished.status === "error") {
-            setMediaError({
-              code: finished.code ?? "generation_failed",
-              message: finished.message ?? "Video generation failed",
-            });
-            return;
-          }
-          if (finished.videoUrl) {
-            updateCharacterInQueue(withUrl.id, finished.videoUrl);
-          }
+      } else if (workingQueue.length < VALUES_SWIPE_PIPELINE_DEPTH) {
+        const nextSeed = seedPool.find(
+          (c) => !workingQueue.some((q) => q.id === c.id),
+        );
+        if (nextSeed) {
+          syncQueue([...workingQueue, nextSeed]);
+          setRegistry((prev) => mergeCharacterRegistry(prev, [nextSeed]));
+          return "progress";
         }
       }
 
-      const priorities = pipelineVideoPriorities(workingQueue);
+      const priorities = pipelineVideoPriorities(queueRef.current);
       const targetIndex = priorities[0];
-      if (targetIndex === undefined) {
-        setPipelineMessage(null);
-        return;
-      }
+      if (targetIndex === undefined) return "done";
 
-      const target = workingQueue[targetIndex]!;
-      if (characterHasVideo(target)) {
-        setPipelineMessage(null);
-        return;
-      }
+      const target = queueRef.current[targetIndex]!;
+      if (characterHasVideo(target)) return "done";
 
       setPipelineMessage(`Generating video for ${target.name}…`);
       const start = await valuesAlignment.startValuesCharacterGeneration({
@@ -245,15 +247,14 @@ export function ValuesSwipeView({
       if (start.status === "error") {
         setMediaError({
           code: start.code ?? "generation_failed",
-          message: start.message ?? "Video generation failed",
+          message: start.message ?? "Character generation failed",
         });
-        return;
+        return "error";
       }
 
       if (start.status === "ready" && start.videoUrl) {
         updateCharacterInQueue(target.id, start.videoUrl);
-        setPipelineMessage(null);
-        return;
+        return "progress";
       }
 
       if (start.status === "processing" && start.predictionId) {
@@ -269,14 +270,44 @@ export function ValuesSwipeView({
             code: finished.code ?? "generation_failed",
             message: finished.message ?? "Video generation failed",
           });
-          return;
+          return "error";
         }
         if (finished.videoUrl) {
           updateCharacterInQueue(target.id, finished.videoUrl);
         }
       }
 
-      setPipelineMessage(null);
+      return "progress";
+    },
+    [
+      swipeSeedCharacters,
+      seenIds,
+      alignments,
+      inferencePayload,
+      growPipeline,
+      syncQueue,
+      updateCharacterInQueue,
+    ],
+  );
+
+  const runMediaPipeline = useCallback(async () => {
+    if (pipelineLock.current) return;
+    pipelineLock.current = true;
+    setPipelineBusy(true);
+
+    const abort = new AbortController();
+    pipelineAbort.current = abort;
+
+    try {
+      while (!abort.signal.aborted && !mediaErrorRef.current) {
+        if (!queueNeedsMediaWork(queueRef.current, { growQueue: growPipeline })) {
+          break;
+        }
+
+        const step = await runOneMediaStep(abort);
+        if (step === "error") break;
+        if (step === "done") break;
+      }
     } catch (err) {
       if (abort.signal.aborted) return;
       setMediaError({
@@ -284,25 +315,19 @@ export function ValuesSwipeView({
         message: err instanceof Error ? err.message : "Media pipeline failed",
       });
     } finally {
+      setPipelineMessage(null);
       pipelineLock.current = false;
       setPipelineBusy(false);
       pipelineAbort.current = null;
     }
-  }, [
-    swipeSeedCharacters,
-    seenIds,
-    alignments,
-    inferencePayload,
-    appendDraftToQueue,
-    updateCharacterInQueue,
-  ]);
+  }, [growPipeline, runOneMediaStep]);
 
   useEffect(() => {
-    if (mediaError?.code === "insufficient_credits") return;
-    if (!canSwipe && !pipelineBusy && !pipelineLock.current) {
-      void runMediaPipeline();
-    }
-  }, [canSwipe, mediaError?.code, pipelineBusy, runMediaPipeline, queue]);
+    if (mediaError) return;
+    if (!queueNeedsMediaWork(queue, { growQueue: growPipeline })) return;
+    if (pipelineLock.current) return;
+    void runMediaPipeline();
+  }, [mediaError, growPipeline, runMediaPipeline, queue.length, alignments]);
 
   useEffect(() => {
     return () => {
@@ -312,13 +337,18 @@ export function ValuesSwipeView({
 
   const restart = useCallback(
     (withReviewed: boolean) => {
+      pipelineAbort.current?.abort();
       setIncludeReviewed(withReviewed);
       setMediaError(null);
-      setQueue(
-        buildSeedQueue(registry, alignments, withReviewed, VALUES_LAUNCH_CHARACTER_IDS),
+      const next = buildSeedQueue(
+        registry,
+        alignments,
+        withReviewed,
+        VALUES_LAUNCH_CHARACTER_IDS,
       );
+      syncQueue(next);
     },
-    [registry, alignments],
+    [registry, alignments, syncQueue],
   );
 
   const advance = useCallback(() => {
@@ -361,7 +391,8 @@ export function ValuesSwipeView({
   const current = queue[0] ?? null;
   const next = queue[1] ?? null;
   const canRank = alignedCount >= MIN_ALIGNED_FOR_RANKING;
-  const swipeDisabled = saving || !canSwipe || pipelineBusy;
+  const swipeDisabled = saving || !canSwipe;
+  const showBackgroundPrep = pipelineBusy && canSwipe;
 
   if (swipeSeedCharacters.length === 0 && inferencePayload.aligned.length === 0) {
     return (
@@ -422,9 +453,13 @@ export function ValuesSwipeView({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-[13px] text-fg-subtle">
           {reviewedCount} reviewed ·{" "}
-          {canSwipe
-            ? "Ready to swipe"
-            : pipelineMessage ?? "Preparing character videos…"}
+          {mediaError
+            ? "Video generation paused"
+            : canSwipe
+              ? showBackgroundPrep
+                ? "Ready — preparing more in the background"
+                : "Ready to swipe"
+              : pipelineMessage ?? "Preparing character videos…"}
         </p>
         {reviewedCount > 0 && !current && !pipelineBusy && (
           <Button variant="secondary" size="sm" onClick={() => restart(true)}>
@@ -450,24 +485,21 @@ export function ValuesSwipeView({
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            {pipelineBusy ? (
-              <div className="flex flex-col items-center gap-3 text-fg-muted">
-                <Loader2 size={28} className="animate-spin" />
-                <p className="text-[14px]">
-                  {pipelineMessage ?? "Preparing character videos…"}
-                </p>
-              </div>
-            ) : (
-              <EmptyState
-                icon={<HeartHandshake size={28} />}
-                title="Nothing left in this pass"
-                description={
-                  canRank
+            <EmptyState
+              icon={<HeartHandshake size={28} />}
+              title={
+                pipelineBusy && !mediaError
+                  ? "Preparing characters"
+                  : "Nothing left in this pass"
+              }
+              description={
+                pipelineBusy && !mediaError
+                  ? (pipelineMessage ?? "Generating portrait videos…")
+                  : canRank
                     ? "Rank your alignments above, or keep swiping — we'll suggest more like who you aligned with."
                     : "Align with more characters and we'll narrow in on your taste."
-                }
-              />
-            )}
+              }
+            />
           </div>
         )}
       </div>
@@ -508,8 +540,8 @@ export function ValuesSwipeView({
           </Button>
           {!canSwipe && !mediaError && (
             <p className="text-center text-[12px] text-fg-subtle">
-              Swipe unlocks when the next 10 characters and the 11th in line
-              have videos ready.
+              {pipelineMessage ??
+                "Swipe unlocks when this character’s video is ready."}
             </p>
           )}
         </div>

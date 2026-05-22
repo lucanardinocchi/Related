@@ -36,6 +36,18 @@ const STATUS_OPTIONS: { value: EventStatus; label: string }[] = [
   { value: "missed", label: "Missed" },
 ];
 
+function sourceBadgeTone(source: Event["source"]): BadgeTone {
+  if (source === "google") return "info";
+  if (source === "outlook") return "sent";
+  return "approved";
+}
+
+function sourceBadgeLabel(source: Event["source"]): string {
+  if (source === "google") return "Google";
+  if (source === "outlook") return "Outlook";
+  return "Manual";
+}
+
 const STATUS_TONE: Record<EventStatus, BadgeTone> = {
   planned: "sent",
   occurred: "approved",
@@ -148,8 +160,8 @@ export function EventDetailView({ event: initial, allContacts }: Props) {
       <header className="flex items-center justify-between gap-2 pb-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone={STATUS_TONE[event.status]}>{event.status}</Badge>
-          <Badge tone={event.source === "google" ? "info" : "approved"}>
-            {event.source === "google" ? "Google" : "Manual"}
+          <Badge tone={sourceBadgeTone(event.source)}>
+            {sourceBadgeLabel(event.source)}
           </Badge>
         </div>
         <Button
@@ -163,10 +175,11 @@ export function EventDetailView({ event: initial, allContacts }: Props) {
         </Button>
       </header>
 
-      {event.source === "google" && (
+      {(event.source === "google" || event.source === "outlook") && (
         <Micro className="block pb-1">
-          Google sync may overwrite title, times, location, and attendees. Aim,
-          prep, status, and type are preserved.
+          {event.source === "google" ? "Google" : "Outlook"} sync may overwrite
+          title, times, location, and attendees. Aim, prep, status, and type
+          are preserved.
         </Micro>
       )}
 

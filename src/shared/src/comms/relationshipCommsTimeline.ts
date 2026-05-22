@@ -130,6 +130,21 @@ export function fromCommsPlatformMessage(
   };
 }
 
+export function fromInstagramRow(row: {
+  ig_message_id: string;
+  direction: "inbound" | "outbound";
+  text: string;
+  sent_at: string;
+}): CommsTimelineItem {
+  return {
+    id: `instagram:${row.ig_message_id}`,
+    platform: "instagram",
+    direction: row.direction === "outbound" ? "sent" : "received",
+    sentAt: row.sent_at,
+    body: row.text,
+  };
+}
+
 export function fromWhatsAppRow(row: {
   wa_message_id: string;
   direction: "inbound" | "outbound";
@@ -142,6 +157,21 @@ export function fromWhatsAppRow(row: {
     direction: row.direction === "outbound" ? "sent" : "received",
     sentAt: row.sent_at,
     body: row.text,
+  };
+}
+
+export function fromXRow(row: {
+  x_message_id: string;
+  direction: "sent" | "received";
+  text: string | null;
+  sent_at: string;
+}): CommsTimelineItem {
+  return {
+    id: `x:${row.x_message_id}`,
+    platform: "x",
+    direction: row.direction,
+    sentAt: row.sent_at,
+    body: row.text ?? "",
   };
 }
 

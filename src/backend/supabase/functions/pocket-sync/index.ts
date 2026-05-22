@@ -12,6 +12,7 @@ import {
   pocketFetch,
   processPendingImportForOwner,
   type PocketRecordingSummary,
+  type PocketSpeakerAssignmentPayload,
 } from "../_shared/pocketImport.ts";
 import { formatUtcDate } from "../../../../shared/src/integrations/pocket/pocketSpeakerMatch.ts";
 
@@ -164,6 +165,25 @@ async function runSync(
   return summary;
 }
 
+async function loadContactNamesById(
+  service: ReturnType<typeof createClient>,
+  ownerId: string,
+  contactIds: string[],
+): Promise<Record<string, string>> {
+  if (contactIds.length === 0) return {};
+  const { data, error } = await service
+    .from("contacts")
+    .select("id, name")
+    .eq("owner_id", ownerId)
+    .in("id", contactIds);
+  if (error) throw error;
+  const out: Record<string, string> = {};
+  for (const row of (data ?? []) as Array<{ id: string; name: string }>) {
+    out[row.id] = row.name;
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: CORS_HEADERS });
@@ -177,7 +197,12 @@ Deno.serve(async (req) => {
     return jsonResponse(401, { error: "missing Authorization header" });
   }
 
-  let body: { action?: string; recordingId?: string; speaker?: string };
+  let body: {
+    action?: string;
+    recordingId?: string;
+    speaker?: string;
+    assignments?: Record<string, PocketSpeakerAssignmentPayload>;
+  };
   try {
     body = await req.json().catch(() => ({}));
   } catch {
@@ -196,6 +221,112 @@ Deno.serve(async (req) => {
   const service = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
+
+  if (body.action === "resolveSpeakers") {
+    const recordingId = body.recordingId?.trim();
+    const assignments = body.assignments;
+    if (!recordingId || !assignments || typeof assignments !== "object") {
+      return jsonResponse(400, { error: "missing recordingId or assignments" });
+    }
+
+    const selfCount = Object.values(assignments).filter((a) =>
+      a?.kind === "self"
+    ).length;
+    if (selfCount !== 1) {
+      return jsonResponse(400, {
+        error: "assign exactly one speaker as yourself",
+      });
+    }
+
+    const ambiguityRes = await supabase
+      .from("pocket_speaker_ambiguities")
+      .select(
+        "speakers, recording_title, recording_created_at, transcript_segments",
+      )
+      .eq("recording_id", recordingId)
+      .is("resolved_at", null)
+      .maybeSingle();
+    if (ambiguityRes.error || !ambiguityRes.data) {
+      return jsonResponse(404, { error: "ambiguity not found" });
+    }
+
+    const tokenRes = await service
+      .from("user_provider_tokens")
+      .select("access_token")
+      .eq("owner_id", ownerId)
+      .eq("provider", "pocket")
+      .maybeSingle();
+    if (!tokenRes.data?.access_token) {
+      return jsonResponse(400, { error: "Pocket is not connected" });
+    }
+
+    const integrationRes = await service
+      .from("pocket_integration")
+      .select("account_display_name")
+      .eq("owner_id", ownerId)
+      .maybeSingle();
+    if (!integrationRes.data) {
+      return jsonResponse(400, { error: "Pocket integration metadata missing" });
+    }
+
+    const contactIds = Object.values(assignments)
+      .filter((a): a is { kind: "contact"; contactId: string } =>
+        a?.kind === "contact" && typeof a.contactId === "string"
+      )
+      .map((a) => a.contactId);
+
+    try {
+      const contactNamesById = await loadContactNamesById(
+        service,
+        ownerId,
+        contactIds,
+      );
+      if (contactIds.some((id) => !contactNamesById[id])) {
+        return jsonResponse(400, { error: "unknown contact in assignments" });
+      }
+
+      const recording: PocketRecordingSummary = {
+        id: recordingId,
+        title: ambiguityRes.data.recording_title as string | null,
+        created_at: ambiguityRes.data.recording_created_at as string | null,
+      };
+
+      const result = await importRecording(
+        service,
+        SUPABASE_URL,
+        SERVICE_ROLE_KEY,
+        ownerId,
+        recording,
+        tokenRes.data.access_token as string,
+        integrationRes.data.account_display_name as string,
+        {
+          speakerAssignments: assignments,
+          contactNamesById,
+          transcript: ambiguityRes.data.transcript_segments ?? undefined,
+        },
+      );
+
+      if (result.status === "imported") {
+        await supabase
+          .from("pocket_speaker_ambiguities")
+          .update({
+            resolved_at: new Date().toISOString(),
+            resolved_speaker: Object.entries(assignments).find(([, a]) =>
+              a.kind === "self"
+            )?.[0] ?? null,
+          })
+          .eq("recording_id", recordingId);
+        return jsonResponse(200, { status: "ok", chatId: result.chatId });
+      }
+      return jsonResponse(500, {
+        error: `import failed: ${result.status}`,
+      });
+    } catch (err) {
+      return jsonResponse(500, {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   if (body.action === "resolveSpeaker") {
     const recordingId = body.recordingId?.trim();

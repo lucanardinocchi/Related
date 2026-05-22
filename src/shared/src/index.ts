@@ -159,6 +159,7 @@ export type {
 } from "./agent/userContextProjections";
 export type {
   UserContextSnapshot,
+  AmbientUserContextSnapshot,
   CalendarDensitySignal,
   SleepSignal,
   GoalEntry,
@@ -235,6 +236,7 @@ export {
   VALUES_SWIPE_PIPELINE_DEPTH,
   VALUES_MEDIA_BUFFER,
   canSwipeValuesQueue,
+  queueNeedsMediaWork,
   characterHasVideo,
   pipelineVideoPriorities,
   applyVideoUrl,
@@ -373,9 +375,15 @@ export type {
 
 export {
   AMBIENT_PASS_MODES,
+  AMBIENT_TRIAL_DAYS,
+  canEnableAmbientIntelligence,
   canRunAmbientIntelligence,
+  getAmbientTrialEndsAt,
+  getAmbientTrialDaysRemaining,
+  hasAmbientIntelligenceAccess,
   isAmbientIntelligenceEnabled,
   isAmbientPassMode,
+  isWithinAmbientTrial,
 } from "./billing/ambientAccess";
 export type { AmbientPassMode } from "./billing/ambientAccess";
 
@@ -523,6 +531,7 @@ export type {
   PocketSyncSummary,
   PocketSpeakerAmbiguity,
   PocketIntegrationStatus,
+  PocketSpeakerAssignment,
 } from "./integrations/PocketClient";
 
 export {
@@ -531,11 +540,16 @@ export {
   uniqueSpeakersFromTranscript,
   parseTranscriptSegments,
   transcriptToChatMessages,
+  transcriptToChatMessagesWithAssignments,
+  normalizeSpeakerKey,
+  speakerKeysFromTranscript,
+  POCKET_UNLABELED_SPEAKER,
   formatUtcDate,
 } from "./integrations/pocket/pocketSpeakerMatch";
 export type {
   SpeakerMatchResult,
   PocketTranscriptSegment,
+  PocketSpeakerAssignment,
 } from "./integrations/pocket/pocketSpeakerMatch";
 
 export {
@@ -577,6 +591,7 @@ export { ChatsClient } from "./chats/ChatsClient";
 export type {
   Chat,
   ChatSummary,
+  ChatSource,
   ChatMessage,
   MessageRole,
   AppendMessageInput,
@@ -634,6 +649,8 @@ export type {
 } from "./chats/conversationalChatState";
 
 export { MessagesClient, normalizePhone } from "./messages/MessagesClient";
+export { buildRelaySetupPrompt } from "./messages/relaySetupPrompt";
+export type { RelaySetupPromptInput } from "./messages/relaySetupPrompt";
 export type {
   MessageThread,
   Message,
@@ -654,9 +671,11 @@ export {
   fromInstagramMessage,
   fromTikTokMessage,
   fromTikTokRow,
+  fromInstagramRow,
   fromWhatsAppMessage,
   fromWhatsAppRow,
   fromXMessage,
+  fromXRow,
   mergeCommsTimelineItems,
   COMMS_PLATFORM_LABELS,
 } from "./comms/relationshipCommsTimeline";

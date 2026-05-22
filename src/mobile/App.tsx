@@ -121,7 +121,7 @@ const mobileMicCapture = isNative ? createMobileMicCapture : undefined;
 const oauthRedirectTo =
   Platform.OS === "web" && typeof window !== "undefined"
     ? window.location.origin
-    : "related://oauth-callback";
+    : authOAuthRedirectUri();
 
 const webAppOrigin =
   Platform.OS === "web" && typeof window !== "undefined"

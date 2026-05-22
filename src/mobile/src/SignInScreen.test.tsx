@@ -187,7 +187,7 @@ describe("<SignInScreen />", () => {
     ).toBeTruthy();
   });
 
-  it("calls onOAuthSignIn when Continue with Google is pressed", async () => {
+  it("calls onOAuthSignIn when Sign in with Google is pressed", async () => {
     const authClient = makeMockAuthClient();
     const onOAuthSignIn = jest.fn().mockResolvedValue(undefined);
 
@@ -199,7 +199,7 @@ describe("<SignInScreen />", () => {
         onOAuthSignIn={onOAuthSignIn}
       />,
     );
-    fireEvent.press(screen.getByText(/continue with google/i));
+    fireEvent.press(screen.getByLabelText("Sign in with Google"));
 
     await waitFor(() => expect(onOAuthSignIn).toHaveBeenCalledWith("google"));
   });

@@ -120,13 +120,10 @@ interface OutboundQueueRow {
   sent_at: string | null;
 }
 
-interface CreatePairingCodeResponse {
-  code: string;
-  expires_at?: string;
-  expiresAt?: string;
-}
-
 const RELAY_DEVICE_COLUMNS = "id, name, last_seen_at, created_at";
+const PAIRING_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const PAIRING_CODE_LENGTH = 8;
+const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
 
 const MESSAGE_THREAD_COLUMNS =
   "id, external_chat_id, external_chat_guid, is_group, display_name, contact_id, group_id, participant_handles, last_message_at, created_at, updated_at";
@@ -199,10 +196,20 @@ function toOutboundQueueItem(row: OutboundQueueRow): OutboundQueueItem {
   };
 }
 
+function generatePairingCode(): string {
+  const bytes = new Uint8Array(PAIRING_CODE_LENGTH);
+  crypto.getRandomValues(bytes);
+  let code = "";
+  for (let i = 0; i < PAIRING_CODE_LENGTH; i++) {
+    code += PAIRING_CODE_CHARS[bytes[i] % PAIRING_CODE_CHARS.length];
+  }
+  return code;
+}
+
 /**
  * Reads Mac Messages relay state and enqueues outbound sends on behalf of
- * the signed-in User. Pairing and sync run through edge functions; RLS
- * enforces ownership on direct table access.
+ * the signed-in User. Mac pairing exchange and sync run through edge
+ * functions; RLS enforces ownership on direct table access.
  */
 export class MessagesClient {
   constructor(private readonly client: SupabaseClient) {}
@@ -216,21 +223,33 @@ export class MessagesClient {
   }
 
   async createPairingCode(): Promise<{ code: string; expiresAt: string }> {
-    const { data, error } = await this.client.functions.invoke(
-      "relay-pair",
-      { body: { action: "create_code" } },
-    );
-    if (error) {
-      const errMsg =
-        (error as { message?: string }).message ?? "relay-pair failed";
-      throw new Error(errMsg);
+    const {
+      data: { user },
+      error: authError,
+    } = await this.client.auth.getUser();
+    if (authError || !user) {
+      throw new Error(authError?.message ?? "Not signed in");
     }
-    const payload = (data ?? {}) as CreatePairingCodeResponse;
-    const expiresAt = payload.expiresAt ?? payload.expires_at;
-    if (!payload.code || !expiresAt) {
-      throw new Error("relay-pair create_code returned incomplete payload");
+
+    const expiresAt = new Date(Date.now() + PAIRING_CODE_TTL_MS).toISOString();
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = generatePairingCode();
+      const { error } = await this.client.from("relay_pairing_codes").insert({
+        owner_id: user.id,
+        code,
+        expires_at: expiresAt,
+      });
+
+      if (!error) {
+        return { code, expiresAt };
+      }
+      if (error.code !== "23505") {
+        throw error;
+      }
     }
-    return { code: payload.code, expiresAt };
+
+    throw new Error("failed to generate unique pairing code");
   }
 
   async listRelayDevices(): Promise<RelayDevice[]> {

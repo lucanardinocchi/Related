@@ -39,7 +39,7 @@ export default function SignUpPage() {
       <PageHeader title="Create account" subtitle="Get started with Related." />
 
       <Card className="space-y-4">
-        <OAuthButtons nextPath="/onboarding" />
+        <OAuthButtons nextPath="/onboarding" action="sign-up" />
         <AuthDivider />
 
         <form className="space-y-4" onSubmit={onSubmit}>

@@ -1,12 +1,11 @@
 import type {
-  CharacterValuesAlignmentEntry,
+  AmbientUserContextSnapshot,
   OperatorStrengthEntry,
   TransientIntentEntry,
   UserContextCoreSnapshot,
   UserContextGroupSummary,
   UserContextRelationshipSummary,
-  UserContextSnapshot,
-} from "./userContextCore";
+} from "./userContextCore.ts";
 
 /** Conversational user-context slice embedded in ConversationContextSnapshot. */
 export interface ConversationalUserContextSlice {
@@ -46,8 +45,6 @@ export interface ConversationalUserContextBundle {
 export interface AmbientPassExtras {
   userId: string;
   operatorStrengths: OperatorStrengthEntry[];
-  inferredSignals: UserContextSnapshot["inferredSignals"];
-  characterValuesAlignment: CharacterValuesAlignmentEntry[];
 }
 
 function mapTransientToConversational(
@@ -82,22 +79,17 @@ function mapGroupToConversational(
   };
 }
 
-/** Project core load into Ambient Pass UserContextSnapshot. */
+/** Project core load into Ambient Pass user context (G&V, situational, strengths). */
 export function projectForAmbientPass(
   core: UserContextCoreSnapshot,
   extras: AmbientPassExtras,
-): UserContextSnapshot {
+): AmbientUserContextSnapshot {
   return {
     userId: extras.userId,
     asOf: core.asOf,
-    transientIntent: core.transientIntent.map((t) => t.content),
     goalsAndValues: core.goalsAndValues,
     situationalState: core.situationalState,
     operatorStrengths: extras.operatorStrengths,
-    inferredSignals: extras.inferredSignals,
-    groups: core.groups,
-    otherRelationships: core.relationships,
-    characterValuesAlignment: extras.characterValuesAlignment,
   };
 }
 

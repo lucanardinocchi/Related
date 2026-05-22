@@ -37,24 +37,12 @@ async function pickNextPendingPass(
 
   for (const row of data ?? []) {
     const pass = row as ScheduledAmbientPassRow;
-    const [{ data: sub, error: subErr }, { data: prefs, error: prefsErr }] =
-      await Promise.all([
-        service
-          .from("user_subscriptions")
-          .select("status")
-          .eq("owner_id", pass.owner_id)
-          .maybeSingle(),
-        service
-          .from("ambient_intelligence_preferences")
-          .select("enabled")
-          .eq("owner_id", pass.owner_id)
-          .maybeSingle(),
-      ]);
-    if (subErr) throw subErr;
-    if (prefsErr) throw prefsErr;
-    const status = (sub?.status ?? "inactive") as string;
-    const enabled = prefs?.enabled ?? true;
-    if (canRunAmbientIntelligence({ status }, { enabled })) {
+    const { data: canRun, error: canErr } = await service.rpc(
+      "can_run_ambient_intelligence",
+      { p_owner_id: pass.owner_id },
+    );
+    if (canErr) throw canErr;
+    if (canRun) {
       return pass;
     }
   }

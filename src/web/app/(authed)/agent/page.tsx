@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function AgentPage() {
   const { chats } = await getServerDeps();
-  const initialChats = await chats.listChats();
+  const initialChats = await chats.listAgentChats();
 
   return <AgentView initialChats={initialChats} />;
 }

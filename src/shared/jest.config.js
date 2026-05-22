@@ -5,4 +5,16 @@ module.exports = {
   testMatch: ["**/*.test.ts"],
   setupFiles: ["<rootDir>/jest.setup.js"],
   testTimeout: 15000,
+  transform: {
+    "^.+\\.ts$": [
+      "ts-jest",
+      {
+        tsconfig: {
+          module: "commonjs",
+          allowImportingTsExtensions: true,
+          noEmit: true,
+        },
+      },
+    ],
+  },
 };
