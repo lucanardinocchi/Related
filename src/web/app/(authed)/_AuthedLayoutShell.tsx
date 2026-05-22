@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { AmbientIntelligenceRunner } from "@/components/ambient/AmbientIntelligenceRunner";
 import { AmbientBillingProvider } from "@/components/billing/AmbientBillingProvider";
 import { Sidebar } from "@/components/Sidebar";
+import { GoogleOAuthCapture } from "./_GoogleOAuthCapture";
 
 interface Props {
   userEmail: string;
@@ -17,16 +18,20 @@ export function AuthedLayoutShell({ userEmail, gmailConnected, children }: Props
 
   if (isOnboarding) {
     return (
-      <div className="min-h-screen overflow-y-auto bg-bg">
-        <div className="mx-auto w-full max-w-[var(--layout-content-max-w)] px-6 py-10 sm:px-10 sm:py-12">
-          {children}
+      <>
+        <GoogleOAuthCapture />
+        <div className="min-h-screen overflow-y-auto bg-bg">
+          <div className="mx-auto w-full max-w-[var(--layout-content-max-w)] px-6 py-10 sm:px-10 sm:py-12">
+            {children}
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <AmbientBillingProvider>
+      <GoogleOAuthCapture />
       <AmbientIntelligenceRunner />
       <div className="flex h-screen overflow-hidden">
         <Sidebar userEmail={userEmail} gmailConnected={gmailConnected} />

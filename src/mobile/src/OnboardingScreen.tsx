@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
   OnboardingClient,
+  mergeGoogleScopesOnConnect,
   type AuthClient,
   type OnboardingState,
   type OnboardingStep,
@@ -136,11 +137,14 @@ export function OnboardingScreen({
           session?.providerToken &&
           !initial.completedSteps.includes("calendar")
         ) {
+          const existing =
+            await userProviderTokensClient.getForProvider("google");
           await userProviderTokensClient.upsert({
             provider: "google",
             accessToken: session.providerToken,
-            refreshToken: session.providerRefreshToken,
-            scopes: "https://www.googleapis.com/auth/calendar.readonly",
+            refreshToken:
+              session.providerRefreshToken ?? existing?.refreshToken ?? null,
+            scopes: mergeGoogleScopesOnConnect(existing?.scopes, "calendar"),
             expiresAt:
               session.expiresAt !== null
                 ? new Date(session.expiresAt * 1000).toISOString()

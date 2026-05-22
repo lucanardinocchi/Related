@@ -102,12 +102,24 @@ The same Google OAuth client powers **sign-in with Google** (basic profile/email
 
 ### 2.3 Auth URL Configuration
 
-Dashboard → Authentication → URL Configuration → Redirect URLs → add:
+Dashboard → Authentication → URL Configuration → Redirect URLs (`uri_allow_list`):
 
-- Your Vercel URL (production + preview), e.g. `https://your-app.vercel.app/auth/callback`
-- Same with query params used by the app: `.../auth/callback?next=/onboarding`, `.../auth/callback?next=/reset-password`
-- Google Calendar / Gmail connect returns directly to `/settings` (and `/onboarding` during setup)
-- Mobile deep link: `related://auth-callback` (after `scheme: related` in `src/mobile/app.json`)
+Hosted **Related** project (`yawclybcwwtrrnuyotdm`) uses wildcards plus explicit Gmail/Calendar callbacks:
+
+- `https://related-sooty.vercel.app/**`, `https://related-sooty-*.vercel.app/**`
+- `https://userelatedai.com/**`, `https://www.userelatedai.com/**`
+- `http://localhost:3000/**`, `http://127.0.0.1:3000/**`
+- `related://auth-callback`
+- Explicit (Gmail connect): `…/auth/callback?next=/settings&google_intent=gmail` (and `calendar`, URL-encoded `next`, context onboarding variants) on each production origin above
+
+Google Calendar / Gmail connect returns via `/auth/callback?next=…&google_intent=calendar|gmail` (server-side PKCE exchange). Local exact URLs live in `src/backend/supabase/config.toml` → `additional_redirect_urls`.
+
+To update hosted allow-list programmatically (requires Supabase CLI login):
+
+```sh
+# From repo root — merges Gmail callback URLs; keep list under platform size limits
+python3 src/backend/scripts/update-supabase-auth-redirects.py
+```
 
 Local Supabase (`src/backend/supabase/config.toml`) already allow-lists `http://127.0.0.1:3000/auth/callback` and `related://auth-callback`. Set provider secrets via env when running locally:
 

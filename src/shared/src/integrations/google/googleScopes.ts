@@ -45,6 +45,34 @@ export function googleScopesWithoutCalendar(scopes: string): string | null {
   return remaining.length > 0 ? remaining.join(" ") : null;
 }
 
+export type GoogleConnectIntent = "calendar" | "gmail";
+
+function parseScopeList(scopes: string | null | undefined): string[] {
+  return (scopes ?? "").split(/\s+/).filter((s) => s.length > 0);
+}
+
+/**
+ * Merges scopes granted by a new Google connect into any existing row.
+ * Re-connecting Calendar must not drop Gmail (and vice versa).
+ */
+export function mergeGoogleScopesOnConnect(
+  existingScopes: string | null | undefined,
+  intent: GoogleConnectIntent | null,
+): string {
+  const existing = parseScopeList(existingScopes);
+  const granted =
+    intent === "gmail"
+      ? parseScopeList(GOOGLE_INTEGRATION_SCOPES)
+      : intent === "calendar"
+        ? parseScopeList(GOOGLE_CALENDAR_SCOPES)
+        : [];
+  if (granted.length === 0) {
+    if (existing.length > 0) return existing.join(" ");
+    return GOOGLE_CALENDAR_SCOPES;
+  }
+  return [...new Set([...existing, ...granted])].join(" ");
+}
+
 /** Returns remaining scopes after removing Gmail, or null if none left. */
 export function googleScopesWithoutGmail(scopes: string): string | null {
   const remaining = scopes

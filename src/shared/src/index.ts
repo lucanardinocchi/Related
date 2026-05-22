@@ -430,6 +430,8 @@ export {
   tokenHasCalendarAccess,
   googleScopesWithoutCalendar,
   googleScopesWithoutGmail,
+  mergeGoogleScopesOnConnect,
+  type GoogleConnectIntent,
 } from "./integrations/google/googleScopes";
 
 export {
