@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Interaction, OpenThread } from "@related/shared";
+import type {
+  Event,
+  Interaction,
+  OpenThread,
+  PlatformCommsTouchpoint,
+} from "@related/shared";
 import {
   peopleAddedPerDay,
   groupsAddedPerDay,
@@ -70,7 +75,7 @@ const SECTION_META: Record<
     eyebrow: "Inner circle",
     title: "Who you're closest with",
     description:
-      "Ranked by interactions, comms, context notes, and commitments — inner rings are closer relationships.",
+      "Ranked by synced comms, calendar events together, context notes, and commitments — inner rings are closer relationships.",
   },
 };
 
@@ -80,6 +85,8 @@ interface Props {
   interactions: Interaction[];
   relationshipCreatedAtByContactId: Record<string, string>;
   innerCircleContacts: InnerCircleContactInput[];
+  platformComms: PlatformCommsTouchpoint[];
+  attendeeEvents: Event[];
   openThreads: OpenThread[];
   contactIdByRelationshipId: Record<string, string>;
 }
@@ -250,6 +257,8 @@ export function RelationshipsIndexCharts({
   interactions,
   relationshipCreatedAtByContactId,
   innerCircleContacts,
+  platformComms,
+  attendeeEvents,
   openThreads,
   contactIdByRelationshipId,
 }: Props) {
@@ -383,6 +392,8 @@ export function RelationshipsIndexCharts({
           {section === "inner" && (
             <InnerCircleChart
               contacts={innerCircleContacts}
+              platformComms={platformComms}
+              attendeeEvents={attendeeEvents}
               interactions={interactions}
               openThreads={openThreads}
               contactIdByRelationshipId={contactIdByRelationshipId}

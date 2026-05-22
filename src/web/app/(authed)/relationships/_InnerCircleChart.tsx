@@ -2,9 +2,15 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Interaction, OpenThread } from "@related/shared";
+import type {
+  Event,
+  Interaction,
+  OpenThread,
+  PlatformCommsTouchpoint,
+} from "@related/shared";
 import {
   innerCircleCloseness,
+  CLOSENESS_WEIGHTS,
   type InnerCircleContact,
   type InnerCircleContactInput,
 } from "@related/shared";
@@ -22,14 +28,17 @@ const RING_RADII = [52, 96, 140] as const;
 const RING_CAPS = [3, 6, 12] as const;
 
 const SIGNAL_COLORS = {
-  interactions: "#ed7a35",
   comms: "#5b7cfa",
   notes: "#3d8f6e",
-  commitments: "#8b6bb8",
+  upcoming: "#ed7a35",
+  attended: "#8b6bb8",
+  commitments: "#c9a227",
 } as const;
 
 interface Props {
   contacts: InnerCircleContactInput[];
+  platformComms: PlatformCommsTouchpoint[];
+  attendeeEvents: Event[];
   interactions: Interaction[];
   openThreads: OpenThread[];
   contactIdByRelationshipId: Record<string, string>;
@@ -192,24 +201,29 @@ function SignalBar({ person }: { person: InnerCircleContact }) {
   const total = person.score || 1;
   const segments = [
     {
-      key: "interactions" as const,
-      label: "Meet",
-      value: person.signals.interactions * 3,
-    },
-    {
       key: "comms" as const,
       label: "Comms",
-      value: person.signals.comms * 2,
+      value: person.signals.comms * CLOSENESS_WEIGHTS.comms,
+    },
+    {
+      key: "attended" as const,
+      label: "Attended",
+      value: person.signals.attended * CLOSENESS_WEIGHTS.attended,
+    },
+    {
+      key: "upcoming" as const,
+      label: "Upcoming",
+      value: person.signals.upcoming * CLOSENESS_WEIGHTS.upcoming,
     },
     {
       key: "notes" as const,
       label: "Notes",
-      value: person.signals.notes * 2,
+      value: person.signals.notes * CLOSENESS_WEIGHTS.note,
     },
     {
       key: "commitments" as const,
       label: "Commits",
-      value: person.signals.commitments * 2,
+      value: person.signals.commitments * CLOSENESS_WEIGHTS.commitment,
     },
   ].filter((s) => s.value > 0);
 
@@ -233,6 +247,8 @@ function SignalBar({ person }: { person: InnerCircleContact }) {
 
 export function InnerCircleChart({
   contacts,
+  platformComms,
+  attendeeEvents,
   interactions,
   openThreads,
   contactIdByRelationshipId,
@@ -244,6 +260,8 @@ export function InnerCircleChart({
     () =>
       innerCircleCloseness({
         contacts,
+        platformComms,
+        events: attendeeEvents,
         interactions,
         openThreads,
         contactIdByRelationshipId,
@@ -252,6 +270,8 @@ export function InnerCircleChart({
       }),
     [
       contacts,
+      platformComms,
+      attendeeEvents,
       interactions,
       openThreads,
       contactIdByRelationshipId,
@@ -296,8 +316,9 @@ export function InnerCircleChart({
       <div className="flex flex-wrap gap-x-4 gap-y-2 text-[12px] text-fg-muted">
         {(
           [
-            ["interactions", "Interactions"],
-            ["comms", "Comms"],
+            ["comms", "Synced comms"],
+            ["attended", "Attended events"],
+            ["upcoming", "Upcoming events"],
             ["notes", "Context notes"],
             ["commitments", "Commitments"],
           ] as const
@@ -314,8 +335,9 @@ export function InnerCircleChart({
 
       {rankings.contacts.length === 0 ? (
         <p className="text-[13px] text-fg-muted">
-          No closeness signals in this period yet — log interactions, comms,
-          notes, or commitments on a relationship to see your inner circle.
+          No closeness signals in this period yet — synced comms, shared
+          calendar events, context notes, or commitments will populate your
+          inner circle.
         </p>
       ) : (
         <>

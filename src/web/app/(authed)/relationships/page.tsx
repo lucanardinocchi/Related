@@ -43,17 +43,32 @@ function daysAgo(iso: string | null, now: Date): string {
 }
 
 export default async function RelationshipsIndexPage() {
-  const { relationships, groups, interactions, openThreads } =
-    await getServerDeps();
+  const {
+    relationships,
+    groups,
+    interactions,
+    openThreads,
+    events,
+    commsPlatformMessages,
+  } = await getServerDeps();
 
-  const [contactRels, groupRels, allInteractions, allOpenThreads, allThreads] =
-    await Promise.all([
-      relationships.listRelationships(),
-      groups.listGroupRelationships(),
-      interactions.listAll(),
-      openThreads.listOpenForUser(),
-      openThreads.listAllForUser(),
-    ]);
+  const [
+    contactRels,
+    groupRels,
+    allInteractions,
+    allOpenThreads,
+    allThreads,
+    platformComms,
+    attendeeEvents,
+  ] = await Promise.all([
+    relationships.listRelationships(),
+    groups.listGroupRelationships(),
+    interactions.listAll(),
+    openThreads.listOpenForUser(),
+    openThreads.listAllForUser(),
+    commsPlatformMessages.listForUser(),
+    events.listForAttendeeCloseness(),
+  ]);
 
   const now = new Date();
 
@@ -217,7 +232,9 @@ export default async function RelationshipsIndexPage() {
       {(peopleCreatedAts.length > 0 ||
         groupCreatedAts.length > 0 ||
         allInteractions.length > 0 ||
-        allThreads.length > 0) && (
+        allThreads.length > 0 ||
+        platformComms.length > 0 ||
+        attendeeEvents.length > 0) && (
         <RelationshipsIndexCharts
           peopleCreatedAts={peopleCreatedAts}
           groupCreatedAts={groupCreatedAts}
@@ -226,6 +243,8 @@ export default async function RelationshipsIndexPage() {
             relationshipCreatedAtByContactId
           }
           innerCircleContacts={innerCircleContacts}
+          platformComms={platformComms}
+          attendeeEvents={attendeeEvents}
           openThreads={allThreads}
           contactIdByRelationshipId={contactIdByRelationshipId}
         />

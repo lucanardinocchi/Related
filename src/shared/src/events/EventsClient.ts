@@ -135,6 +135,22 @@ export class EventsClient {
     );
   }
 
+  /**
+   * Calendar events where the User listed attendees and status is
+   * `planned` (upcoming) or `attended` (past). Used for inner-circle scoring.
+   */
+  async listForAttendeeCloseness(): Promise<Event[]> {
+    const { data, error } = await this.client
+      .from("events")
+      .select(SELECT)
+      .in("status", ["planned", "attended"])
+      .order("start", { ascending: false });
+    if (error) throw error;
+    return ((data ?? []) as unknown as EventRow[])
+      .map(toEvent)
+      .filter((e) => e.attendees.length > 0);
+  }
+
   /** Events whose `start` falls in [from, to], time-ascending. */
   async listInRange(input: { from: string; to: string }): Promise<Event[]> {
     const { data, error } = await this.client

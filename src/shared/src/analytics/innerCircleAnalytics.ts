@@ -1,3 +1,5 @@
+import type { PlatformCommsTouchpoint } from "../comms/CommsPlatformMessagesClient";
+import type { Event } from "../events/EventsClient";
 import type { Interaction } from "../interactions/InteractionsClient";
 import type { OpenThread } from "../open-threads/OpenThreadsClient";
 
@@ -5,27 +7,18 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Points per touchpoint type — tuned for comparable scale across signals. */
 export const CLOSENESS_WEIGHTS = {
-  interaction: 3,
   comms: 2,
   note: 2,
+  upcoming: 2,
+  attended: 3,
   commitment: 2,
 } as const;
 
-const COMMS_KINDS = new Set([
-  "email",
-  "sms",
-  "imessage",
-  "phone_call",
-  "whatsapp",
-  "instagram_dm",
-  "x_dm",
-  "tiktok_dm",
-]);
-
 export interface ClosenessSignalCounts {
-  interactions: number;
   comms: number;
   notes: number;
+  upcoming: number;
+  attended: number;
   commitments: number;
 }
 
@@ -55,31 +48,36 @@ function isNoteKind(kind: string): boolean {
   return kind === "note";
 }
 
-function isCommsKind(kind: string): boolean {
-  return COMMS_KINDS.has(kind);
-}
-
-function isOccurredInteraction(i: Interaction): boolean {
-  return i.status === "occurred" || i.status === "attended";
-}
-
-function inWindow(iso: string, cutoff: number | null, now: number): boolean {
+/** Rolling window: past `windowDays` plus future `windowDays` when `includeFuture`. */
+function inWindow(
+  iso: string,
+  windowDays: number | null,
+  nowMs: number,
+  includeFuture = false,
+): boolean {
   const t = new Date(iso).getTime();
-  if (t > now) return false;
-  if (cutoff === null) return true;
-  return t >= cutoff;
+  if (windowDays === null) return includeFuture || t <= nowMs;
+
+  const span = windowDays * MS_PER_DAY;
+  const pastStart = nowMs - span;
+  if (t >= pastStart && t <= nowMs) return true;
+  if (includeFuture && t > nowMs && t <= nowMs + span) return true;
+  return false;
 }
 
 function emptySignals(): ClosenessSignalCounts {
-  return { interactions: 0, comms: 0, notes: 0, commitments: 0 };
+  return { comms: 0, notes: 0, upcoming: 0, attended: 0, commitments: 0 };
 }
 
 /**
- * Rank contacts by closeness using interactions (in-person), comms, free-form
- * notes, and commitments opened. Returns top `limit` contacts by score.
+ * Rank contacts by closeness using platform comms, calendar events the
+ * contact is attending (planned / attended), context notes, and commitments.
  */
 export function innerCircleCloseness(input: {
   contacts: InnerCircleContactInput[];
+  platformComms: PlatformCommsTouchpoint[];
+  events: Event[];
+  /** Interactions — only `note` kinds are counted. */
   interactions: Interaction[];
   openThreads: OpenThread[];
   /** relationship id → contact id */
@@ -91,13 +89,18 @@ export function innerCircleCloseness(input: {
   const now = input.now ?? new Date();
   const nowMs = now.getTime();
   const windowDays = input.windowDays ?? null;
-  const cutoff =
-    windowDays === null ? null : nowMs - windowDays * MS_PER_DAY;
   const limit = input.limit ?? 12;
+
+  const knownContactIds = new Set(input.contacts.map((c) => c.contactId));
 
   const scores = new Map<
     string,
-    { score: number; signals: ClosenessSignalCounts; relationshipId: string; name: string }
+    {
+      score: number;
+      signals: ClosenessSignalCounts;
+      relationshipId: string;
+      name: string;
+    }
   >();
 
   for (const c of input.contacts) {
@@ -114,38 +117,50 @@ export function innerCircleCloseness(input: {
     key: keyof ClosenessSignalCounts,
     points: number,
   ) => {
+    if (!knownContactIds.has(contactId)) return;
     const row = scores.get(contactId);
     if (!row) return;
     row.score += points;
     row.signals[key] += 1;
   };
 
-  for (const i of input.interactions) {
-    if (!inWindow(i.time, cutoff, nowMs)) continue;
+  for (const msg of input.platformComms) {
+    if (!inWindow(msg.sentAt, windowDays, nowMs)) continue;
+    bump(msg.contactId, "comms", CLOSENESS_WEIGHTS.comms);
+  }
+
+  for (const event of input.events) {
+    const isUpcoming = event.status === "planned";
+    if (!inWindow(event.start, windowDays, nowMs, isUpcoming)) continue;
 
     let key: keyof ClosenessSignalCounts | null = null;
     let points = 0;
 
-    if (isNoteKind(i.kind)) {
-      key = "notes";
-      points = CLOSENESS_WEIGHTS.note;
-    } else if (isCommsKind(i.kind)) {
-      key = "comms";
-      points = CLOSENESS_WEIGHTS.comms;
-    } else if (isOccurredInteraction(i)) {
-      key = "interactions";
-      points = CLOSENESS_WEIGHTS.interaction;
+    if (isUpcoming) {
+      key = "upcoming";
+      points = CLOSENESS_WEIGHTS.upcoming;
+    } else if (event.status === "attended") {
+      key = "attended";
+      points = CLOSENESS_WEIGHTS.attended;
     }
 
     if (!key) continue;
 
+    for (const attendee of event.attendees) {
+      bump(attendee.id, key, points);
+    }
+  }
+
+  for (const i of input.interactions) {
+    if (!isNoteKind(i.kind)) continue;
+    if (!inWindow(i.time, windowDays, nowMs)) continue;
     for (const c of i.contacts) {
-      bump(c.id, key, points);
+      bump(c.id, "notes", CLOSENESS_WEIGHTS.note);
     }
   }
 
   for (const thread of input.openThreads) {
-    if (!inWindow(thread.createdAt, cutoff, nowMs)) continue;
+    if (!inWindow(thread.createdAt, windowDays, nowMs)) continue;
     for (const relId of thread.relationshipIds) {
       const contactId = input.contactIdByRelationshipId[relId];
       if (!contactId) continue;

@@ -1,6 +1,7 @@
 import { innerCircleCloseness, CLOSENESS_WEIGHTS } from "./innerCircleAnalytics";
 import type { Interaction } from "../interactions/InteractionsClient";
 import type { OpenThread } from "../open-threads/OpenThreadsClient";
+import type { Event } from "../events/EventsClient";
 
 const now = new Date("2026-05-21T12:00:00Z");
 
@@ -8,11 +9,30 @@ function ix(over: Partial<Interaction>): Interaction {
   return {
     id: "ix-1",
     time: "2026-05-20T10:00:00Z",
-    kind: "coffee",
+    kind: "note",
     category: "personal",
     notes: null,
     status: "occurred",
     contacts: [{ id: "c1", name: "Alex" }],
+    ...over,
+  };
+}
+
+function ev(over: Partial<Event>): Event {
+  return {
+    id: "ev-1",
+    title: "Coffee",
+    start: "2026-05-20T10:00:00Z",
+    end: "2026-05-20T11:00:00Z",
+    isAllDay: false,
+    location: null,
+    aim: null,
+    requiredPrep: null,
+    status: "attended",
+    type: "meeting",
+    source: "manual",
+    externalEventId: null,
+    attendees: [{ id: "c1", name: "Alex" }],
     ...over,
   };
 }
@@ -44,23 +64,29 @@ const contactIdByRelationshipId = {
 };
 
 describe("innerCircleCloseness", () => {
-  it("weights interactions, comms, notes, and commitments", () => {
+  it("weights platform comms, events, notes, and commitments", () => {
     const result = innerCircleCloseness({
       contacts,
       contactIdByRelationshipId,
+      platformComms: [
+        { contactId: "c1", sentAt: "2026-05-20T10:00:00Z" },
+        { contactId: "c1", sentAt: "2026-05-19T09:00:00Z" },
+      ],
+      events: [
+        ev({
+          status: "attended",
+          start: "2026-05-18T10:00:00Z",
+          attendees: [{ id: "c1", name: "Alex" }],
+        }),
+        ev({
+          id: "ev-2",
+          status: "planned",
+          start: "2026-05-25T10:00:00Z",
+          attendees: [{ id: "c2", name: "Blake" }],
+        }),
+      ],
       interactions: [
         ix({
-          time: "2026-05-20T10:00:00Z",
-          contacts: [{ id: "c1", name: "Alex" }],
-        }),
-        ix({
-          id: "ix-2",
-          kind: "imessage",
-          contacts: [{ id: "c1", name: "Alex" }],
-        }),
-        ix({
-          id: "ix-3",
-          kind: "note",
           contacts: [{ id: "c2", name: "Blake" }],
         }),
       ],
@@ -72,14 +98,29 @@ describe("innerCircleCloseness", () => {
     expect(result.contacts[0]).toMatchObject({
       contactId: "c1",
       score:
-        CLOSENESS_WEIGHTS.interaction + CLOSENESS_WEIGHTS.comms,
-      signals: { interactions: 1, comms: 1, notes: 0, commitments: 0 },
+        CLOSENESS_WEIGHTS.comms * 2 + CLOSENESS_WEIGHTS.attended,
+      signals: {
+        comms: 2,
+        notes: 0,
+        upcoming: 0,
+        attended: 1,
+        commitments: 0,
+      },
       relativeCloseness: 100,
     });
     expect(result.contacts[1]).toMatchObject({
       contactId: "c2",
-      score: CLOSENESS_WEIGHTS.note + CLOSENESS_WEIGHTS.commitment,
-      signals: { interactions: 0, comms: 0, notes: 1, commitments: 1 },
+      score:
+        CLOSENESS_WEIGHTS.upcoming +
+        CLOSENESS_WEIGHTS.note +
+        CLOSENESS_WEIGHTS.commitment,
+      signals: {
+        comms: 0,
+        notes: 1,
+        upcoming: 1,
+        attended: 0,
+        commitments: 1,
+      },
     });
   });
 
@@ -87,12 +128,11 @@ describe("innerCircleCloseness", () => {
     const result = innerCircleCloseness({
       contacts,
       contactIdByRelationshipId,
-      interactions: [
-        ix({
-          time: "2026-04-01T10:00:00Z",
-          contacts: [{ id: "c1", name: "Alex" }],
-        }),
+      platformComms: [
+        { contactId: "c1", sentAt: "2026-04-01T10:00:00Z" },
       ],
+      events: [],
+      interactions: [],
       openThreads: [],
       windowDays: 7,
       now,
@@ -100,31 +140,33 @@ describe("innerCircleCloseness", () => {
     expect(result.contacts).toHaveLength(0);
   });
 
-  it("includes all-time history when windowDays is null", () => {
+  it("includes all-time platform comms when windowDays is null", () => {
     const result = innerCircleCloseness({
       contacts,
       contactIdByRelationshipId,
-      interactions: [
-        ix({
-          time: "2025-01-01T10:00:00Z",
-          contacts: [{ id: "c1", name: "Alex" }],
-        }),
+      platformComms: [
+        { contactId: "c1", sentAt: "2025-01-01T10:00:00Z" },
       ],
+      events: [],
+      interactions: [],
       openThreads: [],
       windowDays: null,
       now,
     });
     expect(result.contacts).toHaveLength(1);
-    expect(result.contacts[0].score).toBe(CLOSENESS_WEIGHTS.interaction);
+    expect(result.contacts[0].score).toBe(CLOSENESS_WEIGHTS.comms);
   });
 
-  it("ignores planned interactions and counts closed commitments", () => {
+  it("ignores non-note interactions and counts closed commitments", () => {
     const result = innerCircleCloseness({
       contacts,
       contactIdByRelationshipId,
+      platformComms: [],
+      events: [],
       interactions: [
         ix({
-          status: "planned",
+          kind: "coffee",
+          status: "occurred",
           contacts: [{ id: "c1", name: "Alex" }],
         }),
       ],
@@ -143,9 +185,10 @@ describe("innerCircleCloseness", () => {
         contactId: "c1",
         score: CLOSENESS_WEIGHTS.commitment,
         signals: {
-          interactions: 0,
           comms: 0,
           notes: 0,
+          upcoming: 0,
+          attended: 0,
           commitments: 1,
         },
       }),

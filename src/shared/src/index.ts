@@ -534,6 +534,12 @@ export type {
   CommsTimelineItem,
 } from "./comms/relationshipCommsTimeline";
 
+export { CommsPlatformMessagesClient } from "./comms/CommsPlatformMessagesClient";
+export type {
+  PlatformCommsTouchpoint,
+  CommsPlatformMessagesClientConfig,
+} from "./comms/CommsPlatformMessagesClient";
+
 export { InteractionsClient } from "./interactions/InteractionsClient";
 export type {
   Interaction,

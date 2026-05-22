@@ -14,6 +14,58 @@ function makeListQuery() {
   return { from, select, gte, lte, order };
 }
 
+describe("EventsClient.listForAttendeeCloseness", () => {
+  it("returns planned and attended events that have attendees", async () => {
+    const order = jest.fn().mockResolvedValue({
+      data: [
+        {
+          id: "ev-1",
+          title: "Dinner",
+          start: "2026-05-20T19:00:00Z",
+          end: "2026-05-20T21:00:00Z",
+          is_all_day: false,
+          location: null,
+          aim: null,
+          required_prep: null,
+          status: "attended",
+          type: "personal",
+          source: "manual",
+          external_event_id: null,
+          event_attendees: [{ contact_id: "c-1", contacts: { name: "Sam" } }],
+        },
+        {
+          id: "ev-2",
+          title: "Solo block",
+          start: "2026-05-21T10:00:00Z",
+          end: "2026-05-21T11:00:00Z",
+          is_all_day: false,
+          location: null,
+          aim: null,
+          required_prep: null,
+          status: "planned",
+          type: "work",
+          source: "manual",
+          external_event_id: null,
+          event_attendees: [],
+        },
+      ],
+      error: null,
+    });
+    const select = jest.fn(() => ({ order }));
+    const inFilter = jest.fn(() => ({ order }));
+    const from = jest.fn(() => ({ select: jest.fn(() => ({ in: inFilter })) }));
+    const supa = { from } as unknown as SupabaseClient;
+    const client = new EventsClient(supa);
+
+    const result = await client.listForAttendeeCloseness();
+
+    expect(inFilter).toHaveBeenCalledWith("status", ["planned", "attended"]);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("ev-1");
+    expect(result[0].attendees[0].id).toBe("c-1");
+  });
+});
+
 describe("EventsClient.listInRange", () => {
   it("queries events within [from, to] start-ascending and maps attendees", async () => {
     const q = makeListQuery();
