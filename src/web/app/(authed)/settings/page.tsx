@@ -50,8 +50,16 @@ export default async function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Subscription, integrations, and account connections."
+        subtitle="Subscription, integrations, account connections, Mac relay, and Connect MCP."
       />
+      <nav
+        aria-label="Settings sections"
+        className="-mt-4 mb-6 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-fg-muted"
+      >
+        <a href="#connect-mcp" className="hover:text-fg hover:underline">
+          Connect MCP
+        </a>
+      </nav>
       <BillingSection
         initialIsActive={subscription.isActive}
         initialStatus={subscription.status}

@@ -77,6 +77,7 @@ export function McpSection() {
   }
 
   return (
+    <div id="connect-mcp" className="scroll-mt-8">
     <Section title="Connect MCP" fixed>
       <div className="space-y-3">
         <Card>
@@ -184,5 +185,6 @@ export function McpSection() {
         ) : null}
       </div>
     </Section>
+    </div>
   );
 }
