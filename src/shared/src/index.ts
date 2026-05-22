@@ -658,6 +658,19 @@ export type {
 export { MessagesClient, normalizePhone } from "./messages/MessagesClient";
 export { buildRelaySetupPrompt } from "./messages/relaySetupPrompt";
 export type { RelaySetupPromptInput } from "./messages/relaySetupPrompt";
+export { McpClient } from "./mcp/McpClient";
+export { buildMcpSetupPrompt } from "./mcp/mcpSetupPrompt";
+export {
+  generateMcpApiKey,
+  hashMcpApiKey,
+  mcpApiKeyPrefix,
+  mcpServerUrlFromSupabaseUrl,
+} from "./mcp/mcpApiKey";
+export type { McpSetupPromptInput } from "./mcp/mcpSetupPrompt";
+export type {
+  McpApiKeyRecord,
+  CreateMcpApiKeyResult,
+} from "./mcp/McpClient";
 export type {
   MessageThread,
   Message,

@@ -28,6 +28,7 @@ import {
   MessagesClient,
   AmbientIntelligencePreferencesClient,
   PocketClient,
+  McpClient,
 } from "@related/shared";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 
@@ -85,6 +86,7 @@ function build() {
     outlook: new OutlookClient(supabase),
     messages: new MessagesClient(supabase),
     pocket: new PocketClient(supabase),
+    mcp: new McpClient(supabase),
     ambientIntelligencePreferences: new AmbientIntelligencePreferencesClient(
       supabase,
       resolveOwnerId,

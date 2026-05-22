@@ -14,6 +14,7 @@ import { AmbientIntelligenceSection } from "./_AmbientIntelligenceSection";
 import { IntegrationsSection } from "./_IntegrationsSection";
 import { PocketSection } from "./_PocketSection";
 import { RelaySection } from "./_RelaySection";
+import { McpSection } from "./_McpSection";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +96,7 @@ export default async function SettingsPage() {
         initialAmbiguities={pocketAmbiguities}
       />
       <RelaySection />
+      <McpSection />
     </>
   );
 }
