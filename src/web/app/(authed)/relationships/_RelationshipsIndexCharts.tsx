@@ -353,7 +353,7 @@ export function RelationshipsIndexCharts({
           </div>
         )}
 
-        <div className="mt-5">
+        <div className={section === "inner" ? "mt-3" : "mt-5"}>
           {section === "growth" && growthChart === "people" && (
             <SimpleBarChart
               buckets={peopleBuckets}

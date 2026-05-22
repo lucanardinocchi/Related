@@ -24,8 +24,10 @@ const CURRENT_WINDOW_DAYS: Record<CurrentWindow, number> = {
   "90d": 90,
 };
 
-const RING_RADII = [52, 96, 140] as const;
+const RING_RADII = [36, 64, 92] as const;
 const RING_CAPS = [3, 6, 12] as const;
+const SVG_SIZE = 280;
+const SVG_CX = SVG_SIZE / 2;
 
 const SIGNAL_COLORS = {
   comms: "#5b7cfa",
@@ -34,6 +36,14 @@ const SIGNAL_COLORS = {
   attended: "#8b6bb8",
   commitments: "#c9a227",
 } as const;
+
+const LEGEND: { key: keyof typeof SIGNAL_COLORS; label: string }[] = [
+  { key: "comms", label: "Comms" },
+  { key: "attended", label: "Attended" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "notes", label: "Notes" },
+  { key: "commitments", label: "Commits" },
+];
 
 interface Props {
   contacts: InnerCircleContactInput[];
@@ -77,9 +87,7 @@ function nodePosition(
 }
 
 function InnerCircleSvg({ contacts }: { contacts: InnerCircleContact[] }) {
-  const cx = 200;
-  const cy = 200;
-  const size = 400;
+  const cy = SVG_CX;
 
   const byRing: InnerCircleContact[][] = [[], [], []];
   for (let i = 0; i < contacts.length; i++) {
@@ -88,53 +96,38 @@ function InnerCircleSvg({ contacts }: { contacts: InnerCircleContact[] }) {
 
   return (
     <svg
-      viewBox={`0 0 ${size} ${size}`}
+      viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
       role="img"
       aria-label="Inner circle closeness"
-      className="mx-auto block w-full max-w-[400px]"
+      className="mx-auto block w-full max-w-[220px]"
     >
-      <circle
-        cx={cx}
-        cy={cy}
-        r={RING_RADII[2]}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1}
-        className="text-border"
-        strokeDasharray="4 6"
-      />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={RING_RADII[1]}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1}
-        className="text-border/70"
-        strokeDasharray="4 6"
-      />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={RING_RADII[0]}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1}
-        className="text-border/50"
-      />
+      {RING_RADII.map((r, i) => (
+        <circle
+          key={r}
+          cx={SVG_CX}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1}
+          className={i === 0 ? "text-border/50" : "text-border"}
+          strokeDasharray={i === 0 ? undefined : "4 6"}
+          opacity={i === 0 ? 1 : i === 1 ? 0.7 : 1}
+        />
+      ))}
 
       <circle
-        cx={cx}
+        cx={SVG_CX}
         cy={cy}
-        r={18}
+        r={14}
         className="fill-bg stroke-border"
         strokeWidth={1}
       />
       <text
-        x={cx}
-        y={cy + 4}
+        x={SVG_CX}
+        y={cy + 3}
         textAnchor="middle"
-        className="fill-fg-muted text-[11px] font-medium"
+        className="fill-fg-muted text-[10px] font-medium"
       >
         You
       </text>
@@ -147,15 +140,15 @@ function InnerCircleSvg({ contacts }: { contacts: InnerCircleContact[] }) {
           rank,
           indexOnRing,
           peers.length,
-          cx,
+          SVG_CX,
           cy,
         );
-        const r = 10 + (person.relativeCloseness / 100) * 10;
+        const r = 7 + (person.relativeCloseness / 100) * 6;
 
         return (
           <g key={person.contactId}>
             <line
-              x1={cx}
+              x1={SVG_CX}
               y1={cy}
               x2={x}
               y2={y}
@@ -178,17 +171,9 @@ function InnerCircleSvg({ contacts }: { contacts: InnerCircleContact[] }) {
               x={x}
               y={y + 3}
               textAnchor="middle"
-              className="fill-fg font-[family-name:var(--font-jetbrains-mono)] text-[9px] font-semibold"
+              className="fill-fg font-[family-name:var(--font-jetbrains-mono)] text-[8px] font-semibold"
             >
               {initials(person.name)}
-            </text>
-            <text
-              x={x}
-              y={y + r + 14}
-              textAnchor="middle"
-              className="fill-fg text-[11px]"
-            >
-              {person.name.split(" ")[0]}
             </text>
           </g>
         );
@@ -229,7 +214,7 @@ function SignalBar({ person }: { person: InnerCircleContact }) {
 
   return (
     <div
-      className="flex h-1.5 overflow-hidden rounded-full bg-bg"
+      className="flex h-1 overflow-hidden rounded-full bg-bg"
       title={segments.map((s) => `${s.label}: ${s.value}`).join(", ")}
     >
       {segments.map((s) => (
@@ -280,14 +265,9 @@ export function InnerCircleChart({
     ],
   );
 
-  const modeLabel =
-    mode === "current"
-      ? `last ${CURRENT_WINDOW_DAYS[currentWindow]} days`
-      : "all time";
-
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         <Pill active={mode === "current"} onClick={() => setMode("current")}>
           Closest now
         </Pill>
@@ -296,85 +276,77 @@ export function InnerCircleChart({
         </Pill>
         {mode === "current" && (
           <>
-            <span className="mx-1 h-4 w-px bg-border" />
+            <span className="mx-0.5 h-3.5 w-px bg-border" />
             <Pill
               active={currentWindow === "30d"}
               onClick={() => setCurrentWindow("30d")}
             >
-              30 days
+              30d
             </Pill>
             <Pill
               active={currentWindow === "90d"}
               onClick={() => setCurrentWindow("90d")}
             >
-              90 days
+              90d
             </Pill>
+          </>
+        )}
+        {rankings.contacts.length > 0 && (
+          <>
+            <span className="mx-0.5 h-3.5 w-px bg-border" />
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-fg-subtle">
+              {LEGEND.map(({ key, label }) => (
+                <span key={key} className="flex items-center gap-1">
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-sm"
+                    style={{ backgroundColor: SIGNAL_COLORS[key] }}
+                  />
+                  {label}
+                </span>
+              ))}
+            </div>
           </>
         )}
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-2 text-[12px] text-fg-muted">
-        {(
-          [
-            ["comms", "Synced comms"],
-            ["attended", "Attended events"],
-            ["upcoming", "Upcoming events"],
-            ["notes", "Context notes"],
-            ["commitments", "Commitments"],
-          ] as const
-        ).map(([key, label]) => (
-          <div key={key} className="flex items-center gap-2">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-sm"
-              style={{ backgroundColor: SIGNAL_COLORS[key] }}
-            />
-            {label}
-          </div>
-        ))}
-      </div>
-
       {rankings.contacts.length === 0 ? (
-        <p className="text-[13px] text-fg-muted">
-          No closeness signals in this period yet — synced comms, shared
-          calendar events, context notes, or commitments will populate your
-          inner circle.
+        <p className="text-[12px] leading-[18px] text-fg-muted">
+          No closeness signals in this period yet.
         </p>
       ) : (
-        <>
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,200px)_1fr] sm:items-start sm:gap-3">
           <InnerCircleSvg contacts={rankings.contacts} />
-          <p className="text-center text-[12px] text-fg-subtle">
-            Ring position and dot size reflect relative closeness ({modeLabel}).
-          </p>
-          <ol className="space-y-2">
+          <ol className="min-h-0 space-y-0.5">
             {rankings.contacts.map((person, i) => (
               <li
                 key={person.contactId}
-                className="flex items-center gap-3 rounded-lg border border-border bg-bg px-3 py-2"
+                className="flex items-center gap-2 rounded-md border border-border/80 bg-bg px-2 py-1"
               >
-                <Mono className="w-5 shrink-0 text-[13px] text-fg-subtle">
+                <Mono className="w-4 shrink-0 text-[11px] text-fg-subtle">
                   {i + 1}
                 </Mono>
                 <div className="min-w-0 flex-1">
-                  <Link
-                    href={`/relationships/${person.relationshipId}`}
-                    className="truncate text-[14px] font-medium text-fg hover:underline"
-                  >
-                    {person.name}
-                  </Link>
-                  <div className="mt-1.5">
-                    <SignalBar person={person} />
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Link
+                      href={`/relationships/${person.relationshipId}`}
+                      className="truncate text-[13px] font-medium text-fg hover:underline"
+                    >
+                      {person.name}
+                    </Link>
+                    <Mono className="shrink-0 text-[12px] tabular-nums">
+                      {person.score}
+                      <span className="text-fg-subtle">
+                        {" "}
+                        · {person.relativeCloseness}%
+                      </span>
+                    </Mono>
                   </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <Mono className="text-[15px]">{person.score}</Mono>
-                  <div className="text-[11px] text-fg-subtle">
-                    {person.relativeCloseness}%
-                  </div>
+                  <SignalBar person={person} />
                 </div>
               </li>
             ))}
           </ol>
-        </>
+        </div>
       )}
     </div>
   );
