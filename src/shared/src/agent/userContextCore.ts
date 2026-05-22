@@ -3,12 +3,12 @@ import {
   summariseCalendarDensity,
   type CalendarDensitySignal,
   type RawCalendarEvent,
-} from "../signals/calendarDensity";
+} from "../signals/calendarDensity.ts";
 import {
   summariseSleep,
   type SleepSignal,
   type RawSleepRecord,
-} from "../signals/sleepSummary";
+} from "../signals/sleepSummary.ts";
 
 export type { CalendarDensitySignal, RawCalendarEvent, SleepSignal, RawSleepRecord };
 
