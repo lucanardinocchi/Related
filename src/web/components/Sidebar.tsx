@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   Calendar as CalendarIcon,
   CircleCheck,
   HeartHandshake,
   LogOut,
+  MessageSquarePlus,
   MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
@@ -14,6 +16,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { FeedbackModal } from "@/components/FeedbackModal";
 import { cn } from "@/lib/cn";
 import { usePersistedBoolean } from "@/lib/usePersistedBoolean";
 
@@ -83,11 +86,19 @@ function NavLink({
   );
 }
 
-export function Sidebar({ userEmail }: { userEmail: string }) {
+export function Sidebar({
+  userEmail,
+  gmailConnected,
+}: {
+  userEmail: string;
+  gmailConnected: boolean;
+}) {
   const pathname = usePathname();
   const [collapsed, toggleCollapsed] = usePersistedBoolean(COLLAPSED_KEY);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
+    <>
     <aside
       data-collapsed={collapsed ? "true" : "false"}
       className={cn(
@@ -176,9 +187,25 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
       <div
         className={cn(
           "py-3",
-          collapsed ? "flex justify-center px-1" : "px-4",
+          collapsed ? "flex flex-col items-center gap-2 px-1" : "px-4",
         )}
       >
+        <button
+          type="button"
+          onClick={() => setFeedbackOpen(true)}
+          aria-label="Send feedback"
+          title="Send feedback"
+          className={cn(
+            "inline-flex items-center rounded text-fg-subtle hover:bg-hover hover:text-fg",
+            collapsed
+              ? "h-8 w-8 justify-center"
+              : "gap-2 px-2 py-1.5 text-[13px] text-fg-muted",
+          )}
+        >
+          <MessageSquarePlus size={16} />
+          {collapsed ? null : <span>Feedback</span>}
+        </button>
+
         {collapsed ? (
           <form action="/auth/sign-out" method="post">
             <button
@@ -207,5 +234,12 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
         )}
       </div>
     </aside>
+    <FeedbackModal
+      open={feedbackOpen}
+      onClose={() => setFeedbackOpen(false)}
+      userEmail={userEmail}
+      gmailConnected={gmailConnected}
+    />
+    </>
   );
 }

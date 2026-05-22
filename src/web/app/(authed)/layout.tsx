@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { tokenHasGmailAccess } from "@related/shared";
+import { getServerDeps } from "@/lib/deps/server";
 import { AuthedLayoutShell } from "./_AuthedLayoutShell";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ export default async function AuthedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createServerSupabase();
+  const { supabase, userProviderTokens } = await getServerDeps();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -18,7 +19,15 @@ export default async function AuthedLayout({
     redirect("/sign-in");
   }
 
+  const googleToken = await userProviderTokens.getForProvider("google");
+  const gmailConnected = tokenHasGmailAccess(googleToken?.scopes);
+
   return (
-    <AuthedLayoutShell userEmail={user.email}>{children}</AuthedLayoutShell>
+    <AuthedLayoutShell
+      userEmail={user.email}
+      gmailConnected={gmailConnected}
+    >
+      {children}
+    </AuthedLayoutShell>
   );
 }

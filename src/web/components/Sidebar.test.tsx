@@ -14,7 +14,7 @@ describe("<Sidebar />", () => {
 
   it("collapses nav labels when the user clicks Collapse sidebar", async () => {
     const user = userEvent.setup();
-    render(<Sidebar userEmail="user@example.com" />);
+    render(<Sidebar userEmail="user@example.com" gmailConnected={false} />);
 
     expect(screen.getByText("Relationships")).toBeInTheDocument();
 
@@ -29,10 +29,23 @@ describe("<Sidebar />", () => {
     expect(screen.getByRole("link", { name: "Relationships" })).toBeInTheDocument();
   });
 
+  it("opens the feedback modal when the user clicks Feedback", async () => {
+    const user = userEvent.setup();
+    render(<Sidebar userEmail="user@example.com" gmailConnected={false} />);
+
+    await user.click(screen.getByRole("button", { name: "Send feedback" }));
+
+    expect(screen.getByRole("dialog", { name: "Send feedback" })).toBeInTheDocument();
+    expect(screen.getByText("Sending as")).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Send feedback" }),
+    ).toHaveTextContent("user@example.com");
+  });
+
   it("restores labels when the user clicks Expand sidebar", async () => {
     const user = userEvent.setup();
     window.localStorage.setItem("related.sidebar.collapsed", "1");
-    render(<Sidebar userEmail="user@example.com" />);
+    render(<Sidebar userEmail="user@example.com" gmailConnected={false} />);
 
     const aside = document.querySelector("aside")!;
     expect(aside).toHaveAttribute("data-collapsed", "true");
