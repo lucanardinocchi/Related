@@ -1,18 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AgentCaller, AgentPrompt, CandidateActionInput } from "./PassEngine";
+import type { AgentCaller, AgentPrompt, CandidateActionInput } from "./agentPassRun";
 
 export interface EdgeFunctionAgentCallerOptions {
   supabase: SupabaseClient;
-  /** Defaults to 'ambient-pass'. Override for staging variants. */
   functionName?: string;
 }
 
-/**
- * Client-side AgentCaller that delegates the actual Sonnet 4.6 call to a
- * Supabase Edge Function (`ambient-pass`). The API key never leaves the
- * server. The client sends the prompt; the function returns the parsed
- * Candidate Action list.
- */
 export class EdgeFunctionAgentCaller implements AgentCaller {
   private readonly supabase: SupabaseClient;
   private readonly functionName: string;
@@ -23,22 +16,19 @@ export class EdgeFunctionAgentCaller implements AgentCaller {
   }
 
   async propose(prompt: AgentPrompt): Promise<CandidateActionInput[]> {
-    const { data, error } = await this.supabase.functions.invoke(
-      this.functionName,
-      { body: { prompt } },
-    );
+    const { data, error } = await this.supabase.functions.invoke(this.functionName, { body: { prompt } });
     if (error) {
-      throw new Error(
-        (error as { message?: string }).message ??
-          `ambient-pass function call failed`,
-      );
+      const ctx = error as { context?: Response; message?: string };
+      const detail = ctx.context
+        ? ((await ctx.context.json().catch(() => null)) as { error?: string } | null)
+        : null;
+      throw new Error(detail?.error ?? ctx.message ?? `${this.functionName} function call failed`);
     }
-    const actions = (data as { actions?: unknown })?.actions;
-    if (!Array.isArray(actions)) {
-      throw new Error(
-        "ambient-pass response missing `actions` array",
-      );
+    const json = (data ?? {}) as { actions?: unknown; error?: string };
+    if (json.error) throw new Error(json.error);
+    if (!Array.isArray(json.actions)) {
+      throw new Error(`${this.functionName} response missing \`actions\` array`);
     }
-    return actions as CandidateActionInput[];
+    return json.actions as CandidateActionInput[];
   }
 }

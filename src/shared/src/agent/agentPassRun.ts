@@ -9,7 +9,7 @@ import type {
   PreviousCandidateSet,
 } from "../candidates/candidateSet";
 import type { NotificationDispatcher } from "../notifications/NotificationDispatcher";
-import type { UserContextSnapshot } from "./UserContextBuilder";
+import type { UserContextSnapshot } from "./userContextCore";
 import type { RelationshipContextSnapshot } from "./RelationshipContextBuilder";
 
 export type {
@@ -50,7 +50,11 @@ export interface AgentPassRunDeps {
   buildRelationshipContext: (
     relationshipId: string,
   ) => Promise<RelationshipContextSnapshot>;
-  buildUserContext: (userId: string, asOf: Date) => Promise<UserContextSnapshot>;
+  buildUserContext: (
+    userId: string,
+    asOf: Date,
+    relationshipId: string,
+  ) => Promise<UserContextSnapshot>;
   dispatcher?: NotificationDispatcher | null;
 }
 
@@ -111,7 +115,7 @@ export async function runAgentPass(
     };
   }
 
-  const userContext = await deps.buildUserContext(ownerId, new Date());
+  const userContext = await deps.buildUserContext(ownerId, new Date(), relationshipId);
 
   const prompt: AgentPrompt = {
     mode,
