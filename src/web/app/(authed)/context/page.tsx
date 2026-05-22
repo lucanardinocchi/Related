@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { getServerDeps } from "@/lib/deps/server";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ContextEditor } from "./_ContextEditor";
+import { ContextOnboardingLauncher } from "./_ContextOnboardingLauncher";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,9 @@ export default async function ContextPage() {
         initialSituationalState={situationalState}
         initialOperatorStrengths={operatorStrengths}
       />
+      <Suspense fallback={null}>
+        <ContextOnboardingLauncher />
+      </Suspense>
     </>
   );
 }
