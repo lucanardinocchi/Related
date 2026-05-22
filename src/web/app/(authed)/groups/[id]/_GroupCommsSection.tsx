@@ -11,6 +11,7 @@ import {
   tokenHasTikTokAccess,
   tokenHasWhatsAppAccess,
   tokenHasXAccess,
+  assertIntegrationOk,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { EmptyState, Section } from "@/components/ui";
@@ -409,6 +410,7 @@ export function GroupCommsSection({
             whatsappGroupId: waGroupId,
             text,
           });
+          assertIntegrationOk(r.status, "WhatsApp");
           if (r.status !== "ok") throw new Error("Could not send WhatsApp message.");
           break;
         }
@@ -419,6 +421,7 @@ export function GroupCommsSection({
             xDmConversationId: xConvId,
             text,
           });
+          assertIntegrationOk(r.status, "X");
           if (r.status !== "ok") throw new Error("Could not send X group DM.");
           break;
         }
@@ -429,6 +432,7 @@ export function GroupCommsSection({
             tiktokDmConversationId: ttConvId,
             text,
           });
+          assertIntegrationOk(r.status, "TikTok");
           if (r.status !== "ok") throw new Error("Could not send TikTok group DM.");
           break;
         }

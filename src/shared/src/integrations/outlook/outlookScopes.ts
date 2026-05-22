@@ -41,3 +41,24 @@ export function tokenHasOutlookMailAccess(
     scopes.includes(OUTLOOK_SCOPE_MAIL_SEND)
   );
 }
+
+/** Returns remaining scopes after removing Calendar, or null if none left. */
+export function outlookScopesWithoutCalendar(scopes: string): string | null {
+  const remaining = scopes
+    .split(/\s+/)
+    .filter((s) => s.length > 0 && s !== OUTLOOK_SCOPE_CALENDARS_READ);
+  return remaining.length > 0 ? remaining.join(" ") : null;
+}
+
+/** Returns remaining scopes after removing Mail, or null if none left. */
+export function outlookScopesWithoutMail(scopes: string): string | null {
+  const remaining = scopes
+    .split(/\s+/)
+    .filter(
+      (s) =>
+        s.length > 0 &&
+        s !== OUTLOOK_SCOPE_MAIL_READ &&
+        s !== OUTLOOK_SCOPE_MAIL_SEND,
+    );
+  return remaining.length > 0 ? remaining.join(" ") : null;
+}

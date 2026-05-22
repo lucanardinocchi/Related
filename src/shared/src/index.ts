@@ -417,6 +417,8 @@ export {
   GOOGLE_INTEGRATION_SCOPES,
   tokenHasGmailAccess,
   tokenHasCalendarAccess,
+  googleScopesWithoutCalendar,
+  googleScopesWithoutGmail,
 } from "./integrations/google/googleScopes";
 
 export {
@@ -429,7 +431,16 @@ export {
   OUTLOOK_INTEGRATION_SCOPES,
   tokenHasOutlookCalendarAccess,
   tokenHasOutlookMailAccess,
+  outlookScopesWithoutCalendar,
+  outlookScopesWithoutMail,
 } from "./integrations/outlook/outlookScopes";
+
+export {
+  isNeedsReconsent,
+  integrationReconsentError,
+  assertIntegrationOk,
+} from "./integrations/integrationStatus";
+export type { IntegrationNeedsReconsentStatus } from "./integrations/integrationStatus";
 
 export { GmailClient } from "./integrations/GmailClient";
 export type {

@@ -36,3 +36,24 @@ export function tokenHasCalendarAccess(
   if (!scopes) return false;
   return scopes.includes(GOOGLE_SCOPE_CALENDAR_READONLY);
 }
+
+/** Returns remaining scopes after removing Calendar, or null if none left. */
+export function googleScopesWithoutCalendar(scopes: string): string | null {
+  const remaining = scopes
+    .split(/\s+/)
+    .filter((s) => s.length > 0 && s !== GOOGLE_SCOPE_CALENDAR_READONLY);
+  return remaining.length > 0 ? remaining.join(" ") : null;
+}
+
+/** Returns remaining scopes after removing Gmail, or null if none left. */
+export function googleScopesWithoutGmail(scopes: string): string | null {
+  const remaining = scopes
+    .split(/\s+/)
+    .filter(
+      (s) =>
+        s.length > 0 &&
+        s !== GOOGLE_SCOPE_GMAIL_READONLY &&
+        s !== GOOGLE_SCOPE_GMAIL_SEND,
+    );
+  return remaining.length > 0 ? remaining.join(" ") : null;
+}

@@ -24,6 +24,8 @@ import {
   tokenHasTikTokAccess,
   tokenHasWhatsAppAccess,
   tokenHasXAccess,
+  assertIntegrationOk,
+  isNeedsReconsent,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { EmptyState, Section } from "@/components/ui";
@@ -129,9 +131,11 @@ export function CommsSection({
     x: false,
     tiktok: false,
   });
+  const [expiredIntegrations, setExpiredIntegrations] = useState<string[]>([]);
 
   const loadComms = useCallback(async () => {
     setLoading(true);
+    const expired: string[] = [];
     const collected: CommsTimelineItem[] = [];
     const {
       supabase,
@@ -273,7 +277,9 @@ export function CommsSection({
                 contactEmail: contact.email!,
                 maxResults: 25,
               });
-              if (result.status === "ok") {
+              if (isNeedsReconsent(result.status)) {
+                expired.push("Gmail");
+              } else if (result.status === "ok") {
                 addItems(
                   result.messages.map((message) => fromGmailMessage(message)),
                 );
@@ -295,7 +301,9 @@ export function CommsSection({
               contactEmail: contact.email!,
               maxResults: 25,
             });
-            if (result.status === "ok") {
+            if (isNeedsReconsent(result.status)) {
+              expired.push("Outlook");
+            } else if (result.status === "ok") {
               addItems(
                 result.messages.map((message) => fromOutlookMessage(message)),
               );
@@ -319,6 +327,10 @@ export function CommsSection({
               instagramScopedId: contact.instagramScopedId,
               maxResults: 25,
             });
+            if (isNeedsReconsent(result.status)) {
+              expired.push("Instagram");
+              return;
+            }
             if (result.status !== "ok") return;
             addItems(result.messages.map((message) => fromInstagramMessage(message)));
             if (result.resolvedScopedId) {
@@ -343,6 +355,10 @@ export function CommsSection({
               xUserId: contact.xUserId,
               maxResults: 25,
             });
+            if (isNeedsReconsent(result.status)) {
+              expired.push("X");
+              return;
+            }
             if (result.status !== "ok") return;
             addItems(result.messages.map((message) => fromXMessage(message)));
             if (result.resolvedUserId) {
@@ -368,6 +384,10 @@ export function CommsSection({
               whatsappWaId: effectiveWaId,
               maxResults: 25,
             });
+            if (isNeedsReconsent(result.status)) {
+              expired.push("WhatsApp");
+              return;
+            }
             if (result.status !== "ok") return;
             addItems(result.messages.map((message) => fromWhatsAppMessage(message)));
             if (result.resolvedWaId) {
@@ -392,6 +412,10 @@ export function CommsSection({
               tiktokOpenId: contact.tiktokOpenId,
               maxResults: 25,
             });
+            if (isNeedsReconsent(result.status)) {
+              expired.push("TikTok");
+              return;
+            }
             if (result.status !== "ok") return;
             addItems(result.messages.map((message) => fromTikTokMessage(message)));
             if (result.resolvedOpenId) {
@@ -405,6 +429,7 @@ export function CommsSection({
     }
 
     await Promise.allSettled(loaders);
+    setExpiredIntegrations(expired);
     setItems(mergeCommsTimelineItems(collected));
     setVisibleCount(INITIAL_VISIBLE);
     setLoading(false);
@@ -598,6 +623,7 @@ export function CommsSection({
             subject: "(no subject)",
             body: text,
           });
+          assertIntegrationOk(result.status, "Gmail");
           if (result.status !== "ok") throw new Error("Could not send email.");
           break;
         }
@@ -608,6 +634,7 @@ export function CommsSection({
             subject: "(no subject)",
             body: text,
           });
+          assertIntegrationOk(result.status, "Outlook");
           if (result.status !== "ok") throw new Error("Could not send email.");
           break;
         }
@@ -620,6 +647,7 @@ export function CommsSection({
             instagramScopedId: contact.instagramScopedId,
             text,
           });
+          assertIntegrationOk(result.status, "Instagram");
           if (result.status !== "ok") {
             throw new Error(
               "Could not send — Instagram only allows replies within 24h of their last DM.",
@@ -634,6 +662,7 @@ export function CommsSection({
             whatsappWaId: waId,
             text,
           });
+          assertIntegrationOk(result.status, "WhatsApp");
           if (result.status !== "ok") {
             throw new Error("Could not send WhatsApp message.");
           }
@@ -646,6 +675,7 @@ export function CommsSection({
             xUserId: contact.xUserId,
             text,
           });
+          assertIntegrationOk(result.status, "X");
           if (result.status !== "ok") {
             throw new Error("Could not send X DM.");
           }
@@ -658,6 +688,7 @@ export function CommsSection({
             tiktokOpenId: contact.tiktokOpenId,
             text,
           });
+          assertIntegrationOk(result.status, "TikTok");
           if (result.status !== "ok") {
             throw new Error("Could not send TikTok DM.");
           }
@@ -685,6 +716,19 @@ export function CommsSection({
           : undefined
       }
     >
+      {expiredIntegrations.length > 0 ? (
+        <div
+          className="mb-3 rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-fg-muted"
+          role="status"
+        >
+          {expiredIntegrations.join(", ")}{" "}
+          {expiredIntegrations.length === 1 ? "connection has" : "connections have"}{" "}
+          expired.{" "}
+          <Link href="/settings" className="text-accent hover:underline">
+            Reconnect in Settings
+          </Link>
+        </div>
+      ) : null}
       {!hasIdentifiers ? (
         <EmptyState
           title="No contact channels on file"

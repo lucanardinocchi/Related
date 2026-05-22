@@ -6,6 +6,8 @@ import { Calendar, Mail, AtSign, MessageCircle } from "lucide-react";
 import {
   GOOGLE_CALENDAR_SCOPES,
   GOOGLE_INTEGRATION_SCOPES,
+  googleScopesWithoutCalendar,
+  googleScopesWithoutGmail,
   tokenHasCalendarAccess,
   tokenHasGmailAccess,
   tokenHasInstagramAccess,
@@ -17,9 +19,14 @@ import {
   generateCodeVerifier,
   generateCodeChallenge,
 } from "@related/shared";
-import { Button, Card, Section } from "@/components/ui";
+import { Card, Section } from "@/components/ui";
+import { IntegrationConnectionActions } from "@/components/integrations/IntegrationConnectionActions";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { isIntegrationComingSoon } from "@/lib/integrations/integrationAvailability";
+import {
+  probeIntegrationHealth,
+  type IntegrationHealthFlags,
+} from "@/lib/integrations/integrationHealth";
 import { setOAuthReturnPath } from "@/lib/integrations/oauthReturn";
 
 const OAUTH_INTENT_KEY = "related.google-oauth-intent";
@@ -82,16 +89,34 @@ export function IntegrationsSection({
   );
   const [working, setWorking] = useState<
     | "calendar"
+    | "disconnect-calendar"
     | "outlook"
+    | "disconnect-outlook"
     | "gmail"
+    | "disconnect-gmail"
     | "instagram"
+    | "disconnect-instagram"
     | "x"
+    | "disconnect-x"
     | "whatsapp"
+    | "disconnect-whatsapp"
     | "tiktok"
+    | "disconnect-tiktok"
     | null
   >(null);
+  const [needsReconsent, setNeedsReconsent] = useState<IntegrationHealthFlags>({
+    googleCalendar: false,
+    gmail: false,
+    outlookCalendar: false,
+    outlookMail: false,
+    instagram: false,
+    x: false,
+    whatsapp: false,
+    tiktok: false,
+  });
   const [error, setError] = useState<string | null>(null);
   const captureRunning = useRef(false);
+  const healthProbeRunning = useRef(false);
 
   const captureProviderTokens = useCallback(async () => {
     if (captureRunning.current) return;
@@ -187,6 +212,19 @@ export function IntegrationsSection({
     );
   }, []);
 
+  const runHealthProbe = useCallback(async () => {
+    if (healthProbeRunning.current) return;
+    healthProbeRunning.current = true;
+    try {
+      const flags = await probeIntegrationHealth();
+      setNeedsReconsent(flags);
+    } catch {
+      // Non-fatal — connection state still shown from tokens.
+    } finally {
+      healthProbeRunning.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     setOAuthReturnPath("/settings");
     captureProviderTokens();
@@ -195,9 +233,11 @@ export function IntegrationsSection({
     void refreshWhatsAppConnection();
     void refreshTikTokConnection();
     void refreshOutlookConnection();
+    void runHealthProbe();
     const { auth } = getBrowserDeps();
     const unsubscribe = auth.onAuthStateChange(() => {
       captureProviderTokens();
+      void runHealthProbe();
     });
     return () => unsubscribe();
   }, [
@@ -207,7 +247,120 @@ export function IntegrationsSection({
     refreshWhatsAppConnection,
     refreshTikTokConnection,
     refreshOutlookConnection,
+    runHealthProbe,
   ]);
+
+  const busy = working !== null;
+
+  async function disconnectGoogleCalendar() {
+    if (busy) return;
+    setError(null);
+    setWorking("disconnect-calendar");
+    try {
+      const { userProviderTokens } = getBrowserDeps();
+      const token = await userProviderTokens.getForProvider("google");
+      if (!token?.scopes) {
+        setCalendarConnected(false);
+        setNeedsReconsent((f) => ({ ...f, googleCalendar: false }));
+        return;
+      }
+      const remaining = googleScopesWithoutCalendar(token.scopes);
+      if (remaining === null) {
+        await userProviderTokens.deleteForProvider("google");
+        setCalendarConnected(false);
+        setGmailConnected(false);
+        setNeedsReconsent((f) => ({ ...f, googleCalendar: false, gmail: false }));
+      } else {
+        await userProviderTokens.updateScopes("google", remaining);
+        setCalendarConnected(false);
+        setNeedsReconsent((f) => ({ ...f, googleCalendar: false }));
+      }
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Failed to disconnect Google Calendar",
+      );
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function disconnectGmail() {
+    if (busy) return;
+    setError(null);
+    setWorking("disconnect-gmail");
+    try {
+      const { userProviderTokens } = getBrowserDeps();
+      const token = await userProviderTokens.getForProvider("google");
+      if (!token?.scopes) {
+        setGmailConnected(false);
+        setNeedsReconsent((f) => ({ ...f, gmail: false }));
+        return;
+      }
+      const remaining = googleScopesWithoutGmail(token.scopes);
+      if (remaining === null) {
+        await userProviderTokens.deleteForProvider("google");
+        setCalendarConnected(false);
+        setGmailConnected(false);
+        setNeedsReconsent((f) => ({ ...f, googleCalendar: false, gmail: false }));
+      } else {
+        await userProviderTokens.updateScopes("google", remaining);
+        setGmailConnected(false);
+        setNeedsReconsent((f) => ({ ...f, gmail: false }));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to disconnect Gmail");
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function disconnectOutlook() {
+    if (busy) return;
+    setError(null);
+    setWorking("disconnect-outlook");
+    try {
+      const { userProviderTokens } = getBrowserDeps();
+      await userProviderTokens.deleteForProvider("outlook");
+      setOutlookCalendarConnected(false);
+      setOutlookMailConnected(false);
+      setNeedsReconsent((f) => ({
+        ...f,
+        outlookCalendar: false,
+        outlookMail: false,
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to disconnect Outlook");
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function disconnectProvider(
+    provider: "instagram" | "x" | "whatsapp" | "tiktok",
+    workingKey:
+      | "disconnect-instagram"
+      | "disconnect-x"
+      | "disconnect-whatsapp"
+      | "disconnect-tiktok",
+    setConnected: (v: boolean) => void,
+    clearReconsent: (f: IntegrationHealthFlags) => IntegrationHealthFlags,
+  ) {
+    if (busy) return;
+    setError(null);
+    setWorking(workingKey);
+    try {
+      const { userProviderTokens } = getBrowserDeps();
+      await userProviderTokens.deleteForProvider(provider);
+      setConnected(false);
+      setNeedsReconsent(clearReconsent);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : `Failed to disconnect ${provider}`,
+      );
+    } finally {
+      setWorking(null);
+    }
+  }
 
   async function connectCalendar() {
     if (working) return;
@@ -383,22 +536,17 @@ export function IntegrationsSection({
                   for catch-up timing.
                 </p>
               </div>
-              {calendarConnected ? (
-                <p className="text-[13px] text-fg-muted">
-                  <span aria-hidden="true">✓ </span>
-                  Connected
-                </p>
-              ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={working === "calendar"}
-                  disabled={working !== null}
-                  onClick={() => void connectCalendar()}
-                >
-                  Connect Google Calendar
-                </Button>
-              )}
+              <IntegrationConnectionActions
+                connected={calendarConnected}
+                needsReconsent={needsReconsent.googleCalendar}
+                connectLabel="Connect Google Calendar"
+                onConnect={() => void connectCalendar()}
+                onReconnect={() => void connectCalendar()}
+                onDisconnect={() => void disconnectGoogleCalendar()}
+                connectLoading={working === "calendar"}
+                disconnectLoading={working === "disconnect-calendar"}
+                disabled={busy}
+              />
             </div>
           </div>
         </Card>
@@ -417,31 +565,43 @@ export function IntegrationsSection({
                 </p>
               </div>
               {outlookCalendarConnected || outlookMailConnected ? (
-                <div className="space-y-1 text-[13px] text-fg-muted">
-                  <p>
-                    <span aria-hidden="true">
-                      {outlookCalendarConnected ? "✓" : "○"}{" "}
-                    </span>
-                    Calendar{outlookCalendarConnected ? " connected" : " not connected"}
-                  </p>
-                  <p>
-                    <span aria-hidden="true">
-                      {outlookMailConnected ? "✓" : "○"}{" "}
-                    </span>
-                    Mail{outlookMailConnected ? " connected" : " not connected"}
-                  </p>
+                <div className="space-y-2">
+                  <div className="space-y-1 text-[13px] text-fg-muted">
+                    <p>
+                      <span aria-hidden="true">
+                        {outlookCalendarConnected ? "✓" : "○"}{" "}
+                      </span>
+                      Calendar
+                      {outlookCalendarConnected ? " connected" : " not connected"}
+                      {needsReconsent.outlookCalendar ? " (expired)" : ""}
+                    </p>
+                    <p>
+                      <span aria-hidden="true">
+                        {outlookMailConnected ? "✓" : "○"}{" "}
+                      </span>
+                      Mail
+                      {outlookMailConnected ? " connected" : " not connected"}
+                      {needsReconsent.outlookMail ? " (expired)" : ""}
+                    </p>
+                  </div>
+                  <IntegrationConnectionActions
+                    connected
+                    needsReconsent={
+                      needsReconsent.outlookCalendar || needsReconsent.outlookMail
+                    }
+                    connectLabel="Connect Outlook"
+                    onConnect={() => void connectOutlookCalendar()}
+                    onReconnect={() => void connectOutlookCalendar()}
+                    onDisconnect={() => void disconnectOutlook()}
+                    connectLoading={working === "outlook"}
+                    disconnectLoading={working === "disconnect-outlook"}
+                    disabled={busy}
+                  />
                   {!outlookCalendarConnected || !outlookMailConnected ? (
                     !microsoftClientId ? null : (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        loading={working === "outlook"}
-                        disabled={working !== null}
-                        onClick={() => void connectOutlookCalendar()}
-                        className="mt-1"
-                      >
-                        Reconnect Outlook
-                      </Button>
+                      <p className="text-[12px] text-fg-subtle">
+                        Use Reconnect to add missing Calendar or Mail access.
+                      </p>
                     )
                   ) : null}
                 </div>
@@ -454,15 +614,13 @@ export function IntegrationsSection({
                   to enable Outlook connect.
                 </p>
               ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={working === "outlook"}
-                  disabled={working !== null}
-                  onClick={() => void connectOutlookCalendar()}
-                >
-                  Connect Outlook
-                </Button>
+                <IntegrationConnectionActions
+                  connected={false}
+                  connectLabel="Connect Outlook"
+                  onConnect={() => void connectOutlookCalendar()}
+                  connectLoading={working === "outlook"}
+                  disabled={busy}
+                />
               )}
             </div>
           </div>
@@ -479,22 +637,17 @@ export function IntegrationsSection({
                   pages.
                 </p>
               </div>
-              {gmailConnected ? (
-                <p className="text-[13px] text-fg-muted">
-                  <span aria-hidden="true">✓ </span>
-                  Connected
-                </p>
-              ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={working === "gmail"}
-                  disabled={working !== null}
-                  onClick={() => void connectGmail()}
-                >
-                  Connect Gmail
-                </Button>
-              )}
+              <IntegrationConnectionActions
+                connected={gmailConnected}
+                needsReconsent={needsReconsent.gmail}
+                connectLabel="Connect Gmail"
+                onConnect={() => void connectGmail()}
+                onReconnect={() => void connectGmail()}
+                onDisconnect={() => void disconnectGmail()}
+                connectLoading={working === "gmail"}
+                disconnectLoading={working === "disconnect-gmail"}
+                disabled={busy}
+              />
             </div>
           </div>
         </Card>
@@ -510,27 +663,31 @@ export function IntegrationsSection({
                   pages. Requires an Instagram professional/creator account.
                 </p>
               </div>
-              {instagramConnected ? (
-                <p className="text-[13px] text-fg-muted">
-                  <span aria-hidden="true">✓ </span>
-                  Connected
-                </p>
-              ) : !instagramAppId ? (
+              {!instagramAppId ? (
                 <p className="text-[13px] text-fg-muted">
                   Set{" "}
                   <code className="text-[12px]">NEXT_PUBLIC_INSTAGRAM_APP_ID</code>{" "}
                   to enable Instagram connect.
                 </p>
               ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={working === "instagram"}
-                  disabled={working !== null}
-                  onClick={() => void connectInstagram()}
-                >
-                  Connect Instagram
-                </Button>
+                <IntegrationConnectionActions
+                  connected={instagramConnected}
+                  needsReconsent={needsReconsent.instagram}
+                  connectLabel="Connect Instagram"
+                  onConnect={() => void connectInstagram()}
+                  onReconnect={() => void connectInstagram()}
+                  onDisconnect={() =>
+                    void disconnectProvider(
+                      "instagram",
+                      "disconnect-instagram",
+                      setInstagramConnected,
+                      (f) => ({ ...f, instagram: false }),
+                    )
+                  }
+                  connectLoading={working === "instagram"}
+                  disconnectLoading={working === "disconnect-instagram"}
+                  disabled={busy}
+                />
               )}
             </div>
           </div>
@@ -549,27 +706,31 @@ export function IntegrationsSection({
                   X API access with DM permissions.
                 </p>
               </div>
-              {xConnected ? (
-                <p className="text-[13px] text-fg-muted">
-                  <span aria-hidden="true">✓ </span>
-                  Connected
-                </p>
-              ) : !xClientId ? (
+              {!xClientId ? (
                 <p className="text-[13px] text-fg-muted">
                   Set{" "}
                   <code className="text-[12px]">NEXT_PUBLIC_X_CLIENT_ID</code>{" "}
                   to enable X connect.
                 </p>
               ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={working === "x"}
-                  disabled={working !== null}
-                  onClick={() => void connectX()}
-                >
-                  Connect X
-                </Button>
+                <IntegrationConnectionActions
+                  connected={xConnected}
+                  needsReconsent={needsReconsent.x}
+                  connectLabel="Connect X"
+                  onConnect={() => void connectX()}
+                  onReconnect={() => void connectX()}
+                  onDisconnect={() =>
+                    void disconnectProvider(
+                      "x",
+                      "disconnect-x",
+                      setXConnected,
+                      (f) => ({ ...f, x: false }),
+                    )
+                  }
+                  connectLoading={working === "x"}
+                  disconnectLoading={working === "disconnect-x"}
+                  disabled={busy}
+                />
               )}
             </div>
           </div>
@@ -590,12 +751,7 @@ export function IntegrationsSection({
                   with WhatsApp enabled.
                 </p>
               </div>
-              {whatsappConnected ? (
-                <p className="text-[13px] text-fg-muted">
-                  <span aria-hidden="true">✓ </span>
-                  Connected
-                </p>
-              ) : isIntegrationComingSoon("whatsapp") ? (
+              {isIntegrationComingSoon("whatsapp") ? (
                 <p className="text-[13px] text-fg-muted">Coming soon</p>
               ) : !whatsappAppId ? (
                 <p className="text-[13px] text-fg-muted">
@@ -606,15 +762,24 @@ export function IntegrationsSection({
                   to enable WhatsApp connect.
                 </p>
               ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={working === "whatsapp"}
-                  disabled={working !== null}
-                  onClick={() => void connectWhatsApp()}
-                >
-                  Connect WhatsApp
-                </Button>
+                <IntegrationConnectionActions
+                  connected={whatsappConnected}
+                  needsReconsent={needsReconsent.whatsapp}
+                  connectLabel="Connect WhatsApp"
+                  onConnect={() => void connectWhatsApp()}
+                  onReconnect={() => void connectWhatsApp()}
+                  onDisconnect={() =>
+                    void disconnectProvider(
+                      "whatsapp",
+                      "disconnect-whatsapp",
+                      setWhatsappConnected,
+                      (f) => ({ ...f, whatsapp: false }),
+                    )
+                  }
+                  connectLoading={working === "whatsapp"}
+                  disconnectLoading={working === "disconnect-whatsapp"}
+                  disabled={busy}
+                />
               )}
             </div>
           </div>
@@ -633,12 +798,7 @@ export function IntegrationsSection({
                   a TikTok Business Account with Business Messaging access.
                 </p>
               </div>
-              {tiktokConnected ? (
-                <p className="text-[13px] text-fg-muted">
-                  <span aria-hidden="true">✓ </span>
-                  Connected
-                </p>
-              ) : isIntegrationComingSoon("tiktok") ? (
+              {isIntegrationComingSoon("tiktok") ? (
                 <p className="text-[13px] text-fg-muted">Coming soon</p>
               ) : !tiktokClientKey ? (
                 <p className="text-[13px] text-fg-muted">
@@ -649,15 +809,24 @@ export function IntegrationsSection({
                   to enable TikTok connect.
                 </p>
               ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={working === "tiktok"}
-                  disabled={working !== null}
-                  onClick={() => void connectTikTok()}
-                >
-                  Connect TikTok
-                </Button>
+                <IntegrationConnectionActions
+                  connected={tiktokConnected}
+                  needsReconsent={needsReconsent.tiktok}
+                  connectLabel="Connect TikTok"
+                  onConnect={() => void connectTikTok()}
+                  onReconnect={() => void connectTikTok()}
+                  onDisconnect={() =>
+                    void disconnectProvider(
+                      "tiktok",
+                      "disconnect-tiktok",
+                      setTiktokConnected,
+                      (f) => ({ ...f, tiktok: false }),
+                    )
+                  }
+                  connectLoading={working === "tiktok"}
+                  disconnectLoading={working === "disconnect-tiktok"}
+                  disabled={busy}
+                />
               )}
             </div>
           </div>

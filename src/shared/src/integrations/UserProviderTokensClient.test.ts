@@ -11,8 +11,24 @@ function makeMock() {
   const select = jest.fn(() => ({ eq }));
   const upsertSelect = jest.fn(() => ({ single }));
   const upsert = jest.fn(() => ({ select: upsertSelect }));
-  const from = jest.fn(() => ({ select, upsert }));
-  return { from, select, eq, eqInner, single, maybeSingle, upsert, upsertSelect };
+  const updateEq = jest.fn(() => ({ eq: jest.fn(() => ({ error: null })) }));
+  const update = jest.fn(() => ({ eq: updateEq }));
+  const deleteEq = jest.fn(() => ({ error: null }));
+  const del = jest.fn(() => ({ eq: jest.fn(() => ({ eq: deleteEq })) }));
+  const from = jest.fn(() => ({ select, upsert, update, delete: del }));
+  return {
+    from,
+    select,
+    eq,
+    eqInner,
+    single,
+    maybeSingle,
+    upsert,
+    upsertSelect,
+    update,
+    del,
+    deleteEq,
+  };
 }
 
 function withClient() {
@@ -83,5 +99,14 @@ describe("UserProviderTokensClient.getForProvider", () => {
     q.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
     const got = await client.getForProvider("google");
     expect(got).toBeNull();
+  });
+});
+
+describe("UserProviderTokensClient.deleteForProvider", () => {
+  it("deletes the row for the current User and provider", async () => {
+    const { q, client } = withClient();
+    await client.deleteForProvider("instagram");
+    expect(q.del).toHaveBeenCalled();
+    expect(q.deleteEq).toHaveBeenCalledWith("provider", "instagram");
   });
 });

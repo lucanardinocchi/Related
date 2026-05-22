@@ -101,4 +101,29 @@ export class UserProviderTokensClient {
     if (!data) return null;
     return rowToToken(data as Row);
   }
+
+  /** Removes the stored OAuth row for this provider (revokes Related-side access). */
+  async deleteForProvider(provider: ProviderName): Promise<void> {
+    const ownerId = await this.resolveOwnerId();
+    const { error } = await this.client
+      .from("user_provider_tokens")
+      .delete()
+      .eq("owner_id", ownerId)
+      .eq("provider", provider);
+    if (error) throw error;
+  }
+
+  /** Updates scopes only — used when disconnecting Calendar vs Gmail on a shared Google token. */
+  async updateScopes(provider: ProviderName, scopes: string): Promise<void> {
+    const ownerId = await this.resolveOwnerId();
+    const { error } = await this.client
+      .from("user_provider_tokens")
+      .update({
+        scopes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("owner_id", ownerId)
+      .eq("provider", provider);
+    if (error) throw error;
+  }
 }
