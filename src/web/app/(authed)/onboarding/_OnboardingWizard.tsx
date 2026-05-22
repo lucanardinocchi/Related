@@ -323,9 +323,7 @@ export function OnboardingWizard({
                     : undefined
                 }
                 onConnect={() =>
-                  void runConnect("instagram", () =>
-                    connectInstagram(returnPath, instagramAppId!),
-                  )
+                  void runConnect("instagram", () => connectInstagram(returnPath))
                 }
               />
               <IntegrationCard

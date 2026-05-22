@@ -181,12 +181,22 @@ export function eventsUpsertKeys(
   return Object.keys(row);
 }
 
+export interface CalendarSyncPersistOptions {
+  /** When set, prune only removes provider rows in this window (full sync). */
+  window?: { timeMin: string; timeMax: string };
+  /** When false, skip deleting provider rows missing from the snapshot (webhook upserts). */
+  pruneMissing?: boolean;
+}
+
 export async function persistCalendarSyncSnapshot(
   supabase: SupabaseClient,
   provider: CalendarSyncProvider,
   ownerId: string,
   events: CalendarSyncEvent[],
+  options: CalendarSyncPersistOptions = {},
 ): Promise<CalendarSyncPersistResult> {
+  const pruneMissing = options.pruneMissing !== false;
+
   if (events.length > 0) {
     const signalRows = events.map((e) =>
       toSignalRowForProvider(provider, ownerId, e),
@@ -209,122 +219,175 @@ export async function persistCalendarSyncSnapshot(
       };
     }
 
-    const allEmails = Array.from(
-      new Set(events.flatMap((e) => e.attendeeEmails ?? [])),
-    );
-    let emailToContactId = new Map<string, string>();
-    if (allEmails.length > 0) {
-      const { data: contactRows } = await supabase
-        .from("contacts")
-        .select("id, email")
-        .eq("owner_id", ownerId)
-        .in("email", allEmails);
-      emailToContactId = new Map(
-        ((contactRows ?? []) as Array<{ id: string; email: string | null }>)
-          .filter((c) => c.email)
-          .map((c) => [c.email!.toLowerCase(), c.id]),
-      );
-    }
-
-    const externalIds = events.map((e) =>
-      externalEventIdForProvider(provider, e.id),
-    );
-    const { data: eventIdRows } = await supabase
-      .from("events")
-      .select("id, external_event_id")
-      .eq("owner_id", ownerId)
-      .in("external_event_id", externalIds);
-    const externalToEventId = new Map(
-      ((eventIdRows ?? []) as Array<{
-        id: string;
-        external_event_id: string;
-      }>).map((r) => [r.external_event_id, r.id]),
-    );
-
-    const touchedEventIds = Array.from(externalToEventId.values());
-    if (touchedEventIds.length > 0) {
-      await supabase
-        .from("event_attendees")
-        .delete()
-        .in("event_id", touchedEventIds);
-
-      const links: Array<{ event_id: string; contact_id: string }> = [];
-      for (const e of events) {
-        const eventId = externalToEventId.get(
-          externalEventIdForProvider(provider, e.id),
-        );
-        if (!eventId) continue;
-        for (const email of e.attendeeEmails ?? []) {
-          const cid = emailToContactId.get(email);
-          if (cid) links.push({ event_id: eventId, contact_id: cid });
-        }
-      }
-      if (links.length > 0) {
-        await supabase.from("event_attendees").insert(links);
-      }
-    }
+    await syncEventAttendees(supabase, provider, ownerId, events);
   }
 
-  const keepList = events
-    .map((e) => signalEventIdForProvider(provider, e.id))
-    .join(",");
-  const externalKeepList = events
-    .map((e) => externalEventIdForProvider(provider, e.id))
-    .join(",");
-
-  if (provider === "google") {
-    if (events.length > 0) {
-      await supabase
-        .from("inferred_signal_calendar")
-        .delete()
-        .eq("owner_id", ownerId)
-        .not("event_id", "in", `(${keepList})`)
-        .not("event_id", "like", `${OUTLOOK_EVENT_PREFIX}%`);
-      await supabase
-        .from("events")
-        .delete()
-        .eq("owner_id", ownerId)
-        .eq("source", "google")
-        .not("external_event_id", "in", `(${externalKeepList})`);
-    } else {
-      await supabase
-        .from("inferred_signal_calendar")
-        .delete()
-        .eq("owner_id", ownerId)
-        .not("event_id", "like", `${OUTLOOK_EVENT_PREFIX}%`);
-      await supabase
-        .from("events")
-        .delete()
-        .eq("owner_id", ownerId)
-        .eq("source", "google");
-    }
-  } else {
-    if (events.length > 0) {
-      await supabase
-        .from("inferred_signal_calendar")
-        .delete()
-        .eq("owner_id", ownerId)
-        .like("event_id", `${OUTLOOK_EVENT_PREFIX}%`)
-        .not("event_id", "in", `(${keepList})`);
-      await supabase
-        .from("events")
-        .delete()
-        .eq("owner_id", ownerId)
-        .eq("source", "outlook")
-        .not("external_event_id", "in", `(${externalKeepList})`);
-    } else {
-      await supabase
-        .from("inferred_signal_calendar")
-        .delete()
-        .eq("owner_id", ownerId)
-        .like("event_id", `${OUTLOOK_EVENT_PREFIX}%`);
-      await supabase
-        .from("events")
-        .delete()
-        .eq("owner_id", ownerId)
-        .eq("source", "outlook");
-    }
+  if (pruneMissing) {
+    const keepExternalIds = new Set(
+      events.map((e) => externalEventIdForProvider(provider, e.id)),
+    );
+    const keepSignalIds = new Set(
+      events.map((e) => signalEventIdForProvider(provider, e.id)),
+    );
+    await pruneProviderCalendarRows(
+      supabase,
+      provider,
+      ownerId,
+      keepExternalIds,
+      keepSignalIds,
+      options.window,
+    );
   }
 
   return { status: "ok" };
+}
+
+export async function removeCalendarProviderEvent(
+  supabase: SupabaseClient,
+  provider: CalendarSyncProvider,
+  ownerId: string,
+  providerEventId: string,
+): Promise<CalendarSyncPersistResult> {
+  const externalId = externalEventIdForProvider(provider, providerEventId);
+  const signalId = signalEventIdForProvider(provider, providerEventId);
+
+  const { data: rows } = await supabase
+    .from("events")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .eq("external_event_id", externalId)
+    .maybeSingle();
+
+  if (rows?.id) {
+    await supabase.from("event_attendees").delete().eq("event_id", rows.id);
+    await supabase.from("events").delete().eq("id", rows.id);
+  }
+
+  await supabase
+    .from("inferred_signal_calendar")
+    .delete()
+    .eq("owner_id", ownerId)
+    .eq("event_id", signalId);
+
+  return { status: "ok" };
+}
+
+async function syncEventAttendees(
+  supabase: SupabaseClient,
+  provider: CalendarSyncProvider,
+  ownerId: string,
+  events: CalendarSyncEvent[],
+): Promise<void> {
+  const allEmails = Array.from(
+    new Set(events.flatMap((e) => e.attendeeEmails ?? [])),
+  );
+  let emailToContactId = new Map<string, string>();
+  if (allEmails.length > 0) {
+    const { data: contactRows } = await supabase
+      .from("contacts")
+      .select("id, email")
+      .eq("owner_id", ownerId)
+      .in("email", allEmails);
+    emailToContactId = new Map(
+      ((contactRows ?? []) as Array<{ id: string; email: string | null }>)
+        .filter((c) => c.email)
+        .map((c) => [c.email!.toLowerCase(), c.id]),
+    );
+  }
+
+  const externalIds = events.map((e) =>
+    externalEventIdForProvider(provider, e.id),
+  );
+  const { data: eventIdRows } = await supabase
+    .from("events")
+    .select("id, external_event_id")
+    .eq("owner_id", ownerId)
+    .in("external_event_id", externalIds);
+  const externalToEventId = new Map(
+    ((eventIdRows ?? []) as Array<{
+      id: string;
+      external_event_id: string;
+    }>).map((r) => [r.external_event_id, r.id]),
+  );
+
+  const touchedEventIds = Array.from(externalToEventId.values());
+  if (touchedEventIds.length === 0) return;
+
+  await supabase.from("event_attendees").delete().in("event_id", touchedEventIds);
+
+  const links: Array<{ event_id: string; contact_id: string }> = [];
+  for (const e of events) {
+    const eventId = externalToEventId.get(
+      externalEventIdForProvider(provider, e.id),
+    );
+    if (!eventId) continue;
+    for (const email of e.attendeeEmails ?? []) {
+      const cid = emailToContactId.get(email);
+      if (cid) links.push({ event_id: eventId, contact_id: cid });
+    }
+  }
+  if (links.length > 0) {
+    await supabase.from("event_attendees").insert(links);
+  }
+}
+
+async function pruneProviderCalendarRows(
+  supabase: SupabaseClient,
+  provider: CalendarSyncProvider,
+  ownerId: string,
+  keepExternalIds: Set<string>,
+  keepSignalIds: Set<string>,
+  window?: { timeMin: string; timeMax: string },
+): Promise<void> {
+  let eventsQuery = supabase
+    .from("events")
+    .select("id, external_event_id, start")
+    .eq("owner_id", ownerId)
+    .eq("source", provider);
+  if (window) {
+    eventsQuery = eventsQuery
+      .gte("start", window.timeMin)
+      .lte("start", window.timeMax);
+  }
+  const { data: existingEvents } = await eventsQuery;
+
+  const eventIdsToDelete = ((existingEvents ?? []) as Array<{
+    id: string;
+    external_event_id: string;
+  }>)
+    .filter((row) => !keepExternalIds.has(row.external_event_id))
+    .map((row) => row.id);
+
+  if (eventIdsToDelete.length > 0) {
+    await supabase.from("event_attendees").delete().in("event_id", eventIdsToDelete);
+    await supabase.from("events").delete().in("id", eventIdsToDelete);
+  }
+
+  let signalQuery = supabase
+    .from("inferred_signal_calendar")
+    .select("event_id, start")
+    .eq("owner_id", ownerId);
+  if (provider === "outlook") {
+    signalQuery = signalQuery.like("event_id", `${OUTLOOK_EVENT_PREFIX}%`);
+  } else {
+    signalQuery = signalQuery.not("event_id", "like", `${OUTLOOK_EVENT_PREFIX}%`);
+  }
+  if (window) {
+    signalQuery = signalQuery
+      .gte("start", window.timeMin)
+      .lte("start", window.timeMax);
+  }
+  const { data: existingSignals } = await signalQuery;
+
+  const signalIdsToDelete = ((existingSignals ?? []) as Array<{ event_id: string }>)
+    .filter((row) => !keepSignalIds.has(row.event_id))
+    .map((row) => row.event_id);
+
+  if (signalIdsToDelete.length > 0) {
+    await supabase
+      .from("inferred_signal_calendar")
+      .delete()
+      .eq("owner_id", ownerId)
+      .in("event_id", signalIdsToDelete);
+  }
 }

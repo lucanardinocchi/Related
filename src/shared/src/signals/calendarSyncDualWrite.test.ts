@@ -97,17 +97,49 @@ describe("calendarSyncDualWrite", () => {
       chain.like = jest.fn(() => chain);
       return chain;
     };
+    const emptyResult = { data: [] as unknown[], error: null };
+    const makeAwaitableChain = () => {
+      const chain: {
+        eq: jest.Mock;
+        gte: jest.Mock;
+        lte: jest.Mock;
+        like: jest.Mock;
+        not: jest.Mock;
+        in: jest.Mock;
+        then: Promise<typeof emptyResult>["then"];
+      } = {} as never;
+      chain.eq = jest.fn(() => chain);
+      chain.gte = jest.fn(() => chain);
+      chain.lte = jest.fn(() => chain);
+      chain.like = jest.fn(() => chain);
+      chain.not = jest.fn(() => chain);
+      chain.in = jest.fn(() => Promise.resolve(emptyResult));
+      chain.then = (onFulfilled, onRejected) =>
+        Promise.resolve(emptyResult).then(onFulfilled, onRejected);
+      return chain;
+    };
     const deleteFn = jest.fn(() => makeDeleteChain());
     const from = jest.fn((table: string) => {
-      if (table === "events") {
+      if (table === "events" || table === "inferred_signal_calendar") {
         return {
           upsert,
           delete: deleteFn,
+          select: jest.fn(() => makeAwaitableChain()),
+        };
+      }
+      if (table === "contacts") {
+        return {
           select: jest.fn(() => ({
             eq: jest.fn(() => ({
               in: jest.fn().mockResolvedValue({ data: [], error: null }),
             })),
           })),
+        };
+      }
+      if (table === "event_attendees") {
+        return {
+          delete: jest.fn().mockResolvedValue({ data: null, error: null }),
+          insert: jest.fn().mockResolvedValue({ data: null, error: null }),
         };
       }
       return { upsert, delete: deleteFn };

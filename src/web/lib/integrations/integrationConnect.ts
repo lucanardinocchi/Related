@@ -17,8 +17,14 @@ import {
   getIntegrationOAuthValue,
   isIntegrationOAuthCallbackPath,
   setIntegrationOAuthValue,
+  clearIntegrationOAuthValue,
 } from "./integrationOAuthStorage";
-import { setOAuthReturnPath } from "./oauthReturn";
+import { buildOutlookCallbackRedirectUri } from "./integrationOAuthOrigin";
+import {
+  clearIntegrationOAuthFeedback,
+  setOAuthReturnPath,
+} from "./oauthReturn";
+import { triggerCalendarConnectSync } from "./calendarConnectSync";
 
 export const OAUTH_INTENT_KEY = "related.google-oauth-intent";
 
@@ -147,13 +153,22 @@ export async function captureGoogleProviderTokens(
 
     const oauthError = params.get("error");
     if (oauthError) {
+      // Microsoft (and other providers) use ?error= on redirect; do not treat
+      // as a Google Auth failure while a third-party OAuth flow is in flight.
+      if (
+        getIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY) ||
+        params.get("code")
+      ) {
+        return null;
+      }
       throw new Error(params.get("error_description") ?? oauthError);
     }
 
     intent = sessionStorage.getItem(OAUTH_INTENT_KEY);
   }
 
-  const { auth, userProviderTokens, onboarding } = getBrowserDeps();
+  const { auth, userProviderTokens, onboarding, supabase, resolveOwnerId } =
+    getBrowserDeps();
   const session = await auth.getSessionWithProviderTokens();
   if (!session?.providerToken) return null;
 
@@ -186,6 +201,12 @@ export async function captureGoogleProviderTokens(
   const refreshed = await refreshGoogleConnections();
   if (refreshed.calendar) {
     await onboarding.completeStep("calendar");
+    try {
+      const ownerId = await resolveOwnerId();
+      triggerCalendarConnectSync(supabase, ownerId);
+    } catch {
+      // Session edge case — sync can be retried from Settings.
+    }
   }
   return refreshed;
 }
@@ -214,9 +235,9 @@ export async function connectOutlookCalendar(
   returnPath: string,
   microsoftClientId: string,
 ): Promise<void> {
+  clearIntegrationOAuthFeedback();
   setOAuthReturnPath(returnPath);
-  const redirectUri =
-    window.location.origin + "/settings/outlook/callback";
+  const redirectUri = buildOutlookCallbackRedirectUri();
   const state = crypto.randomUUID();
   const codeVerifier = generateCodeVerifier();
   setIntegrationOAuthValue(OUTLOOK_CODE_VERIFIER_KEY, codeVerifier);
@@ -229,23 +250,29 @@ export async function connectOutlookCalendar(
     codeChallenge,
     state,
   });
-  window.location.href = url;
+  window.location.replace(url);
 }
 
 export async function connectInstagram(
   returnPath: string,
-  instagramAppId: string,
+  _instagramAppId?: string | null,
+  _whatsappAppId: string | null = null,
 ): Promise<void> {
   setOAuthReturnPath(returnPath);
-  const redirectUri =
-    window.location.origin + "/settings/instagram/callback";
-  sessionStorage.setItem(INSTAGRAM_OAUTH_STATE_KEY, "connect");
-  const { auth } = getBrowserDeps();
-  const url = auth.buildInstagramOAuthUrl({
-    appId: instagramAppId,
-    redirectUri,
+  const response = await fetch("/api/integrations/instagram/authorize-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
   });
-  window.location.href = url;
+  const payload = (await response.json()) as {
+    url?: string;
+    state?: string;
+    error?: string;
+  };
+  if (!response.ok || !payload.url || !payload.state) {
+    throw new Error(payload.error ?? "Failed to start Instagram OAuth");
+  }
+  sessionStorage.setItem(INSTAGRAM_OAUTH_STATE_KEY, payload.state);
+  window.location.href = payload.url;
 }
 
 export async function connectX(

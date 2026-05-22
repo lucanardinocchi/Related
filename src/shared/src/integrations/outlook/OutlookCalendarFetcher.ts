@@ -1,8 +1,11 @@
 import { OUTLOOK_CALENDAR_SCOPES } from "./outlookScopes";
+import {
+  buildCalendarSyncWindow,
+  type CalendarSyncWindow,
+} from "../../signals/calendarSyncConfig";
 
 /**
- * Outlook Calendar fetcher via Microsoft Graph. Pure functions over `fetch` —
- * usable from tests and mirrored inline in the sync-calendar Edge Function.
+ * Outlook Calendar fetcher via Microsoft Graph. Pure functions over `fetch`.
  */
 
 export interface RawOutlookCalendarEvent {
@@ -20,7 +23,9 @@ export interface FetchOutlookCalendarEventsInput {
   refreshToken?: string;
   clientId?: string;
   clientSecret?: string;
-  asOf: Date;
+  /** @deprecated Prefer `window`. Uses 7-day forward slice from asOf. */
+  asOf?: Date;
+  window?: CalendarSyncWindow;
   fetch?: typeof fetch;
 }
 
@@ -30,20 +35,34 @@ export interface FetchOutlookCalendarEventsResult {
   refreshedExpiresInSeconds?: number;
 }
 
-const CALENDAR_WINDOW_DAYS = 7;
 const GRAPH_CALENDAR_VIEW_URL =
   "https://graph.microsoft.com/v1.0/me/calendarView";
+const GRAPH_EVENT_URL = "https://graph.microsoft.com/v1.0/me/events";
 const MICROSOFT_TOKEN_URL =
   "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+const PAGE_SIZE = 100;
 
-function buildCalendarViewUrl(asOf: Date): string {
-  const timeMax = new Date(asOf);
-  timeMax.setUTCDate(timeMax.getUTCDate() + CALENDAR_WINDOW_DAYS);
+function resolveWindow(input: FetchOutlookCalendarEventsInput): CalendarSyncWindow {
+  if (input.window) return input.window;
+  if (input.asOf) {
+    const timeMin = input.asOf;
+    const timeMax = new Date(input.asOf);
+    timeMax.setUTCDate(timeMax.getUTCDate() + 7);
+    return { timeMin, timeMax };
+  }
+  return buildCalendarSyncWindow();
+}
+
+function buildCalendarViewUrl(
+  window: CalendarSyncWindow,
+  nextLink?: string,
+): string {
+  if (nextLink) return nextLink;
   const params = new URLSearchParams({
-    startDateTime: asOf.toISOString(),
-    endDateTime: timeMax.toISOString(),
+    startDateTime: window.timeMin.toISOString(),
+    endDateTime: window.timeMax.toISOString(),
     $select: "id,subject,start,end,isAllDay,location,attendees",
-    $top: "100",
+    $top: String(PAGE_SIZE),
     $orderby: "start/dateTime",
   });
   return `${GRAPH_CALENDAR_VIEW_URL}?${params.toString()}`;
@@ -51,6 +70,7 @@ function buildCalendarViewUrl(asOf: Date): string {
 
 interface GraphDateTime {
   dateTime?: string;
+  date?: string;
   timeZone?: string;
 }
 
@@ -69,16 +89,18 @@ interface GraphEvent {
 }
 
 export function mapOutlookEvent(e: GraphEvent): RawOutlookCalendarEvent | null {
-  if (!e.start?.dateTime || !e.end?.dateTime) return null;
+  const start = e.start?.dateTime ?? e.start?.date;
+  const end = e.end?.dateTime ?? e.end?.date;
+  if (!start || !end) return null;
   const attendeeEmails = (e.attendees ?? [])
     .map((a) => a.emailAddress?.address?.toLowerCase().trim())
     .filter((email): email is string => Boolean(email));
   return {
     id: e.id,
     title: e.subject ?? null,
-    start: e.start.dateTime,
-    end: e.end.dateTime,
-    isAllDay: e.isAllDay ?? false,
+    start,
+    end,
+    isAllDay: e.isAllDay ?? Boolean(e.start?.date && !e.start?.dateTime),
     location: e.location?.displayName ?? null,
     attendeeEmails,
   };
@@ -86,10 +108,10 @@ export function mapOutlookEvent(e: GraphEvent): RawOutlookCalendarEvent | null {
 
 async function callCalendarViewApi(
   accessToken: string,
-  asOf: Date,
+  url: string,
   fetchImpl: typeof fetch,
 ): Promise<Response> {
-  return fetchImpl(buildCalendarViewUrl(asOf), {
+  return fetchImpl(url, {
     method: "GET",
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -103,49 +125,85 @@ export async function fetchOutlookCalendarEvents(
   input: FetchOutlookCalendarEventsInput,
 ): Promise<FetchOutlookCalendarEventsResult> {
   const fetchImpl = input.fetch ?? fetch;
-  let response = await callCalendarViewApi(
-    input.accessToken,
-    input.asOf,
-    fetchImpl,
-  );
-
+  const window = resolveWindow(input);
+  let accessToken = input.accessToken;
   let refreshedAccessToken: string | undefined;
   let refreshedExpiresInSeconds: number | undefined;
 
-  if (response.status === 401) {
-    if (!input.refreshToken || !input.clientId || !input.clientSecret) {
+  async function load(url: string) {
+    let response = await callCalendarViewApi(accessToken, url, fetchImpl);
+    if (response.status === 401) {
+      if (!input.refreshToken || !input.clientId || !input.clientSecret) {
+        throw new Error(
+          "Outlook Calendar 401 and no refresh_token / client creds available — User needs to re-consent.",
+        );
+      }
+      const refresh = await refreshOutlookAccessToken({
+        refreshToken: input.refreshToken,
+        clientId: input.clientId,
+        clientSecret: input.clientSecret,
+        fetch: fetchImpl,
+      });
+      accessToken = refresh.accessToken;
+      refreshedAccessToken = refresh.accessToken;
+      refreshedExpiresInSeconds = refresh.expiresInSeconds;
+      response = await callCalendarViewApi(accessToken, url, fetchImpl);
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
       throw new Error(
-        "Outlook Calendar 401 and no refresh_token / client creds available — User needs to re-consent.",
+        `Microsoft Graph Calendar ${response.status}: ${text || response.statusText}`,
       );
     }
-    const refresh = await refreshOutlookAccessToken({
-      refreshToken: input.refreshToken,
-      clientId: input.clientId,
-      clientSecret: input.clientSecret,
-      fetch: fetchImpl,
-    });
-    refreshedAccessToken = refresh.accessToken;
-    refreshedExpiresInSeconds = refresh.expiresInSeconds;
-    response = await callCalendarViewApi(
-      refresh.accessToken,
-      input.asOf,
-      fetchImpl,
-    );
+    return response;
   }
 
+  const events: RawOutlookCalendarEvent[] = [];
+  let url: string | undefined = buildCalendarViewUrl(window);
+
+  while (url) {
+    const response = await load(url);
+    const data = (await response.json()) as {
+      value?: GraphEvent[];
+      "@odata.nextLink"?: string;
+    };
+    for (const item of data.value ?? []) {
+      const mapped = mapOutlookEvent(item);
+      if (mapped) events.push(mapped);
+    }
+    url = data["@odata.nextLink"];
+  }
+
+  return { events, refreshedAccessToken, refreshedExpiresInSeconds };
+}
+
+export interface FetchOutlookCalendarEventInput {
+  accessToken: string;
+  eventId: string;
+  fetch?: typeof fetch;
+}
+
+export async function fetchOutlookCalendarEvent(
+  input: FetchOutlookCalendarEventInput,
+): Promise<RawOutlookCalendarEvent | null> {
+  const fetchImpl = input.fetch ?? fetch;
+  const url =
+    `${GRAPH_EVENT_URL}/${encodeURIComponent(input.eventId)}?$select=id,subject,start,end,isAllDay,location,attendees`;
+  const response = await fetchImpl(url, {
+    headers: {
+      authorization: `Bearer ${input.accessToken}`,
+      accept: "application/json",
+      prefer: 'outlook.timezone="UTC"',
+    },
+  });
+  if (response.status === 404) return null;
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(
-      `Microsoft Graph Calendar ${response.status}: ${text || response.statusText}`,
+      `Microsoft Graph event ${response.status}: ${text || response.statusText}`,
     );
   }
-
-  const data = (await response.json()) as { value?: GraphEvent[] };
-  const events = (data.value ?? [])
-    .map(mapOutlookEvent)
-    .filter((e): e is RawOutlookCalendarEvent => e !== null);
-
-  return { events, refreshedAccessToken, refreshedExpiresInSeconds };
+  return mapOutlookEvent((await response.json()) as GraphEvent);
 }
 
 export interface RefreshOutlookAccessTokenInput {

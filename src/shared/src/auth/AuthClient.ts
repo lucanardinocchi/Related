@@ -196,12 +196,14 @@ export class AuthClient {
   buildInstagramOAuthUrl(input: {
     appId: string;
     redirectUri: string;
+    state: string;
   }): string {
     const params = new URLSearchParams({
       client_id: input.appId,
       redirect_uri: input.redirectUri,
       response_type: "code",
       scope: INSTAGRAM_INTEGRATION_SCOPES,
+      state: input.state,
     });
     return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
   }
@@ -286,6 +288,8 @@ export class AuthClient {
       state: input.state,
       code_challenge: input.codeChallenge,
       code_challenge_method: "S256",
+      // Avoid silent SSO retries that surface AADSTS50000 before account picker.
+      prompt: "select_account",
     });
     return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
   }

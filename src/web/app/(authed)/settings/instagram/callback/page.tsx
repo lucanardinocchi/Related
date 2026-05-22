@@ -12,6 +12,7 @@ export default function InstagramCallbackPage() {
     async function run() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
+      const state = params.get("state");
       const oauthError = params.get("error");
 
       if (oauthError) {
@@ -20,6 +21,12 @@ export default function InstagramCallbackPage() {
       }
       if (!code) {
         redirectToSettings(router, "Missing authorization code");
+        return;
+      }
+
+      const expectedState = sessionStorage.getItem("related.instagram-oauth-state");
+      if (!expectedState || state !== expectedState) {
+        redirectToSettings(router, "Instagram OAuth state mismatch — try connecting again");
         return;
       }
 

@@ -11,7 +11,9 @@ import {
   getIntegrationOAuthValue,
 } from "@/lib/integrations/integrationOAuthStorage";
 import { ensureOAuthCallbackSession } from "@/lib/integrations/ensureOAuthCallbackSession";
+import { buildOutlookCallbackRedirectUri } from "@/lib/integrations/integrationOAuthOrigin";
 import { redirectToSettings } from "@/lib/integrations/oauthReturn";
+import { triggerCalendarConnectSync } from "@/lib/integrations/calendarConnectSync";
 import { getBrowserDeps } from "@/lib/deps/client";
 
 export default function OutlookCallbackPage() {
@@ -31,9 +33,11 @@ export default function OutlookCallbackPage() {
       const oauthErrorDescription = params.get("error_description");
 
       if (oauthError) {
-        redirectToSettings(router, oauthErrorDescription ?? oauthError, {
-          hard: true,
-        });
+        const message =
+          oauthError === "server_error" || oauthError === "temporarily_unavailable"
+            ? "Microsoft sign-in had a temporary issue. Try connecting again."
+            : (oauthErrorDescription ?? oauthError);
+        redirectToSettings(router, message, { hard: true });
         return;
       }
       if (!code) {
@@ -61,9 +65,7 @@ export default function OutlookCallbackPage() {
         return;
       }
 
-      const redirectUri =
-        window.location.origin + "/settings/outlook/callback";
-      window.history.replaceState({}, "", window.location.pathname);
+      const redirectUri = buildOutlookCallbackRedirectUri();
 
       try {
         setStatus("Finishing Outlook sign-in…");
@@ -84,14 +86,13 @@ export default function OutlookCallbackPage() {
         }
         clearIntegrationOAuthValue(OUTLOOK_CODE_VERIFIER_KEY);
         clearIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY);
+        window.history.replaceState({}, "", window.location.pathname);
         await onboarding.completeStep("calendar");
 
         const { data: userData } = await supabase.auth.getUser();
         const ownerId = userData.user?.id;
         if (ownerId) {
-          void supabase.functions.invoke("sync-calendar", {
-            body: { ownerId },
-          });
+          triggerCalendarConnectSync(supabase, ownerId);
         }
 
         setStatus("Outlook connected. Returning to Settings…");

@@ -73,6 +73,8 @@ describe("fetchGoogleCalendarEvents", () => {
         start: "2026-05-21T15:00:00Z",
         end: "2026-05-21T16:00:00Z",
         isAllDay: false,
+        location: null,
+        attendeeEmails: [],
       },
       {
         id: "evt-2",
@@ -80,6 +82,8 @@ describe("fetchGoogleCalendarEvents", () => {
         start: "2026-05-23",
         end: "2026-05-24",
         isAllDay: true,
+        location: null,
+        attendeeEmails: [],
       },
     ]);
     expect(result.refreshedAccessToken).toBeUndefined();

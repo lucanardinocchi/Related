@@ -1,6 +1,8 @@
 # WhatsApp setup (Related app)
 
-Uses the same Meta app as Instagram (**Related**, App ID `1443359060811831`).
+Uses the same Meta app as Instagram (**Related**, App ID `1443359060811831` for WhatsApp / Facebook Login).
+
+> Instagram Login uses a **separate Instagram App ID** (Meta → Instagram → API setup with Instagram login). Do not reuse `1443359060811831` for `NEXT_PUBLIC_INSTAGRAM_APP_ID`.
 
 ## 1. Meta Developer Console
 

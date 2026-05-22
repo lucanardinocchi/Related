@@ -10,6 +10,7 @@ import {
 } from "@related/shared";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { getServerDeps } from "@/lib/deps/server";
+import { resolveInstagramAppId } from "@/lib/integrations/instagramConfig";
 import { BillingSection } from "./_BillingSection";
 import { AmbientIntelligenceSection } from "./_AmbientIntelligenceSection";
 import { IntegrationsSection } from "./_IntegrationsSection";
@@ -41,7 +42,7 @@ export default async function SettingsPage() {
   const pocketWebhookUrl = supabaseUrl
     ? `${supabaseUrl.replace(/\/$/, "")}/functions/v1/pocket-webhook`
     : null;
-  const instagramAppId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID ?? null;
+  const instagramAppId = resolveInstagramAppId();
   const xClientId = process.env.NEXT_PUBLIC_X_CLIENT_ID ?? null;
   const whatsappAppId = process.env.NEXT_PUBLIC_WHATSAPP_APP_ID ?? null;
   const tiktokClientKey = process.env.NEXT_PUBLIC_TIKTOK_CLIENT_KEY ?? null;

@@ -1,56 +1,39 @@
 # sync-calendar
 
-Daily Edge Function that pulls each User's 7-day forward calendar window from their connected calendar provider(s) and writes it to `inferred_signal_calendar` plus the unified `events` table. Invoked by `pg_cron` at 10 AM UTC (see `20260519000011_calendar_daily_cron.sql`) and also callable on demand with `{ ownerId }` for a single-User sync — e.g. immediately after the Outlook OAuth callback, or from a future "Sync now" button.
+Backfills calendar events on connect, then keeps them fresh via push webhooks.
 
-The function now syncs **both Google and Outlook** calendars. It iterates over every row in `user_provider_tokens` with `provider in ('google', 'outlook')` and dual-writes events with `source = 'google'` or `source = 'outlook'` accordingly. Users with neither integration are skipped silently.
+## Sync window
+
+- **History:** 365 days back
+- **Future:** 730 days forward (~2 years)
+- Paginated fetch (Google 250/page, Outlook 100/page)
+
+## Triggers
+
+| When | Call |
+|------|------|
+| Google Calendar connect | `triggerCalendarConnectSync` → `{ ownerId, subscribe: true }` |
+| Outlook OAuth callback | same |
+| Settings health probe | `{ ownerId }` (no subscribe) |
+| Subscription renewal cron 09:00 UTC | `calendar-renew-subscriptions` |
+
+## Push webhooks
+
+| Provider | Endpoint | Mechanism |
+|----------|----------|-----------|
+| Google | `google-calendar-webhook` | `events.watch` + incremental `syncToken` |
+| Outlook | `outlook-calendar-webhook` | Graph `subscriptions` on `me/events` |
+
+State stored in `calendar_sync_subscriptions`.
 
 ## Deploy
 
-```sh
-supabase secrets set GOOGLE_OAUTH_CLIENT_ID=...
-supabase secrets set GOOGLE_OAUTH_CLIENT_SECRET=...
-supabase secrets set MICROSOFT_CLIENT_ID=...
-supabase secrets set MICROSOFT_CLIENT_SECRET=...
+```bash
+supabase db push   # calendar_sync_subscriptions migration
 supabase functions deploy sync-calendar
+supabase functions deploy google-calendar-webhook --no-verify-jwt
+supabase functions deploy outlook-calendar-webhook --no-verify-jwt
+supabase functions deploy calendar-renew-subscriptions
 ```
 
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by the Edge Runtime.
-
-The `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` are the **same Google Cloud OAuth client** you configured in Supabase Auth → Providers → Google during Slice B. They're needed here because Supabase Auth gives us the refresh token but doesn't refresh on our behalf for non-auth API calls.
-
-The `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` are the Microsoft Entra ID app registration credentials used by `outlook-oauth` for the initial code exchange and reused here to refresh Outlook access tokens against `login.microsoftonline.com/common/oauth2/v2.0/token`. Without them, Outlook-connected users will hit `needs_reconsent` as soon as their first access token expires.
-
-## Token-refresh behaviour
-
-On a 401 from the Calendar API, the function:
-
-1. Reads the User's `refresh_token` from `user_provider_tokens`
-2. Calls `POST oauth2.googleapis.com/token` with `grant_type=refresh_token`
-3. Updates `user_provider_tokens.access_token` + `expires_at` with the new token
-4. Retries the Calendar call once
-
-If the refresh fails (revoked, expired refresh token, etc.) the function returns `{ status: "needs_reconsent" }` in that User's summary so the caller (future UI) can prompt re-consent.
-
-## Request body
-
-Both fields are optional. When called from `pg_cron` the body is empty and the function syncs every connected User.
-
-```json
-{ "asOf": "2026-05-19T10:00:00Z", "ownerId": "uuid-or-omit" }
-```
-
-## Response
-
-```json
-{
-  "provider": "google",
-  "summaries": [
-    { "ownerId": "...", "eventsWritten": 12, "windowEnd": "...", "status": "ok" },
-    { "ownerId": "...", "eventsWritten": 0, "status": "needs_reconsent" }
-  ]
-}
-```
-
-## Why the function inlines the fetcher logic
-
-The canonical Google Calendar fetcher lives at `src/shared/src/integrations/google/GoogleCalendarFetcher.ts` and is unit-tested there. Edge Functions could import it via Deno's NPM specifiers if `@related/shared` were on npm — it isn't, so this function mirrors the fetcher locally. Same trade-off as `ambient-pass/index.ts`. The two implementations are kept in sync by hand; if the Google response mapping changes, change both.
+Dual-write logic is mirrored in `_shared/calendarSyncEngine.ts` (Deno) and `src/shared/src/signals/calendarSyncDualWrite.ts` (Node/tests).

@@ -94,7 +94,9 @@ supabase db push
    - `http://127.0.0.1:3000/settings/instagram/callback`
    - `https://related-sooty.vercel.app/settings/instagram/callback`
 2. Copy **Instagram App ID** → `NEXT_PUBLIC_INSTAGRAM_APP_ID` and `INSTAGRAM_APP_ID`.
-3. Copy **Instagram App Secret** → `INSTAGRAM_APP_SECRET` (Supabase only).
+
+   > **Important:** This is **not** the Facebook App ID on App settings → Basic (that ID is for WhatsApp / Facebook Login). Instagram Login exposes a separate **Instagram App ID** on this screen. Using the Facebook App ID causes Meta's white-page error: `Invalid platform app`.
+3. Copy **Instagram App Secret** → `INSTAGRAM_APP_SECRET` (Supabase only). This is also separate from the Facebook App Secret.
 4. **App Review** (for production): request
    - `instagram_business_basic`
    - `instagram_business_manage_messages`
@@ -201,6 +203,7 @@ See [`tiktok-dm/README.md`](../src/backend/supabase/functions/tiktok-dm/README.m
 | Symptom | Likely cause |
 |---------|----------------|
 | Connect button missing in Settings | Missing `NEXT_PUBLIC_*` in `.env.local` / Vercel |
+| Instagram white page: `Invalid platform app` | `NEXT_PUBLIC_INSTAGRAM_APP_ID` is the Facebook App ID (same as WhatsApp) instead of the **Instagram App ID** from Instagram → API setup with Instagram login |
 | Redirect works, callback shows error | Edge function not deployed or wrong `*_APP_SECRET` |
 | Instagram “permissions” error | Scopes not approved / user not app tester |
 | WhatsApp connected but no inbound messages | Webhook URL or `WHATSAPP_VERIFY_TOKEN` mismatch |

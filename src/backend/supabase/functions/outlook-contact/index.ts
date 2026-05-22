@@ -25,7 +25,7 @@ const MAIL_SEND_SCOPE = "Mail.Send";
 
 const CORS_HEADERS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "authorization, content-type",
+  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
   "access-control-allow-methods": "POST, OPTIONS",
 };
 
@@ -288,26 +288,51 @@ function mapMessageSummary(
   };
 }
 
-async function listMessagesForContact(
+const MESSAGE_LIST_SELECT =
+  "id,conversationId,subject,from,toRecipients,receivedDateTime,sentDateTime,bodyPreview";
+
+/** Graph supports $filter on from, but not on toRecipients — use $search for to: instead. */
+function buildFromContactListUrl(contactEmail: string, maxResults: number): string {
+  const normalized = escapeODataString(normalizeEmail(contactEmail));
+  const params = new URLSearchParams();
+  params.set("$filter", `from/emailAddress/address eq '${normalized}'`);
+  params.set("$select", MESSAGE_LIST_SELECT);
+  params.set("$top", String(maxResults));
+  return `${GRAPH_MESSAGES_URL}?${params.toString()}`;
+}
+
+function buildToContactSearchUrl(contactEmail: string, maxResults: number): string {
+  const normalized = normalizeEmail(contactEmail);
+  const params = new URLSearchParams();
+  params.set("$search", `"to:${normalized}"`);
+  params.set("$select", MESSAGE_LIST_SELECT);
+  params.set("$top", String(maxResults));
+  return `${GRAPH_MESSAGES_URL}?${params.toString()}`;
+}
+
+function mergeMessageSummaries(
+  batches: OutlookMessageSummary[],
+  maxResults: number,
+): OutlookMessageSummary[] {
+  const byId = new Map<string, OutlookMessageSummary>();
+  for (const message of batches) {
+    byId.set(message.id, message);
+  }
+  return [...byId.values()]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, maxResults);
+}
+
+async function fetchGraphMessages(
   supabase: any,
   tokenRow: TokenRow,
-  contactEmail: string,
-  maxResults: number,
-): Promise<OutlookMessageSummary[]> {
-  const normalized = escapeODataString(normalizeEmail(contactEmail));
-  const filter = encodeURIComponent(
-    `from/emailAddress/address eq '${normalized}' or toRecipients/any(r:r/emailAddress/address eq '${normalized}')`,
-  );
-  const select = encodeURIComponent(
-    "id,conversationId,subject,from,toRecipients,receivedDateTime,sentDateTime,bodyPreview",
-  );
-  const listUrl =
-    `${GRAPH_MESSAGES_URL}?$filter=${filter}&$select=${select}&$orderby=receivedDateTime desc&$top=${maxResults}`;
-
+  listUrl: string,
+  extraHeaders?: Record<string, string>,
+): Promise<GraphMessage[]> {
   const { response: listResponse } = await withOutlookAccessToken(
     supabase,
     tokenRow,
-    (accessToken) => graphFetch(listUrl, accessToken),
+    (accessToken) => graphFetch(listUrl, accessToken, { headers: extraHeaders }),
   );
 
   if (listResponse.status === 401) {
@@ -321,10 +346,28 @@ async function listMessagesForContact(
   }
 
   const listData = await listResponse.json();
-  const messages: GraphMessage[] = listData.value ?? [];
-  return messages
+  return listData.value ?? [];
+}
+
+async function listMessagesForContact(
+  supabase: any,
+  tokenRow: TokenRow,
+  contactEmail: string,
+  maxResults: number,
+): Promise<OutlookMessageSummary[]> {
+  const fromUrl = buildFromContactListUrl(contactEmail, maxResults);
+  const toUrl = buildToContactSearchUrl(contactEmail, maxResults);
+
+  const fromMessages = await fetchGraphMessages(supabase, tokenRow, fromUrl);
+  const toMessages = await fetchGraphMessages(supabase, tokenRow, toUrl, {
+    ConsistencyLevel: "eventual",
+  });
+
+  const summaries = [...fromMessages, ...toMessages]
     .map((message) => mapMessageSummary(message, contactEmail))
     .filter((m): m is OutlookMessageSummary => m !== null);
+
+  return mergeMessageSummaries(summaries, maxResults);
 }
 
 async function getMessageDetail(

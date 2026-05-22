@@ -15,6 +15,38 @@ export function consumeIntegrationOAuthError(): string | null {
   return message;
 }
 
+/**
+ * Clears stashed integration OAuth errors and provider error query params
+ * before starting a new connect flow (avoids flashing a prior failure).
+ */
+export function clearIntegrationOAuthFeedback(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(INTEGRATION_OAUTH_ERROR_KEY);
+  const url = new URL(window.location.href);
+  const keys = [
+    "oauth_error",
+    "oauth_success",
+    "error",
+    "error_description",
+    "code",
+    "state",
+  ];
+  let changed = false;
+  for (const key of keys) {
+    if (url.searchParams.has(key)) {
+      url.searchParams.delete(key);
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  const qs = url.searchParams.toString();
+  window.history.replaceState(
+    {},
+    "",
+    qs ? `${url.pathname}?${qs}` : url.pathname,
+  );
+}
+
 export function consumeIntegrationOAuthQueryFeedback(): {
   error: string | null;
   success: string | null;

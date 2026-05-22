@@ -19,7 +19,7 @@ const INSTAGRAM_SCOPE_MANAGE_MESSAGES = "instagram_business_manage_messages";
 
 const CORS_HEADERS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "authorization, content-type",
+  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
   "access-control-allow-methods": "POST, OPTIONS",
 };
 

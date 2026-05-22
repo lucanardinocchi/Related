@@ -10,7 +10,7 @@ import { FakeCalendarFetcher } from "./FakeCalendarFetcher";
  * The one-line entry point for "pull this User's calendar and persist
  * the 7-day forward window". Designed to be invoked from:
  *
- *   - the pg_cron-driven `sync-calendar` Edge Function (daily 10 AM)
+ *   - connect-time + webhook-driven `sync-calendar` Edge Function
  *   - a future "Sync now" button in the You/settings screen
  *   - tests and demo scripts (paired with FakeCalendarFetcher)
  *

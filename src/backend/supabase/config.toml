@@ -407,6 +407,9 @@ verify_jwt = false
 [functions.outlook-oauth]
 verify_jwt = false
 
+[functions.outlook-contact]
+verify_jwt = false
+
 [functions.x-oauth]
 verify_jwt = false
 

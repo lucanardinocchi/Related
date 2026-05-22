@@ -9,6 +9,7 @@ import {
 } from "@related/shared";
 import { redirect } from "next/navigation";
 import { getServerDeps } from "@/lib/deps/server";
+import { resolveInstagramAppId } from "@/lib/integrations/instagramConfig";
 import { OnboardingWizard } from "./_OnboardingWizard";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ export default async function OnboardingPage() {
       x={tokenHasXAccess(xToken?.scopes)}
       whatsapp={tokenHasWhatsAppAccess(whatsappToken?.scopes)}
       tiktok={tokenHasTikTokAccess(tiktokToken?.scopes)}
-      instagramAppId={process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID ?? null}
+      instagramAppId={resolveInstagramAppId()}
       xClientId={process.env.NEXT_PUBLIC_X_CLIENT_ID ?? null}
       whatsappAppId={process.env.NEXT_PUBLIC_WHATSAPP_APP_ID ?? null}
       tiktokClientKey={process.env.NEXT_PUBLIC_TIKTOK_CLIENT_KEY ?? null}

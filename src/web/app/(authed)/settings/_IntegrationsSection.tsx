@@ -27,13 +27,17 @@ import {
 import {
   buildGoogleIntegrationRedirectUri,
   captureGoogleProviderTokens,
+  connectInstagram as connectInstagramOAuth,
+  connectOutlookCalendar,
   OAUTH_INTENT_KEY,
-  OUTLOOK_CODE_VERIFIER_KEY,
-  OUTLOOK_OAUTH_STATE_KEY,
   refreshGoogleConnections,
 } from "@/lib/integrations/integrationConnect";
-import { setIntegrationOAuthValue, clearIntegrationOAuthValue } from "@/lib/integrations/integrationOAuthStorage";
 import {
+  INSTAGRAM_APP_ID_MISCONFIG_MESSAGE,
+  isInstagramAppIdMisconfigured,
+} from "@/lib/integrations/instagramConfig";
+import {
+  clearIntegrationOAuthFeedback,
   consumeIntegrationOAuthError,
   consumeIntegrationOAuthQueryFeedback,
   setOAuthReturnPath,
@@ -368,29 +372,14 @@ export function IntegrationsSection({
     }
   }
 
-  async function connectOutlookCalendar() {
+  async function connectOutlook() {
     if (working || !microsoftClientId) return;
+    clearIntegrationOAuthFeedback();
     setError(null);
     setWorking("outlook");
-    const redirectUri =
-      window.location.origin + "/settings/outlook/callback";
-    const state = crypto.randomUUID();
-    const codeVerifier = generateCodeVerifier();
-    setIntegrationOAuthValue(OUTLOOK_CODE_VERIFIER_KEY, codeVerifier);
-    setIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY, state);
     try {
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const { auth } = getBrowserDeps();
-      const url = auth.buildOutlookOAuthUrl({
-        clientId: microsoftClientId,
-        redirectUri,
-        codeChallenge,
-        state,
-      });
-      window.location.href = url;
+      await connectOutlookCalendar("/settings", microsoftClientId);
     } catch (e) {
-      clearIntegrationOAuthValue(OUTLOOK_CODE_VERIFIER_KEY);
-      clearIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY);
       setWorking(null);
       setError(e instanceof Error ? e.message : "Failed to start OAuth");
     }
@@ -415,19 +404,11 @@ export function IntegrationsSection({
   }
 
   async function connectInstagram() {
-    if (working || !instagramAppId) return;
+    if (working) return;
     setError(null);
     setWorking("instagram");
-    const redirectUri =
-      window.location.origin + "/settings/instagram/callback";
-    sessionStorage.setItem(INSTAGRAM_OAUTH_STATE_KEY, "connect");
     try {
-      const { auth } = getBrowserDeps();
-      const url = auth.buildInstagramOAuthUrl({
-        appId: instagramAppId,
-        redirectUri,
-      });
-      window.location.href = url;
+      await connectInstagramOAuth("/settings");
     } catch (e) {
       sessionStorage.removeItem(INSTAGRAM_OAUTH_STATE_KEY);
       setWorking(null);
@@ -578,8 +559,8 @@ export function IntegrationsSection({
                       needsReconsent.outlookCalendar || needsReconsent.outlookMail
                     }
                     connectLabel="Connect Outlook"
-                    onConnect={() => void connectOutlookCalendar()}
-                    onReconnect={() => void connectOutlookCalendar()}
+                    onConnect={() => void connectOutlook()}
+                    onReconnect={() => void connectOutlook()}
                     onDisconnect={() => void disconnectOutlook()}
                     connectLoading={working === "outlook"}
                     disconnectLoading={working === "disconnect-outlook"}
@@ -605,7 +586,7 @@ export function IntegrationsSection({
                 <IntegrationConnectionActions
                   connected={false}
                   connectLabel="Connect Outlook"
-                  onConnect={() => void connectOutlookCalendar()}
+                  onConnect={() => void connectOutlook()}
                   connectLoading={working === "outlook"}
                   disabled={busy}
                 />
@@ -656,6 +637,13 @@ export function IntegrationsSection({
                   Set{" "}
                   <code className="text-[12px]">NEXT_PUBLIC_INSTAGRAM_APP_ID</code>{" "}
                   to enable Instagram connect.
+                </p>
+              ) : isInstagramAppIdMisconfigured(
+                  instagramAppId,
+                  whatsappAppId,
+                ) ? (
+                <p className="text-[13px] text-danger" role="alert">
+                  {INSTAGRAM_APP_ID_MISCONFIG_MESSAGE}
                 </p>
               ) : (
                 <IntegrationConnectionActions

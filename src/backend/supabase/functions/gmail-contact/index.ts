@@ -12,6 +12,10 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
+import {
+  BROWSER_INVOKE_CORS_HEADERS,
+  browserInvokeOptionsResponse,
+} from "../_shared/browserInvokeCors.ts";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_MESSAGES_URL =
@@ -21,12 +25,6 @@ const GMAIL_SEND_URL =
 
 const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
-
-const CORS_HEADERS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "authorization, content-type",
-  "access-control-allow-methods": "POST, OPTIONS",
-};
 
 interface ListRequest {
   action: "list";
@@ -87,7 +85,7 @@ function jsonResponse(
 ): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, "content-type": "application/json" },
+    headers: { ...BROWSER_INVOKE_CORS_HEADERS, "content-type": "application/json" },
   });
 }
 
@@ -427,7 +425,7 @@ async function sendMessage(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return browserInvokeOptionsResponse();
   }
   if (req.method !== "POST") {
     return jsonResponse(405, { error: "method not allowed" });
