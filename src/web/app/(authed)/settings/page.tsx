@@ -6,6 +6,7 @@ import {
   tokenHasWhatsAppAccess,
   tokenHasTikTokAccess,
   tokenHasOutlookCalendarAccess,
+  tokenHasOutlookMailAccess,
 } from "@related/shared";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { getServerDeps } from "@/lib/deps/server";
@@ -77,6 +78,9 @@ export default async function SettingsPage() {
         )}
         initialTikTokConnected={tokenHasTikTokAccess(tiktokToken?.scopes)}
         initialOutlookCalendarConnected={tokenHasOutlookCalendarAccess(
+          outlookToken?.scopes,
+        )}
+        initialOutlookMailConnected={tokenHasOutlookMailAccess(
           outlookToken?.scopes,
         )}
         instagramAppId={instagramAppId}

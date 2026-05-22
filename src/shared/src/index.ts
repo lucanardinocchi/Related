@@ -421,10 +421,14 @@ export {
 
 export {
   OUTLOOK_SCOPE_CALENDARS_READ,
+  OUTLOOK_SCOPE_MAIL_READ,
+  OUTLOOK_SCOPE_MAIL_SEND,
   OUTLOOK_SCOPE_OFFLINE_ACCESS,
   OUTLOOK_SCOPE_USER_READ,
   OUTLOOK_CALENDAR_SCOPES,
+  OUTLOOK_INTEGRATION_SCOPES,
   tokenHasOutlookCalendarAccess,
+  tokenHasOutlookMailAccess,
 } from "./integrations/outlook/outlookScopes";
 
 export { GmailClient } from "./integrations/GmailClient";
@@ -512,6 +516,13 @@ export type {
 } from "./integrations/WhatsAppClient";
 
 export { OutlookClient } from "./integrations/OutlookClient";
+export type {
+  OutlookMessageSummary,
+  OutlookMessageDetail,
+  ListOutlookForContactInput,
+  SendOutlookInput,
+  OutlookContactStatus,
+} from "./integrations/OutlookClient";
 
 export { PocketClient, tokenHasPocketAccess } from "./integrations/PocketClient";
 export type {
@@ -677,6 +688,7 @@ export type {
 export {
   fromCommsPlatformMessage,
   fromGmailMessage,
+  fromOutlookMessage,
   fromImessageMessage,
   fromInstagramMessage,
   fromTikTokMessage,

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { Button, Select, Textarea } from "@/components/ui";
+import type { CommsPlatform } from "@related/shared";
 import { CommsPlatformIcon } from "./_commsIcons";
 
 export type ComposePlatform =
@@ -10,8 +11,14 @@ export type ComposePlatform =
   | "whatsapp"
   | "x"
   | "tiktok"
-  | "email"
+  | "email-gmail"
+  | "email-outlook"
   | "imessage";
+
+function composePlatformIcon(platform: ComposePlatform): CommsPlatform {
+  if (platform === "email-gmail" || platform === "email-outlook") return "email";
+  return platform;
+}
 
 export interface AvailablePlatform {
   platform: ComposePlatform;
@@ -99,7 +106,9 @@ export function CommsComposeBar({
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="text-fg-muted">
-            {platform ? <CommsPlatformIcon platform={platform} /> : null}
+            {platform ? (
+              <CommsPlatformIcon platform={composePlatformIcon(platform)} />
+            ) : null}
           </span>
           <div className="min-w-[8rem] max-w-[14rem]">
             <Select

@@ -44,7 +44,9 @@ vi.mock("@/lib/integrations/integrationConnect", async (importOriginal) => {
     refreshGoogleConnections: vi
       .fn()
       .mockResolvedValue({ calendar: false, gmail: false }),
-    refreshOutlookConnection: vi.fn().mockResolvedValue(false),
+    refreshOutlookConnection: vi
+      .fn()
+      .mockResolvedValue({ calendar: false, mail: false }),
     refreshInstagramConnection: vi.fn().mockResolvedValue(false),
     refreshXConnection: vi.fn().mockResolvedValue(false),
     refreshWhatsAppConnection: vi.fn().mockResolvedValue(false),

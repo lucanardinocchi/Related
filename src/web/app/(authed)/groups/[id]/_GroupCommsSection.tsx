@@ -437,7 +437,8 @@ export function GroupCommsSection({
           break;
         }
         case "instagram":
-        case "email":
+        case "email-gmail":
+        case "email-outlook":
           throw new Error("Not available for groups.");
       }
       await loadComms();

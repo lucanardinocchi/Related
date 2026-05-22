@@ -44,7 +44,7 @@ export const ONBOARDING_WIZARD_STEPS: OnboardingWizardStep[] = [
     label: "Messaging",
     title: "Connect messaging",
     body:
-      "Link the channels you use for DMs so Related can surface conversations on relationship pages. Connect any combination, or skip them all.",
+      "Link the channels you use for DMs so Related can surface conversations on relationship pages. Instagram and X are available now; WhatsApp and TikTok are coming soon.",
     optional: true,
   },
   {

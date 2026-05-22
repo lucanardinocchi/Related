@@ -395,6 +395,24 @@ verify_jwt = false
 [functions.related-mcp]
 verify_jwt = false
 
+# Integration OAuth callbacks validate the user JWT inside the handler.
+# Gateway verify_jwt=false ensures 401 responses include CORS headers when
+# the session is stale, instead of opaque browser fetch failures.
+[functions.outlook-oauth]
+verify_jwt = false
+
+[functions.x-oauth]
+verify_jwt = false
+
+[functions.instagram-oauth]
+verify_jwt = false
+
+[functions.whatsapp-oauth]
+verify_jwt = false
+
+[functions.tiktok-oauth]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

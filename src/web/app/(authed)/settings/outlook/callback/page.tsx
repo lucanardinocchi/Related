@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getBrowserDeps } from "@/lib/deps/client";
+import { ensureOAuthCallbackSession } from "@/lib/integrations/ensureOAuthCallbackSession";
 import { OAuthReturnLink } from "@/components/integrations/OAuthReturnLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -58,6 +59,7 @@ export default function OutlookCallbackPage() {
 
       try {
         const { outlook, onboarding, supabase } = getBrowserDeps();
+        await ensureOAuthCallbackSession(supabase);
         const redirectUri =
           window.location.origin + "/settings/outlook/callback";
         const result = await outlook.exchangeOAuthCode({

@@ -31,6 +31,7 @@ import {
   refreshTikTokConnection,
 } from "@/lib/integrations/integrationConnect";
 import { setOAuthReturnPath } from "@/lib/integrations/oauthReturn";
+import { isIntegrationComingSoon } from "@/lib/integrations/integrationAvailability";
 import { OnboardingStepChecklist } from "./_OnboardingStepChecklist";
 import {
   ONBOARDING_WIZARD_STEPS,
@@ -110,7 +111,7 @@ export function OnboardingWizard({
       ]);
     setCalendarConnected(google.calendar);
     setGmailConnected(google.gmail);
-    setOutlookConnected(outlook);
+    setOutlookConnected(outlook.calendar);
     setInstagramConnected(instagram);
     setXConnected(x);
     setWhatsappConnected(whatsapp);
@@ -356,6 +357,7 @@ export function OnboardingWizard({
                 connectLabel="Connect WhatsApp"
                 loading={working === "whatsapp"}
                 disabled={working !== null || !whatsappAppId}
+                comingSoon={isIntegrationComingSoon("whatsapp")}
                 unavailableNote={
                   !whatsappAppId
                     ? "WhatsApp is not configured in this environment."
@@ -379,6 +381,7 @@ export function OnboardingWizard({
                 connectLabel="Connect TikTok"
                 loading={working === "tiktok"}
                 disabled={working !== null || !tiktokClientKey}
+                comingSoon={isIntegrationComingSoon("tiktok")}
                 unavailableNote={
                   !tiktokClientKey
                     ? "TikTok is not configured in this environment."
@@ -406,8 +409,8 @@ export function OnboardingWizard({
                 <ReviewRow label="Gmail" connected={gmailConnected} />
                 <ReviewRow label="Instagram" connected={instagramConnected} />
                 <ReviewRow label="X" connected={xConnected} />
-                <ReviewRow label="WhatsApp" connected={whatsappConnected} />
-                <ReviewRow label="TikTok" connected={tiktokConnected} />
+                <ReviewRow label="WhatsApp" connected={whatsappConnected} comingSoon={isIntegrationComingSoon("whatsapp")} />
+                <ReviewRow label="TikTok" connected={tiktokConnected} comingSoon={isIntegrationComingSoon("tiktok")} />
               </ul>
               <p className="mt-4 text-[13px] text-fg-subtle">
                 You can connect or disconnect any of these later in Settings.
@@ -464,6 +467,7 @@ function IntegrationCard({
   connectLabel,
   loading,
   disabled,
+  comingSoon = false,
   unavailableNote,
   onConnect,
 }: {
@@ -474,6 +478,7 @@ function IntegrationCard({
   connectLabel: string;
   loading: boolean;
   disabled: boolean;
+  comingSoon?: boolean;
   unavailableNote?: string;
   onConnect: () => void;
 }) {
@@ -491,6 +496,8 @@ function IntegrationCard({
               <Check size={14} aria-hidden />
               Connected
             </p>
+          ) : comingSoon ? (
+            <p className="text-[13px] text-fg-muted">Coming soon</p>
           ) : unavailableNote ? (
             <p className="text-[13px] text-fg-muted">{unavailableNote}</p>
           ) : (
@@ -513,10 +520,17 @@ function IntegrationCard({
 function ReviewRow({
   label,
   connected,
+  comingSoon = false,
 }: {
   label: string;
   connected: boolean;
+  comingSoon?: boolean;
 }) {
+  const status = connected
+    ? "Connected"
+    : comingSoon
+      ? "Coming soon"
+      : "Not connected";
   return (
     <li className="flex items-center justify-between gap-4">
       <span>{label}</span>
@@ -526,7 +540,7 @@ function ReviewRow({
           connected ? "text-success" : "text-fg-subtle",
         )}
       >
-        {connected ? "Connected" : "Not connected"}
+        {status}
       </span>
     </li>
   );

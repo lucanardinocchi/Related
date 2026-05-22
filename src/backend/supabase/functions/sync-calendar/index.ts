@@ -60,7 +60,8 @@ const OUTLOOK_CALENDAR_VIEW_URL =
   "https://graph.microsoft.com/v1.0/me/calendarView";
 const MICROSOFT_TOKEN_URL =
   "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-const OUTLOOK_SCOPES = "Calendars.Read offline_access User.Read";
+const OUTLOOK_SCOPES =
+  "Calendars.Read Mail.Read Mail.Send offline_access User.Read";
 
 function buildGoogleEventsUrl(asOf: Date): string {
   const timeMax = new Date(asOf);

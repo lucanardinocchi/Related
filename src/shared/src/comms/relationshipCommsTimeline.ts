@@ -1,4 +1,5 @@
 import type { GmailMessageSummary } from "../integrations/GmailClient";
+import type { OutlookMessageSummary } from "../integrations/OutlookClient";
 import type { InstagramMessageSummary } from "../integrations/InstagramClient";
 import type { TikTokMessageSummary } from "../integrations/TikTokClient";
 import type { WhatsAppMessageSummary } from "../integrations/WhatsAppClient";
@@ -23,9 +24,11 @@ export interface CommsTimelineItem {
   body: string;
   subject?: string;
   snippet?: string;
-  /** Gmail message id — used to fetch full body on expand. */
+  /** Gmail or Outlook message id — used to fetch full body on expand. */
   emailMessageId?: string;
-  /** Preloaded email body (seed/cache) — skips Gmail fetch on expand. */
+  /** Which mail provider owns emailMessageId — defaults to gmail when absent. */
+  emailProvider?: "gmail" | "outlook";
+  /** Preloaded email body (seed/cache) — skips live fetch on expand. */
   emailFullBody?: string;
 }
 
@@ -56,7 +59,7 @@ export function fromImessageMessage(message: Message): CommsTimelineItem {
 
 export function fromGmailMessage(message: GmailMessageSummary): CommsTimelineItem {
   return {
-    id: `email:${message.id}`,
+    id: `email:gmail:${message.id}`,
     platform: "email",
     direction: message.direction,
     sentAt: message.date,
@@ -64,6 +67,23 @@ export function fromGmailMessage(message: GmailMessageSummary): CommsTimelineIte
     subject: message.subject,
     snippet: message.snippet,
     emailMessageId: message.id,
+    emailProvider: "gmail",
+  };
+}
+
+export function fromOutlookMessage(
+  message: OutlookMessageSummary,
+): CommsTimelineItem {
+  return {
+    id: `email:outlook:${message.id}`,
+    platform: "email",
+    direction: message.direction,
+    sentAt: message.date,
+    body: message.snippet || message.subject,
+    subject: message.subject,
+    snippet: message.snippet,
+    emailMessageId: message.id,
+    emailProvider: "outlook",
   };
 }
 

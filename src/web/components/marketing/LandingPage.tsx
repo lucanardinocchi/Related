@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   HeartHandshake,
   MessageSquareText,
+  Mic,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -13,6 +14,8 @@ import { Card } from "@/components/ui/Card";
 import { Body, Eyebrow, H2, Mono, Small } from "@/components/ui/Typography";
 import { cn } from "@/lib/cn";
 import { MarketingLinkButton } from "./MarketingLinkButton";
+
+const POCKET_URL = "https://heypocket.com";
 
 const RELATIONSHIP_CARDS = [
   {
@@ -115,8 +118,15 @@ const INTEGRATIONS = [
   "Gmail",
   "Instagram",
   "X",
+  "Pocket AI",
   "HealthKit (iOS)",
   "MCP for Claude & Cursor",
+];
+
+const POCKET_EXTRACTS = [
+  "Note: Moving to London in March, wants intro to design leads",
+  "Open thread: Send portfolio to her team",
+  "Interaction: Coffee catch-up logged on the timeline",
 ];
 
 const PERSONAS = [
@@ -411,6 +421,98 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* Pocket */}
+      <section id="pocket" className="border-y border-border bg-surface">
+        <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-2 lg:items-center lg:gap-16">
+          <Card className="order-2 border border-border bg-bg p-5 shadow-2 lg:order-1">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface">
+                <Mic size={16} className="text-fg-muted" aria-hidden />
+              </div>
+              <div>
+                <Small className="uppercase tracking-[0.08em]">Pocket recording</Small>
+                <div className="text-[15px] font-medium">Coffee with Maya Chen</div>
+              </div>
+              <Badge tone="sent" className="ml-auto">
+                Imported
+              </Badge>
+            </div>
+            <p className="mt-3 text-[13px] leading-[20px] text-fg-muted">
+              42 min · transcribed automatically after the conversation ended
+            </p>
+
+            <div className="my-4 flex items-center gap-2 text-[12px] text-fg-subtle">
+              <span className="h-px flex-1 bg-border" />
+              Extraction Pass
+              <span className="h-px flex-1 bg-border" />
+            </div>
+
+            <div className="space-y-2">
+              <Small className="block text-fg-subtle">Added to Maya Chen</Small>
+              {POCKET_EXTRACTS.map((item) => (
+                <div
+                  key={item}
+                  className="rounded-md bg-surface px-3 py-2 text-[13px] leading-[20px] text-fg"
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <div className="order-1 lg:order-2">
+            <Eyebrow>Pocket integration</Eyebrow>
+            <h2 className="mt-2 text-[28px] font-medium leading-[1.2] tracking-[-0.02em] text-fg sm:text-[32px]">
+              Surface the context that usually gets lost
+            </h2>
+            <Body className="mt-4 text-fg-muted">
+              Link Related to{" "}
+              <a
+                href={POCKET_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent underline underline-offset-2 hover:text-accent-hover"
+              >
+                Pocket
+              </a>
+              . Record coffees, calls, and meetings in the real world. Transcripts
+              import automatically, run through the Extraction Pass, and land on
+              the right relationship as notes, interactions, and open threads.
+            </Body>
+            <ul className="mt-6 space-y-2.5">
+              {[
+                "Automatic import when Pocket finishes transcription",
+                "Speaker matching ties the conversation to the right contact",
+                "Commitments and follow-ups extracted from what you actually said",
+                "Ambient Intelligence uses the new context on the next pass",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2 text-[14px] text-fg">
+                  <CheckCircle2
+                    size={16}
+                    className="mt-0.5 shrink-0 text-success"
+                    aria-hidden
+                  />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a
+                href={POCKET_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 items-center justify-center rounded-md bg-fg px-4 text-[14px] font-medium text-fg-on-accent transition-colors hover:bg-[#1f1d18]"
+              >
+                Get Pocket
+              </a>
+              <MarketingLinkButton href="/sign-up" variant="secondary">
+                Connect in Related
+              </MarketingLinkButton>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section id="features" className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
         <div className="text-center">
@@ -449,8 +551,8 @@ export function LandingPage() {
               </h2>
               <Body className="mt-4 text-fg-muted">
                 Read-only calendar access, email and DMs on relationship pages,
-                HealthKit sleep on iOS, and MCP for Claude and Cursor. Connect
-                what you use. Skip the rest.
+                Pocket voice recordings, HealthKit sleep on iOS, and MCP for Claude
+                and Cursor. Connect what you use. Skip the rest.
               </Body>
               <MarketingLinkButton href="/sign-up" className="mt-6">
                 Connect your accounts

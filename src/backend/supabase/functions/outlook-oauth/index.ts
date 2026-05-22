@@ -13,7 +13,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
 const MICROSOFT_TOKEN_URL =
   "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const GRAPH_ME_URL = "https://graph.microsoft.com/v1.0/me";
-const OUTLOOK_SCOPES = "Calendars.Read offline_access User.Read";
+const OUTLOOK_SCOPES =
+  "Calendars.Read Mail.Read Mail.Send offline_access User.Read";
 
 const CORS_HEADERS = {
   "access-control-allow-origin": "*",
@@ -50,15 +51,21 @@ async function exchangeCodeForTokens(input: {
     code: input.code,
     grant_type: "authorization_code",
     client_id: CLIENT_ID ?? "",
-    client_secret: CLIENT_SECRET ?? "",
     redirect_uri: input.redirectUri,
     code_verifier: input.codeVerifier,
-    scope: OUTLOOK_SCOPES,
   });
+
+  const headers: Record<string, string> = {
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  if (CLIENT_SECRET) {
+    headers.authorization =
+      `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`;
+  }
 
   const response = await fetch(MICROSOFT_TOKEN_URL, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers,
     body: body.toString(),
   });
 

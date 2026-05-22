@@ -13,11 +13,13 @@ import {
   tokenHasWhatsAppAccess,
   tokenHasTikTokAccess,
   tokenHasOutlookCalendarAccess,
+  tokenHasOutlookMailAccess,
   generateCodeVerifier,
   generateCodeChallenge,
 } from "@related/shared";
 import { Button, Card, Section } from "@/components/ui";
 import { getBrowserDeps } from "@/lib/deps/client";
+import { isIntegrationComingSoon } from "@/lib/integrations/integrationAvailability";
 import { setOAuthReturnPath } from "@/lib/integrations/oauthReturn";
 
 const OAUTH_INTENT_KEY = "related.google-oauth-intent";
@@ -37,6 +39,7 @@ interface Props {
   initialWhatsAppConnected: boolean;
   initialTikTokConnected: boolean;
   initialOutlookCalendarConnected: boolean;
+  initialOutlookMailConnected: boolean;
   instagramAppId: string | null;
   xClientId: string | null;
   whatsappAppId: string | null;
@@ -52,6 +55,7 @@ export function IntegrationsSection({
   initialWhatsAppConnected,
   initialTikTokConnected,
   initialOutlookCalendarConnected,
+  initialOutlookMailConnected,
   instagramAppId,
   xClientId,
   whatsappAppId,
@@ -72,6 +76,9 @@ export function IntegrationsSection({
   const [tiktokConnected, setTiktokConnected] = useState(initialTikTokConnected);
   const [outlookCalendarConnected, setOutlookCalendarConnected] = useState(
     initialOutlookCalendarConnected,
+  );
+  const [outlookMailConnected, setOutlookMailConnected] = useState(
+    initialOutlookMailConnected,
   );
   const [working, setWorking] = useState<
     | "calendar"
@@ -174,6 +181,9 @@ export function IntegrationsSection({
     const token = await userProviderTokens.getForProvider("outlook");
     setOutlookCalendarConnected(
       token !== null && tokenHasOutlookCalendarAccess(token.scopes),
+    );
+    setOutlookMailConnected(
+      token !== null && tokenHasOutlookMailAccess(token.scopes),
     );
   }, []);
 
@@ -399,18 +409,42 @@ export function IntegrationsSection({
             <div className="min-w-0 flex-1 space-y-2">
               <div>
                 <p className="text-[14px] font-medium text-fg">
-                  Outlook Calendar
+                  Outlook
                 </p>
                 <p className="mt-0.5 text-[13px] text-fg-muted">
-                  Read-only access to your Outlook calendar for the same
-                  week-density signal as Google Calendar.
+                  Read-only calendar plus read/send email with contacts from
+                  their relationship pages.
                 </p>
               </div>
-              {outlookCalendarConnected ? (
-                <p className="text-[13px] text-fg-muted">
-                  <span aria-hidden="true">✓ </span>
-                  Connected
-                </p>
+              {outlookCalendarConnected || outlookMailConnected ? (
+                <div className="space-y-1 text-[13px] text-fg-muted">
+                  <p>
+                    <span aria-hidden="true">
+                      {outlookCalendarConnected ? "✓" : "○"}{" "}
+                    </span>
+                    Calendar{outlookCalendarConnected ? " connected" : " not connected"}
+                  </p>
+                  <p>
+                    <span aria-hidden="true">
+                      {outlookMailConnected ? "✓" : "○"}{" "}
+                    </span>
+                    Mail{outlookMailConnected ? " connected" : " not connected"}
+                  </p>
+                  {!outlookCalendarConnected || !outlookMailConnected ? (
+                    !microsoftClientId ? null : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={working === "outlook"}
+                        disabled={working !== null}
+                        onClick={() => void connectOutlookCalendar()}
+                        className="mt-1"
+                      >
+                        Reconnect Outlook
+                      </Button>
+                    )
+                  ) : null}
+                </div>
               ) : !microsoftClientId ? (
                 <p className="text-[13px] text-fg-muted">
                   Set{" "}
@@ -427,7 +461,7 @@ export function IntegrationsSection({
                   disabled={working !== null}
                   onClick={() => void connectOutlookCalendar()}
                 >
-                  Connect Outlook Calendar
+                  Connect Outlook
                 </Button>
               )}
             </div>
@@ -561,6 +595,8 @@ export function IntegrationsSection({
                   <span aria-hidden="true">✓ </span>
                   Connected
                 </p>
+              ) : isIntegrationComingSoon("whatsapp") ? (
+                <p className="text-[13px] text-fg-muted">Coming soon</p>
               ) : !whatsappAppId ? (
                 <p className="text-[13px] text-fg-muted">
                   Set{" "}
@@ -602,6 +638,8 @@ export function IntegrationsSection({
                   <span aria-hidden="true">✓ </span>
                   Connected
                 </p>
+              ) : isIntegrationComingSoon("tiktok") ? (
+                <p className="text-[13px] text-fg-muted">Coming soon</p>
               ) : !tiktokClientKey ? (
                 <p className="text-[13px] text-fg-muted">
                   Set{" "}

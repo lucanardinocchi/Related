@@ -3,6 +3,7 @@ import { MarketingLinkButton } from "./MarketingLinkButton";
 
 const NAV = [
   { href: "#how-it-works", label: "How it works" },
+  { href: "#pocket", label: "Pocket" },
   { href: "#features", label: "Features" },
   { href: "#integrations", label: "Integrations" },
   { href: "#pricing", label: "Pricing" },

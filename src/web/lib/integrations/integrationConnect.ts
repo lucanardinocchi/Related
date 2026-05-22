@@ -10,6 +10,7 @@ import {
   tokenHasWhatsAppAccess,
   tokenHasTikTokAccess,
   tokenHasOutlookCalendarAccess,
+  tokenHasOutlookMailAccess,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { setOAuthReturnPath } from "./oauthReturn";
@@ -53,10 +54,16 @@ export async function refreshGoogleConnections(): Promise<{
   };
 }
 
-export async function refreshOutlookConnection(): Promise<boolean> {
+export async function refreshOutlookConnection(): Promise<{
+  calendar: boolean;
+  mail: boolean;
+}> {
   const { userProviderTokens } = getBrowserDeps();
   const token = await userProviderTokens.getForProvider("outlook");
-  return token !== null && tokenHasOutlookCalendarAccess(token.scopes);
+  return {
+    calendar: tokenHasOutlookCalendarAccess(token?.scopes),
+    mail: tokenHasOutlookMailAccess(token?.scopes),
+  };
 }
 
 export async function refreshInstagramConnection(): Promise<boolean> {

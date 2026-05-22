@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   type CommsTimelineItem,
   fromGmailMessage,
+  fromOutlookMessage,
   fromImessageMessage,
   fromInstagramMessage,
   fromInstagramRow,
@@ -18,6 +19,7 @@ import {
   fromXMessage,
   mergeCommsTimelineItems,
   tokenHasGmailAccess,
+  tokenHasOutlookMailAccess,
   tokenHasInstagramAccess,
   tokenHasTikTokAccess,
   tokenHasWhatsAppAccess,
@@ -114,12 +116,14 @@ export function CommsSection({
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
   const [connectedPlatforms, setConnectedPlatforms] = useState<{
     gmail: boolean;
+    outlookMail: boolean;
     instagram: boolean;
     whatsapp: boolean;
     x: boolean;
     tiktok: boolean;
   }>({
     gmail: false,
+    outlookMail: false,
     instagram: false,
     whatsapp: false,
     x: false,
@@ -133,6 +137,7 @@ export function CommsSection({
       supabase,
       messages: messagesClient,
       gmail,
+      outlook,
       instagram,
       x,
       whatsapp,
@@ -141,8 +146,9 @@ export function CommsSection({
     } = getBrowserDeps();
 
     try {
-      const [googleTok, igTok, waTok, xTok, ttTok] = await Promise.all([
+      const [googleTok, outlookTok, igTok, waTok, xTok, ttTok] = await Promise.all([
         userProviderTokens.getForProvider("google"),
+        userProviderTokens.getForProvider("outlook"),
         userProviderTokens.getForProvider("instagram"),
         userProviderTokens.getForProvider("whatsapp"),
         userProviderTokens.getForProvider("x"),
@@ -150,6 +156,8 @@ export function CommsSection({
       ]);
       setConnectedPlatforms({
         gmail: !!googleTok && tokenHasGmailAccess(googleTok.scopes),
+        outlookMail:
+          !!outlookTok && tokenHasOutlookMailAccess(outlookTok.scopes),
         instagram: !!igTok && tokenHasInstagramAccess(igTok.scopes),
         whatsapp: !!waTok && tokenHasWhatsAppAccess(waTok.scopes),
         x: !!xTok && tokenHasXAccess(xTok.scopes),
@@ -259,16 +267,41 @@ export function CommsSection({
       loaders.push(
         (async () => {
           try {
-            const token = await userProviderTokens.getForProvider("google");
-            if (!token || !tokenHasGmailAccess(token.scopes)) return;
-            const result = await gmail.listForContact({
+            const googleTok = await userProviderTokens.getForProvider("google");
+            if (googleTok && tokenHasGmailAccess(googleTok.scopes)) {
+              const result = await gmail.listForContact({
+                contactEmail: contact.email!,
+                maxResults: 25,
+              });
+              if (result.status === "ok") {
+                addItems(
+                  result.messages.map((message) => fromGmailMessage(message)),
+                );
+              }
+            }
+          } catch {
+            // Gmail unavailable — skip.
+          }
+        })(),
+      );
+      loaders.push(
+        (async () => {
+          try {
+            const outlookTok = await userProviderTokens.getForProvider("outlook");
+            if (!outlookTok || !tokenHasOutlookMailAccess(outlookTok.scopes)) {
+              return;
+            }
+            const result = await outlook.listForContact({
               contactEmail: contact.email!,
               maxResults: 25,
             });
-            if (result.status !== "ok") return;
-            addItems(result.messages.map((message) => fromGmailMessage(message)));
+            if (result.status === "ok") {
+              addItems(
+                result.messages.map((message) => fromOutlookMessage(message)),
+              );
+            }
           } catch {
-            // Gmail unavailable — skip.
+            // Outlook mail unavailable — skip.
           }
         })(),
       );
@@ -500,7 +533,10 @@ export function CommsSection({
     const waId = deriveWaId(contact.whatsappWaId, contact.phone);
 
     if (contact.email && connectedPlatforms.gmail) {
-      out.push({ platform: "email", label: "Email" });
+      out.push({ platform: "email-gmail", label: "Gmail" });
+    }
+    if (contact.email && connectedPlatforms.outlookMail) {
+      out.push({ platform: "email-outlook", label: "Outlook" });
     }
     if (
       (contact.instagramScopedId || contact.instagramUsername) &&
@@ -555,9 +591,19 @@ export function CommsSection({
       const deps = getBrowserDeps();
       const waId = deriveWaId(contact.whatsappWaId, contact.phone);
       switch (platform) {
-        case "email": {
+        case "email-gmail": {
           if (!contact.email) throw new Error("No email on file.");
           const result = await deps.gmail.send({
+            to: contact.email,
+            subject: "(no subject)",
+            body: text,
+          });
+          if (result.status !== "ok") throw new Error("Could not send email.");
+          break;
+        }
+        case "email-outlook": {
+          if (!contact.email) throw new Error("No email on file.");
+          const result = await deps.outlook.send({
             to: contact.email,
             subject: "(no subject)",
             body: text,
@@ -852,8 +898,10 @@ function EmailMessageCard({
       setLoadingBody(true);
       setLoadError(null);
       try {
-        const { gmail } = getBrowserDeps();
-        const result = await gmail.getMessage(item.emailMessageId);
+        const { gmail, outlook } = getBrowserDeps();
+        const mailClient =
+          item.emailProvider === "outlook" ? outlook : gmail;
+        const result = await mailClient.getMessage(item.emailMessageId);
         if (result.status !== "ok" || !result.message) {
           setLoadError("Could not load email body.");
         } else {
