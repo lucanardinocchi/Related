@@ -13,6 +13,11 @@ import Anthropic from "npm:@anthropic-ai/sdk@^0.96.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.45.0";
 
 import {
+  createCallModel,
+  runAgentToolLoop,
+} from "../../../../shared/src/conversational/index.ts";
+import type { AnthropicCreateClient } from "../../../../shared/src/conversational/agentLoop.ts";
+import {
   bumpSummary,
   dispatchTool,
   emptySummary,
@@ -39,61 +44,27 @@ async function runExtraction(
   ctx: ToolContext,
 ): Promise<ExtractionSummary> {
   const summary = emptySummary();
-  const working: Array<{
-    role: "user" | "assistant";
-    content: string | unknown[];
-  }> = [{ role: "user", content: userMessage }];
 
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    const resp = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: SYSTEM_PROMPT,
-      tools: EXTRACTION_TOOLS as any,
-      messages: working as any,
-    });
-
-    const blocks = (resp.content ?? []) as Array<{
-      type: string;
-      id?: string;
-      name?: string;
-      input?: Record<string, unknown>;
-    }>;
-
-    const toolUses = blocks.filter((b) => b.type === "tool_use");
-    if (toolUses.length === 0) return summary;
-
-    working.push({ role: "assistant", content: blocks });
-
-    const results = await Promise.all(
-      toolUses.map(async (tu) => {
-        try {
-          await dispatchTool(
-            tu.name ?? "",
-            (tu.input ?? {}) as Record<string, unknown>,
-            ctx,
-          );
-          bumpSummary(summary, tu.name ?? "");
-          return {
-            type: "tool_result",
-            tool_use_id: tu.id,
-            content: '{"ok":true}',
-          };
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          summary.toolErrors.push(`${tu.name}: ${message}`);
-          return {
-            type: "tool_result",
-            tool_use_id: tu.id,
-            content: `Error: ${message}`,
-            is_error: true,
-          };
-        }
-      }),
-    );
-
-    working.push({ role: "user", content: results });
-  }
+  await runAgentToolLoop({
+    callModel: createCallModel(anthropic as unknown as AnthropicCreateClient),
+    system: SYSTEM_PROMPT,
+    tools: EXTRACTION_TOOLS,
+    messages: [{ role: "user", content: userMessage }],
+    dispatchTool: async (name, input) => {
+      try {
+        const result = await dispatchTool(name, input, ctx);
+        bumpSummary(summary, name);
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        summary.toolErrors.push(`${name}: ${message}`);
+        throw err;
+      }
+    },
+    model: MODEL,
+    maxTokens: MAX_TOKENS,
+    maxToolRounds: MAX_ROUNDS,
+  });
 
   return summary;
 }

@@ -621,8 +621,11 @@ export {
   MS_PER_DAY as CONVERSATIONAL_MS_PER_DAY,
   buildConversationalHistoryMessages,
   buildConversationalSystemBlocks,
+  createCallModel,
   previewToolResultJson,
+  runAgentToolLoop,
   runConversationalToolLoop,
+  streamingCallModel,
   encodeSseEvent,
 } from "./conversational";
 export type {
@@ -637,8 +640,13 @@ export type {
   AgentRoundTrace,
   ToolUseBlock,
   ToolResultBlock,
+  AgentToolLoopCallbacks,
+  AnthropicCreateClient,
   AnthropicStreamingClient,
+  CallModelFn,
   ConversationalToolLoopCallbacks,
+  RunAgentToolLoopOptions,
+  RunAgentToolLoopResult,
   RunConversationalToolLoopOptions,
   RunConversationalToolLoopResult,
 } from "./conversational";
@@ -723,6 +731,45 @@ export type {
   CreateInteractionInput,
   InteractionsClientConfig,
 } from "./interactions/InteractionsClient";
+
+export {
+  COMMS_KINDS,
+  contextCaptureInputFromExtractionTool,
+  contextCaptureInputFromModal,
+  interactionStatusForCommitmentTiming,
+  interactionStatusFromCommitmentTiming,
+  interactionStatusFromTiming,
+  parseCaptureTime,
+  relationshipTargetFromResolved,
+  resolveContextCapture,
+  resolveInteractionStatus,
+  resolveRelationshipLinkage,
+  writeContextCapture,
+} from "./relationships/contextCapture";
+export type {
+  CommsKind,
+  CommitmentCaptureInput,
+  CommitmentTiming,
+  CommsCaptureInput,
+  ContactRelationshipTarget,
+  ContextCaptureInput,
+  ContextCaptureWrite,
+  ContextFamily,
+  ContextCaptureWriter,
+  ContextCaptureWriteResult,
+  ExtractionContextCaptureWriter,
+  ExtractionToolName,
+  GroupRelationshipTarget,
+  InteractionCaptureInput,
+  InteractionCaptureWrite,
+  InteractionTiming,
+  ManualContextCaptureWriter,
+  ModalContextCapturePayload,
+  NoteCaptureInput,
+  OpenThreadCaptureWrite,
+  RelationshipTarget,
+  ResolveContextCaptureOptions,
+} from "./relationships/contextCapture";
 
 export { EventsClient } from "./events/EventsClient";
 export type {
