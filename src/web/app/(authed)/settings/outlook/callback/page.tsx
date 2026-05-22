@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { ensureOAuthCallbackSession } from "@/lib/integrations/ensureOAuthCallbackSession";
@@ -11,8 +11,13 @@ const OUTLOOK_OAUTH_STATE_KEY = "related.outlook-oauth-state";
 
 export default function OutlookCallbackPage() {
   const router = useRouter();
+  const started = useRef(false);
+  const [status, setStatus] = useState("Connecting Outlook…");
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
     async function run() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
@@ -21,11 +26,13 @@ export default function OutlookCallbackPage() {
       const oauthErrorDescription = params.get("error_description");
 
       if (oauthError) {
-        redirectToSettings(router, oauthErrorDescription ?? oauthError);
+        redirectToSettings(router, oauthErrorDescription ?? oauthError, {
+          hard: true,
+        });
         return;
       }
       if (!code) {
-        redirectToSettings(router, "Missing authorization code");
+        redirectToSettings(router, "Missing authorization code", { hard: true });
         return;
       }
 
@@ -34,6 +41,7 @@ export default function OutlookCallbackPage() {
         redirectToSettings(
           router,
           "OAuth state mismatch — try connecting again from Settings.",
+          { hard: true },
         );
         return;
       }
@@ -43,11 +51,13 @@ export default function OutlookCallbackPage() {
         redirectToSettings(
           router,
           "Missing PKCE verifier — try connecting again.",
+          { hard: true },
         );
         return;
       }
 
       try {
+        setStatus("Finishing Outlook sign-in…");
         const { outlook, onboarding, supabase } = getBrowserDeps();
         await ensureOAuthCallbackSession(supabase);
         const redirectUri =
@@ -61,6 +71,7 @@ export default function OutlookCallbackPage() {
           redirectToSettings(
             router,
             result.error ?? "Could not connect Outlook",
+            { hard: true },
           );
           return;
         }
@@ -76,11 +87,16 @@ export default function OutlookCallbackPage() {
           });
         }
 
-        redirectToSettings(router);
+        setStatus("Outlook connected. Returning to Settings…");
+        redirectToSettings(router, null, {
+          success: "outlook",
+          hard: true,
+        });
       } catch (e) {
         redirectToSettings(
           router,
           e instanceof Error ? e.message : "Could not connect Outlook",
+          { hard: true },
         );
       }
     }
@@ -88,5 +104,9 @@ export default function OutlookCallbackPage() {
     void run();
   }, [router]);
 
-  return null;
+  return (
+    <p className="px-6 py-10 text-[14px] text-fg-muted" role="status">
+      {status}
+    </p>
+  );
 }

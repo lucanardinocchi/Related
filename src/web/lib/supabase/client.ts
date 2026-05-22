@@ -14,7 +14,12 @@ export function createBrowserSupabase(): SupabaseClient {
         "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in the browser bundle.",
       );
     }
-    browserClient = createBrowserClient(url, key);
+    // Supabase sign-in OAuth is exchanged server-side at /auth/callback.
+    // Integration OAuth (Outlook, X, …) also returns ?code= on other routes;
+    // auto-detect would treat those as Supabase PKCE callbacks and fail.
+    browserClient = createBrowserClient(url, key, {
+      auth: { detectSessionInUrl: false },
+    });
   }
   return browserClient;
 }

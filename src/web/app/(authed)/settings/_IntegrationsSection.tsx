@@ -31,6 +31,7 @@ import {
 } from "@/lib/integrations/integrationConnect";
 import {
   consumeIntegrationOAuthError,
+  consumeIntegrationOAuthQueryFeedback,
   setOAuthReturnPath,
 } from "@/lib/integrations/oauthReturn";
 const INSTAGRAM_OAUTH_STATE_KEY = "related.instagram-oauth-state";
@@ -118,6 +119,7 @@ export function IntegrationsSection({
     tiktok: false,
   });
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const captureRunning = useRef(false);
   const healthProbeRunning = useRef(false);
 
@@ -198,8 +200,14 @@ export function IntegrationsSection({
 
   useEffect(() => {
     setOAuthReturnPath("/settings");
+    const queryFeedback = consumeIntegrationOAuthQueryFeedback();
     const stashedError = consumeIntegrationOAuthError();
-    if (stashedError) setError(stashedError);
+    if (queryFeedback.error ?? stashedError) {
+      setError(queryFeedback.error ?? stashedError);
+    }
+    if (queryFeedback.success === "outlook") {
+      setSuccess("Outlook connected.");
+    }
     captureProviderTokens();
     void refreshInstagramConnection();
     void refreshXConnection();
@@ -805,6 +813,11 @@ export function IntegrationsSection({
           </div>
         </Card>
 
+        {success ? (
+          <p className="text-[13px] text-fg" role="status">
+            {success}
+          </p>
+        ) : null}
         {error ? (
           <p className="text-[13px] text-danger" role="alert">
             {error}

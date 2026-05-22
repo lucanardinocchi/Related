@@ -1,8 +1,8 @@
 import {
   generateCodeVerifier,
   generateCodeChallenge,
-  GOOGLE_CALENDAR_SCOPES,
-  GOOGLE_INTEGRATION_SCOPES,
+  mergeGoogleScopesOnConnect,
+  type GoogleConnectIntent,
   tokenHasCalendarAccess,
   tokenHasGmailAccess,
   tokenHasInstagramAccess,
@@ -16,6 +16,23 @@ import { getBrowserDeps } from "@/lib/deps/client";
 import { setOAuthReturnPath } from "./oauthReturn";
 
 export const OAUTH_INTENT_KEY = "related.google-oauth-intent";
+
+/** Strips OAuth callback query params; keeps e.g. onboarding=1. */
+export function buildOAuthReturnPath(pathname: string, search = ""): string {
+  const params = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search,
+  );
+  for (const key of ["code", "state", "error", "error_description"]) {
+    params.delete(key);
+  }
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
+function normalizeGoogleIntent(raw: string | null): GoogleConnectIntent | null {
+  if (raw === "gmail" || raw === "calendar") return raw;
+  return null;
+}
 
 /** Supabase Google OAuth redirect — must be allow-listed in Supabase Auth. */
 export function buildGoogleIntegrationRedirectUri(returnPath = "/settings"): string {
@@ -99,6 +116,7 @@ export async function refreshTikTokConnection(): Promise<boolean> {
 export async function captureGoogleProviderTokens(
   returnPath: string,
 ): Promise<{ calendar: boolean; gmail: boolean } | null> {
+  let intent: string | null = null;
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     const oauthError = params.get("error");
@@ -106,8 +124,12 @@ export async function captureGoogleProviderTokens(
       throw new Error(params.get("error_description") ?? oauthError);
     }
 
+    intent = sessionStorage.getItem(OAUTH_INTENT_KEY);
     const code = params.get("code");
-    if (code) {
+    // Only exchange Supabase auth codes from Google Calendar/Gmail connect.
+    // Other integrations (Outlook, X, …) also use ?code= and must not hit
+    // exchangeCodeForSession — that expects Supabase's PKCE verifier.
+    if (code && intent) {
       const { supabase } = getBrowserDeps();
       const { error: exchangeError } =
         await supabase.auth.exchangeCodeForSession(code);
@@ -119,17 +141,19 @@ export async function captureGoogleProviderTokens(
   const session = await auth.getSessionWithProviderTokens();
   if (!session?.providerToken) return null;
 
-  const intent =
-    typeof window !== "undefined"
-      ? sessionStorage.getItem(OAUTH_INTENT_KEY)
-      : null;
-  const scopes =
-    intent === "gmail" ? GOOGLE_INTEGRATION_SCOPES : GOOGLE_CALENDAR_SCOPES;
+  if (intent === null && typeof window !== "undefined") {
+    intent = sessionStorage.getItem(OAUTH_INTENT_KEY);
+  }
+  const connectIntent = normalizeGoogleIntent(intent);
+  const existing = await userProviderTokens.getForProvider("google");
+  const scopes = mergeGoogleScopesOnConnect(existing?.scopes, connectIntent);
+  const refreshToken =
+    session.providerRefreshToken ?? existing?.refreshToken ?? null;
 
   await userProviderTokens.upsert({
     provider: "google",
     accessToken: session.providerToken,
-    refreshToken: session.providerRefreshToken,
+    refreshToken,
     scopes,
     expiresAt:
       session.expiresAt !== null
