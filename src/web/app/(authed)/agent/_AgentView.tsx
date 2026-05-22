@@ -7,7 +7,9 @@ import {
   ChevronRight,
   Loader2,
   Mic,
+  MoreHorizontal,
   Plus,
+  Search,
   SendHorizontal,
   Square,
   Trash2,
@@ -18,10 +20,10 @@ import type {
   ChatSummary,
   ToolCallSummary,
 } from "@related/shared";
-import { formatExtractionResult } from "@related/shared";
+import { filterChatSummaries, formatExtractionResult } from "@related/shared";
 import { useConversationalChat } from "@related/shared/chats/useConversationalChat";
 import { getBrowserDeps } from "@/lib/deps/client";
-import { Badge, Button, EmptyState } from "@/components/ui";
+import { Badge, Button, EmptyState, Input } from "@/components/ui";
 import type { PocketSpeakerAmbiguity } from "@related/shared";
 import {
   SpeakerResolutionFlow,
@@ -89,6 +91,10 @@ export function AgentView({ initialChats }: AgentViewProps) {
   const [resolveRecordingId, setResolveRecordingId] = useState<string | null>(
     null,
   );
+  const [chatSearch, setChatSearch] = useState("");
+  const [chatListExpanded, setChatListExpanded] = useState(false);
+  const chatListRef = useRef<HTMLDivElement>(null);
+  const [chatListOverflows, setChatListOverflows] = useState(false);
 
   const { promptOpen, dismissPrompt } = useSpeakerResolutionPrompt(
     ambiguities.length,
@@ -111,6 +117,26 @@ export function AgentView({ initialChats }: AgentViewProps) {
     () => chats.find((c) => c.id === selectedId) ?? null,
     [chats, selectedId],
   );
+
+  const filteredChats = useMemo(
+    () => filterChatSummaries(chats, chatSearch),
+    [chats, chatSearch],
+  );
+
+  const chatListScrollable =
+    chatListExpanded || chatSearch.trim().length > 0;
+
+  useEffect(() => {
+    const el = chatListRef.current;
+    if (!el) return;
+    const measure = () => {
+      setChatListOverflows(el.scrollHeight > el.clientHeight + 2);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [filteredChats, chatListScrollable, ambiguities.length]);
 
   const { responding: agentResponding, runAgentRespondStream, closeChatAndExtract } =
     useConversationalChat({
@@ -384,52 +410,92 @@ export function AgentView({ initialChats }: AgentViewProps) {
             </button>
           </div>
         ) : null}
-        <div className="flex-1 overflow-y-auto px-2 pb-3">
-          {chats.length === 0 ? (
-            <div className="px-2 py-2 text-[12px] text-fg-subtle">
-              No chats yet.
-            </div>
-          ) : (
-            <ul className="space-y-0.5">
-              {chats.map((chat) => (
-                <li key={chat.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(chat.id)}
-                    className={cn(
-                      "w-full rounded-md px-2.5 py-2 text-left transition-colors",
-                      chat.id === selectedId
-                        ? "bg-active text-fg"
-                        : "text-fg-muted hover:bg-hover hover:text-fg",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[13px] font-medium leading-[18px]">
-                        {chat.title ?? "Untitled chat"}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1">
-                        {chat.source === "pocket" ? (
-                          <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
-                            Pocket
-                          </span>
-                        ) : null}
-                        {chat.closedAt ? (
-                          <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
-                            {chat.extractedAt ? "extracted" : "closed"}
-                          </span>
-                        ) : null}
-                      </span>
-                    </div>
-                    {chat.lastMessagePreview ? (
-                      <div className="mt-1 truncate text-[12px] leading-[16px] text-fg-subtle">
-                        {chat.lastMessagePreview}
+        <div className="px-2 pb-2">
+          <div className="relative">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-subtle"
+            />
+            <Input
+              value={chatSearch}
+              onChange={(e) => setChatSearch(e.target.value)}
+              placeholder="Search chats"
+              aria-label="Search chats"
+              className="h-8 pl-8 text-[12px]"
+            />
+          </div>
+        </div>
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            ref={chatListRef}
+            className={cn(
+              "flex-1 px-2 pb-3",
+              chatListScrollable ? "overflow-y-auto" : "overflow-hidden",
+            )}
+          >
+            {chats.length === 0 ? (
+              <div className="px-2 py-2 text-[12px] text-fg-subtle">
+                No chats yet.
+              </div>
+            ) : filteredChats.length === 0 ? (
+              <div className="px-2 py-2 text-[12px] text-fg-subtle">
+                No matching chats.
+              </div>
+            ) : (
+              <ul className="space-y-0.5">
+                {filteredChats.map((chat) => (
+                  <li key={chat.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(chat.id)}
+                      className={cn(
+                        "w-full rounded-md px-2.5 py-2 text-left transition-colors",
+                        chat.id === selectedId
+                          ? "bg-active text-fg"
+                          : "text-fg-muted hover:bg-hover hover:text-fg",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[13px] font-medium leading-[18px]">
+                          {chat.title ?? "Untitled chat"}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1">
+                          {chat.source === "pocket" ? (
+                            <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
+                              Pocket
+                            </span>
+                          ) : null}
+                          {chat.closedAt ? (
+                            <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-fg-subtle">
+                              {chat.extractedAt ? "extracted" : "closed"}
+                            </span>
+                          ) : null}
+                        </span>
                       </div>
-                    ) : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+                      {chat.lastMessagePreview ? (
+                        <div className="mt-1 truncate text-[12px] leading-[16px] text-fg-subtle">
+                          {chat.lastMessagePreview}
+                        </div>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {!chatListScrollable && chatListOverflows ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center bg-gradient-to-t from-surface from-40% to-transparent px-2 pb-2 pt-10">
+              <button
+                type="button"
+                onClick={() => setChatListExpanded(true)}
+                aria-label="Show older chats"
+                title="Show older chats"
+                className="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface text-fg-muted shadow-1 transition-colors hover:bg-hover hover:text-fg"
+              >
+                <MoreHorizontal size={16} />
+              </button>
+            </div>
+          ) : null}
         </div>
       </aside>
 

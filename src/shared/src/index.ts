@@ -103,6 +103,11 @@ export type {
   DecisionState,
   PassMode,
 } from "./candidates/candidateSet";
+export {
+  filterUserVisibleCandidateActions,
+  initialDecisionStateForCandidateAction,
+  isUserVisibleCandidateAction,
+} from "./candidates/candidateSet";
 
 export {
   PassEngine,
@@ -602,6 +607,7 @@ export type {
   ExtractionResult,
 } from "./chats/ChatsClient";
 export { formatExtractionResult } from "./chats/ChatsClient";
+export { filterChatSummaries } from "./chats/filterChatSummaries";
 
 export {
   SYSTEM_PROMPT_BASE,

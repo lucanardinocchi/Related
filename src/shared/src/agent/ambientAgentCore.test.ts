@@ -15,6 +15,12 @@ describe("AMBIENT_SYSTEM_PROMPT", () => {
     expect(AMBIENT_SYSTEM_PROMPT).toContain("reason-from-context");
     expect(AMBIENT_SYSTEM_PROMPT).toContain("Reject vague outputs");
   });
+
+  it("defaults to DoNothing unless context warrants a concrete action", () => {
+    expect(AMBIENT_SYSTEM_PROMPT).toContain("When to act (required)");
+    expect(AMBIENT_SYSTEM_PROMPT).toContain("Default to DoNothing");
+    expect(AMBIENT_SYSTEM_PROMPT).toContain("does not see DoNothing");
+  });
 });
 
 describe("buildAmbientUserMessage", () => {

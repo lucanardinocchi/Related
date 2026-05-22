@@ -19,6 +19,7 @@ import type {
   TTSPlayback,
   formatExtractionResult,
 } from "@related/shared";
+import { filterChatSummaries } from "@related/shared";
 import { useConversationalChat } from "@related/shared/chats/useConversationalChat";
 import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
 import { colors, fonts, fontSizes, lineHeights, radii } from "./ui/tokens";
@@ -70,6 +71,10 @@ export function MobileChatScreen({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [ttsMuted, setTtsMuted] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+  const [chatSearch, setChatSearch] = useState("");
+  const [chatListExpanded, setChatListExpanded] = useState(false);
+  const [drawerListHeight, setDrawerListHeight] = useState(0);
+  const [drawerContentHeight, setDrawerContentHeight] = useState(0);
 
   const captureRef = useRef<AudioCaptureHandle | null>(null);
   const transcriptRef = useRef<FlatList<ChatMessage>>(null);
@@ -81,6 +86,19 @@ export function MobileChatScreen({
     () => chatList.find((c) => c.id === selectedChatId) ?? null,
     [chatList, selectedChatId],
   );
+
+  const filteredChatList = useMemo(
+    () => filterChatSummaries(chatList, chatSearch),
+    [chatList, chatSearch],
+  );
+
+  const chatListScrollable =
+    chatListExpanded || chatSearch.trim().length > 0;
+
+  const drawerListOverflows =
+    !chatListScrollable &&
+    drawerContentHeight > drawerListHeight + 2 &&
+    drawerListHeight > 0;
 
   const { responding, runAgentRespondStream, closeChatAndExtract } =
     useConversationalChat({
@@ -104,8 +122,14 @@ export function MobileChatScreen({
     if (initialDraft) setDraft(initialDraft);
   }, [initialDraft]);
 
+  useEffect(() => {
+    if (!drawerOpen) {
+      setChatListExpanded(false);
+    }
+  }, [drawerOpen]);
+
   const refreshChats = useCallback(async () => {
-    const list = await chatsClient.listChats();
+    const list = await chatsClient.listAgentChats();
     setChatList(list);
   }, [chatsClient]);
 
@@ -170,7 +194,7 @@ export function MobileChatScreen({
     let cancelled = false;
     (async () => {
       try {
-        const list = await chatsClient.listChats();
+        const list = await chatsClient.listAgentChats();
         if (cancelled) return;
         setChatList(list);
 
@@ -188,6 +212,7 @@ export function MobileChatScreen({
           {
             id: created.id,
             title: created.title,
+            source: created.source,
             createdAt: created.createdAt,
             closedAt: created.closedAt,
             extractedAt: created.extractedAt,
@@ -354,7 +379,8 @@ export function MobileChatScreen({
   ]);
 
   const headerTitle = selectedChat?.title ?? "Related";
-  const isClosed = !!selectedChat?.closedAt;
+  const isPocket = selectedChat?.source === "pocket";
+  const isClosed = !!selectedChat?.closedAt || isPocket;
   const composerDisabled = working || responding || isClosed;
   const showEmptyState = !loadingMessages && messages.length === 0;
 
@@ -385,9 +411,13 @@ export function MobileChatScreen({
           <Text style={styles.headerTitle} numberOfLines={1}>
             {headerTitle}
           </Text>
-          {selectedChat?.closedAt ? (
+          {selectedChat?.closedAt || isPocket ? (
             <Text style={styles.headerSubtitle}>
-              {selectedChat.extractedAt ? "Extracted" : "Closed"}
+              {isPocket
+                ? "Pocket"
+                : selectedChat?.extractedAt
+                  ? "Extracted"
+                  : "Closed"}
             </Text>
           ) : null}
         </View>
@@ -493,7 +523,9 @@ export function MobileChatScreen({
           ]}
         >
           <Text style={styles.closedBannerText}>
-            This chat is closed. Start a new chat to keep talking.
+            {isPocket
+              ? "Pocket import — read-only transcript."
+              : "This chat is closed. Start a new chat to keep talking."}
           </Text>
         </View>
       ) : (
@@ -598,42 +630,83 @@ export function MobileChatScreen({
               </Pressable>
             </View>
 
-            <FlatList
-              data={chatList}
-              keyExtractor={(c) => c.id}
-              style={styles.drawerList}
-              contentContainerStyle={styles.drawerListContent}
-              ListEmptyComponent={
-                <Text style={styles.drawerEmpty}>No chats yet.</Text>
-              }
-              renderItem={({ item }) => (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setSelectedChatId(item.id);
-                    setDrawerOpen(false);
-                  }}
-                  style={[
-                    styles.drawerRow,
-                    item.id === selectedChatId && styles.drawerRowActive,
-                  ]}
-                >
-                  <Text style={styles.drawerRowTitle} numberOfLines={1}>
-                    {item.title ?? "Untitled chat"}
-                  </Text>
-                  {item.lastMessagePreview ? (
-                    <Text style={styles.drawerRowPreview} numberOfLines={2}>
-                      {item.lastMessagePreview}
-                    </Text>
-                  ) : null}
-                  {item.closedAt ? (
-                    <Text style={styles.drawerRowMeta}>
-                      {item.extractedAt ? "Extracted" : "Closed"}
-                    </Text>
-                  ) : null}
-                </Pressable>
-              )}
+            <TextInput
+              value={chatSearch}
+              onChangeText={setChatSearch}
+              placeholder="Search chats"
+              placeholderTextColor={colors.fgSubtle}
+              accessibilityLabel="Search chats"
+              style={styles.drawerSearch}
+              autoCorrect={false}
+              clearButtonMode="while-editing"
             />
+
+            <View style={styles.drawerListWrap}>
+              <FlatList
+                data={filteredChatList}
+                keyExtractor={(c) => c.id}
+                style={styles.drawerList}
+                contentContainerStyle={styles.drawerListContent}
+                scrollEnabled={chatListScrollable}
+                onLayout={(e) =>
+                  setDrawerListHeight(e.nativeEvent.layout.height)
+                }
+                onContentSizeChange={(_, height) =>
+                  setDrawerContentHeight(height)
+                }
+                ListEmptyComponent={
+                  <Text style={styles.drawerEmpty}>
+                    {chatList.length === 0
+                      ? "No chats yet."
+                      : "No matching chats."}
+                  </Text>
+                }
+                renderItem={({ item }) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setSelectedChatId(item.id);
+                      setDrawerOpen(false);
+                    }}
+                    style={[
+                      styles.drawerRow,
+                      item.id === selectedChatId && styles.drawerRowActive,
+                    ]}
+                  >
+                    <View style={styles.drawerRowTitleRow}>
+                      <Text style={styles.drawerRowTitle} numberOfLines={1}>
+                        {item.title ?? "Untitled chat"}
+                      </Text>
+                      {item.source === "pocket" ? (
+                        <Text style={styles.drawerRowBadge}>Pocket</Text>
+                      ) : null}
+                    </View>
+                    {item.lastMessagePreview ? (
+                      <Text style={styles.drawerRowPreview} numberOfLines={2}>
+                        {item.lastMessagePreview}
+                      </Text>
+                    ) : null}
+                    {item.closedAt ? (
+                      <Text style={styles.drawerRowMeta}>
+                        {item.extractedAt ? "Extracted" : "Closed"}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                )}
+              />
+              {drawerListOverflows ? (
+                <View style={styles.drawerExpandFade} pointerEvents="box-none">
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Show older chats"
+                    onPress={() => setChatListExpanded(true)}
+                    style={styles.drawerExpandBtn}
+                  >
+                    <Text style={styles.drawerExpandBtnLabel}>…</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
 
             {selectedChat ? (
               <View style={styles.drawerFooter}>
@@ -1012,6 +1085,7 @@ const styles = StyleSheet.create({
   },
   drawerPanel: {
     width: DRAWER_WIDTH,
+    flex: 1,
     backgroundColor: colors.surface,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: colors.border,
@@ -1041,6 +1115,24 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansMedium,
     color: colors.fg,
   },
+  drawerSearch: {
+    marginHorizontal: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    backgroundColor: colors.bg,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: fontSizes.small,
+    fontFamily: fonts.sans,
+    color: colors.fg,
+  },
+  drawerListWrap: {
+    flex: 1,
+    minHeight: 0,
+    position: "relative",
+  },
   drawerList: {
     flex: 1,
   },
@@ -1063,11 +1155,24 @@ const styles = StyleSheet.create({
   drawerRowActive: {
     backgroundColor: colors.active,
   },
+  drawerRowTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 2,
+  },
   drawerRowTitle: {
+    flex: 1,
     fontSize: fontSizes.body,
     fontFamily: fonts.sansMedium,
     color: colors.fg,
-    marginBottom: 2,
+  },
+  drawerRowBadge: {
+    fontSize: fontSizes.micro,
+    fontFamily: fonts.sansMedium,
+    color: colors.fgSubtle,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   drawerRowPreview: {
     fontSize: fontSizes.small,
@@ -1082,6 +1187,35 @@ const styles = StyleSheet.create({
     color: colors.fgSubtle,
     textTransform: "uppercase",
     letterSpacing: 0.4,
+  },
+  drawerExpandFade: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 28,
+    paddingBottom: 8,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    opacity: 0.96,
+  },
+  drawerExpandBtn: {
+    minWidth: 28,
+    height: 28,
+    paddingHorizontal: 8,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    ...shadowSm,
+  },
+  drawerExpandBtnLabel: {
+    fontSize: fontSizes.h2,
+    lineHeight: 20,
+    color: colors.fgMuted,
+    fontFamily: fonts.sansBold,
   },
   drawerFooter: {
     borderTopWidth: StyleSheet.hairlineWidth,

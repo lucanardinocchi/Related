@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureDoNothingPeer } from "./ambientTools";
+import { initialDecisionStateForCandidateAction } from "../candidates/candidateSet";
 import {
   UserContextBuilder,
   type UserContextSnapshot,
@@ -176,6 +177,7 @@ export class PassEngine {
             type: a.type,
             payload: a.payload ?? null,
             why: a.why ?? null,
+            decision_state: initialDecisionStateForCandidateAction(a.type),
           })),
         );
       if (actErr) throw actErr;

@@ -199,7 +199,7 @@ export const AMBIENT_TOOLS: AmbientToolDefinition[] = [
   {
     name: "do_nothing",
     description:
-      "Emit when no concrete action beats waiting. why must name what you checked (recent comms, threads, calendar) and why now is not the moment.",
+      "Default outcome when no concrete action is clearly warranted now. The User never sees this in Suggested actions. why must name what you checked (recent comms, threads, calendar) and why waiting is correct.",
     input_schema: {
       type: "object",
       properties: { ...WHY_FIELD },

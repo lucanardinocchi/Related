@@ -127,6 +127,12 @@ describe("PassEngine.runPass", () => {
       );
       expect(q.from).toHaveBeenCalledWith("candidate_sets");
       expect(q.from).toHaveBeenCalledWith("candidate_actions");
+      expect(q.insertFlat).toHaveBeenCalledWith([
+        expect.objectContaining({
+          type: "DoNothing",
+          decision_state: "ignored",
+        }),
+      ]);
     });
   }
 

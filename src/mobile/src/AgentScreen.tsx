@@ -19,7 +19,10 @@ import type {
   SessionHandle,
   VoiceSessionManager,
 } from "@related/shared";
-import { resolveSendMessageRecipients } from "@related/shared";
+import {
+  filterUserVisibleCandidateActions,
+  resolveSendMessageRecipients,
+} from "@related/shared";
 import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
 import { colors, fonts, fontSizes, lineHeights, radii } from "./ui/tokens";
 
@@ -269,7 +272,8 @@ export function AgentScreen({
               {entry.spokenText ? (
                 <Text style={styles.spokenText}>{entry.spokenText}</Text>
               ) : null}
-              {entry.candidateSet.actions.map((a) => (
+              {filterUserVisibleCandidateActions(entry.candidateSet.actions).map(
+                (a) => (
                 <CandidateCard
                   key={a.id}
                   action={a}

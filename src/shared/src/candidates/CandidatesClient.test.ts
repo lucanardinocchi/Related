@@ -58,15 +58,7 @@ describe("CandidatesClient.getLatestForRelationship", () => {
       relationshipId: "r-1",
       mode: "baseline",
       createdAt: "2026-05-19T00:00:00Z",
-      actions: [
-        {
-          id: "ca-1",
-          type: "DoNothing",
-          payload: null,
-          why: "no changes warrant a Candidate Action this Pass",
-          decisionState: "pending",
-        },
-      ],
+      actions: [],
     });
     expect(q.from).toHaveBeenCalledWith("candidate_sets");
     expect(q.eq).toHaveBeenCalledWith("relationship_id", "r-1");

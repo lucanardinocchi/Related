@@ -2,6 +2,24 @@ export type PassMode = "baseline" | "triggered";
 
 export type DecisionState = "pending" | "picked" | "declined" | "ignored";
 
+/** Candidate types surfaced in Suggested actions and relationship candidate UI. */
+export function isUserVisibleCandidateAction(type: string): boolean {
+  return type !== "DoNothing";
+}
+
+export function filterUserVisibleCandidateActions<
+  T extends { type: string },
+>(actions: T[]): T[] {
+  return actions.filter((a) => isUserVisibleCandidateAction(a.type));
+}
+
+/** DoNothing passes are recorded for agent history but never await User review. */
+export function initialDecisionStateForCandidateAction(
+  type: string,
+): DecisionState {
+  return type === "DoNothing" ? "ignored" : "pending";
+}
+
 /** Agent-proposed action before persistence (no id, no decision state). */
 export interface CandidateActionInput {
   type: string;

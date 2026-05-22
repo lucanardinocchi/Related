@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import {
+  filterUserVisibleCandidateActions,
   toCandidateAction,
   toCandidateSet,
   type CandidateAction,
@@ -60,7 +61,11 @@ export class CandidatesClient {
     if (error) throw error;
     const rows = (data ?? []) as unknown as CandidateSetRow[];
     if (rows.length === 0) return null;
-    return toCandidateSet(rows[0]);
+    const set = toCandidateSet(rows[0]);
+    return {
+      ...set,
+      actions: filterUserVisibleCandidateActions(set.actions),
+    };
   }
 
   /**

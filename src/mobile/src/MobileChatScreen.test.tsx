@@ -20,7 +20,7 @@ import { MobileChatScreen } from "./MobileChatScreen";
 
 type ChatsClientLike = Pick<
   ChatsClient,
-  | "listChats"
+  | "listAgentChats"
   | "listMessages"
   | "createChat"
   | "appendMessage"
@@ -34,7 +34,7 @@ function makeChatsMock(): {
   [K in keyof ChatsClientLike]: jest.Mock;
 } {
   return {
-    listChats: jest.fn(),
+    listAgentChats: jest.fn(),
     listMessages: jest.fn(),
     createChat: jest.fn(),
     appendMessage: jest.fn(),
@@ -49,6 +49,7 @@ function chat(over: Partial<ChatSummary> = {}): ChatSummary {
   return {
     id: "c-1",
     title: null,
+    source: "conversational",
     createdAt: "2026-05-21T10:00:00Z",
     closedAt: null,
     extractedAt: null,
@@ -90,7 +91,7 @@ function renderChat(ui: ReactElement) {
 describe("<MobileChatScreen />", () => {
   it("pre-fills the composer when initialDraft is provided", async () => {
     const chats = makeChatsMock();
-    chats.listChats.mockResolvedValue([chat()]);
+    chats.listAgentChats.mockResolvedValue([chat()]);
     chats.listMessages.mockResolvedValue([]);
 
     renderChat(
@@ -109,7 +110,7 @@ describe("<MobileChatScreen />", () => {
 
   it("sends a user turn and renders the streamed assistant reply", async () => {
     const chats = makeChatsMock();
-    chats.listChats.mockResolvedValue([chat()]);
+    chats.listAgentChats.mockResolvedValue([chat()]);
     chats.listMessages.mockResolvedValue([]);
     chats.appendMessage.mockResolvedValue(userMessage());
     chats.renameChat.mockResolvedValue(undefined);
@@ -165,7 +166,7 @@ describe("<MobileChatScreen />", () => {
 
   it("auto-plays assistant turns through the TTS playback handle", async () => {
     const chats = makeChatsMock();
-    chats.listChats.mockResolvedValue([chat()]);
+    chats.listAgentChats.mockResolvedValue([chat()]);
     chats.listMessages.mockResolvedValue([]);
     chats.appendMessage.mockResolvedValue(userMessage());
     chats.respondStream.mockReturnValue(
@@ -210,7 +211,7 @@ describe("<MobileChatScreen />", () => {
 
   it("uses the mic adapter to capture audio and transcribe it into the draft", async () => {
     const chats = makeChatsMock();
-    chats.listChats.mockResolvedValue([chat()]);
+    chats.listAgentChats.mockResolvedValue([chat()]);
     chats.listMessages.mockResolvedValue([]);
 
     let stopCallback: (() => void) | null = null;

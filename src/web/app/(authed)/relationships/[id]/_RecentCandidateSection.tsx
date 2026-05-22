@@ -1,6 +1,9 @@
 "use client";
 
-import type { CandidateSet } from "@related/shared";
+import {
+  filterUserVisibleCandidateActions,
+  type CandidateSet,
+} from "@related/shared";
 import { Badge, Section } from "@/components/ui";
 import { fmtDate } from "./_dateFormat";
 
@@ -9,7 +12,10 @@ interface Props {
 }
 
 export function RecentCandidateSection({ candidateSet }: Props) {
-  if (candidateSet.actions.length === 0) {
+  const visibleActions = filterUserVisibleCandidateActions(
+    candidateSet.actions,
+  );
+  if (visibleActions.length === 0) {
     return null;
   }
 
@@ -19,7 +25,7 @@ export function RecentCandidateSection({ candidateSet }: Props) {
       meta={`${candidateSet.mode} · ${fmtDate(candidateSet.createdAt)}`}
     >
       <ul className="divide-y divide-divider">
-        {candidateSet.actions.map((action) => (
+        {visibleActions.map((action) => (
           <li key={action.id} className="py-3">
             <div className="text-[14px] font-medium text-fg">{action.type}</div>
             {action.why ? (

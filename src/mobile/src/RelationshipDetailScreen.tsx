@@ -10,6 +10,7 @@ import {
 import type {
   CandidateSet,
   CandidatesClient,
+  filterUserVisibleCandidateActions,
   GroupRelationship,
   GroupsClient,
   Interaction,
@@ -250,10 +251,11 @@ export function RelationshipDetailScreen({
       </Pressable>
 
       <Text style={styles.sectionHeading}>Candidate set</Text>
-      {candidateSet === null || candidateSet.actions.length === 0 ? (
+      {candidateSet === null ||
+      filterUserVisibleCandidateActions(candidateSet.actions).length === 0 ? (
         <Text style={styles.empty}>No candidates yet</Text>
       ) : (
-        candidateSet.actions.map((a) => (
+        filterUserVisibleCandidateActions(candidateSet.actions).map((a) => (
           <View key={a.id} style={styles.candidateRow}>
             <Text style={styles.candidateType}>{a.type}</Text>
             {a.why ? <Text style={styles.candidateWhy}>{a.why}</Text> : null}
