@@ -49,4 +49,4 @@ Both fields are optional. When called from `pg_cron` the body is empty and the f
 
 ## Why the function inlines the fetcher logic
 
-The canonical Google Calendar fetcher lives at `src/shared/src/integrations/google/GoogleCalendarFetcher.ts` and is unit-tested there. Edge Functions could import it via Deno's NPM specifiers if `@related/shared` were on npm — it isn't, so this function mirrors the fetcher locally. Same trade-off as `engaged-pass/index.ts`. The two implementations are kept in sync by hand; if the Google response mapping changes, change both.
+The canonical Google Calendar fetcher lives at `src/shared/src/integrations/google/GoogleCalendarFetcher.ts` and is unit-tested there. Edge Functions could import it via Deno's NPM specifiers if `@related/shared` were on npm — it isn't, so this function mirrors the fetcher locally. Same trade-off as `ambient-pass/index.ts`. The two implementations are kept in sync by hand; if the Google response mapping changes, change both.

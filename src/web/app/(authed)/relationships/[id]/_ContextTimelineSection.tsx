@@ -26,6 +26,7 @@ import {
 import { AddContextModal, type AddContextResult } from "./_AddContextModal";
 import {
   commsKindLabel,
+  captureSourceLabel,
   contextFamilyFromInteraction,
   isCommsKind,
   timelineVisualForInteraction,
@@ -202,6 +203,11 @@ function PlannedCommitmentRow({ thread }: { thread: OpenThread }) {
           {visual.timingLabel && (
             <Badge tone={tones.timing}>{visual.timingLabel}</Badge>
           )}
+          {captureSourceLabel(thread.captureSource) && (
+            <Badge tone="neutral">
+              {captureSourceLabel(thread.captureSource)}
+            </Badge>
+          )}
         </div>
         <div className="mt-1 text-[14px] font-medium text-fg">
           {visual.headline}
@@ -283,6 +289,11 @@ function ContextEntry({
           </span>
           {visual.timingLabel && (
             <Badge tone={tones.timing}>{visual.timingLabel}</Badge>
+          )}
+          {captureSourceLabel(entry.captureSource) && (
+            <Badge tone="neutral">
+              {captureSourceLabel(entry.captureSource)}
+            </Badge>
           )}
         </div>
         <div className="mt-1 text-[14px] font-medium text-fg">

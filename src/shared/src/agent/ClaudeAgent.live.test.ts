@@ -1,12 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ClaudeAgent, type AnthropicMessagesClient } from "./ClaudeAgent";
 import type { AgentPrompt } from "./PassEngine";
+import {
+  testContact,
+  testOpenThreadLink,
+  testRelationshipContextSnapshot,
+} from "./relationshipContextFixtures";
 
 /**
  * Real-LLM smoke test — hits the Anthropic API with the live key, asserts the
  * agent returns a structurally valid Candidate Set across the full ontology
  * for a representative fixture. This is the contract: the agent must produce
- * typed actions, the DoNothing peer must be present, and at least one
+ * typed actions, exactly one action per Pass, and at least one
  * concrete action (not just DoNothing) must come back when the Relationship
  * has Open Threads + Goals that warrant a response.
  *
@@ -35,24 +40,23 @@ describe("ClaudeAgent.propose — live Anthropic call", () => {
     const agent = new ClaudeAgent({ client });
 
     const prompt: AgentPrompt = {
-      mode: "engaged",
-      relationship: {
-        id: "r-1",
-        target_type: "contact",
-        contact: { id: "c-sam", name: "Sam" },
-        role: "close friend",
-        cadence: "every couple of weeks",
-      },
-      openThreads: [
-        {
-          open_threads: {
+      mode: "baseline",
+      relationshipContext: testRelationshipContextSnapshot({
+        relationship: {
+          id: "r-1",
+          target_type: "contact",
+          role: "close friend",
+          cadence: "every couple of weeks",
+        },
+        openThreads: [
+          testOpenThreadLink({
             id: "ot-1",
             description: "promised to send Sam the book on Stoicism",
-            direction: "me_owes_them",
             created_at: "2026-05-08T00:00:00Z",
-          },
-        },
-      ],
+          }),
+        ],
+        contact: testContact({ id: "c-sam", name: "Sam" }),
+      }),
       previousCandidateSet: null,
       userContext: {
         userId: "u-1",
@@ -60,13 +64,43 @@ describe("ClaudeAgent.propose — live Anthropic call", () => {
         transientIntent: [
           "I want to plan a low-key catch-up with Sam this week",
         ],
-        situationalState: ["Just moved to Sydney; settling in"],
-        goalsAndValues: ["Be present with close friends, not just family"],
-        operatorStrengths: [
-          "A good ear when a close friend's stuck",
-          "Help thinking through career moves",
+        situationalState: {
+          id: "ss-1",
+          content: "Just moved to Sydney; settling in",
+          createdAt: "2026-05-01T00:00:00Z",
+          updatedAt: "2026-05-19T00:00:00Z",
+        },
+        goalsAndValues: [
+          {
+            id: "g-1",
+            content: "Be present with close friends, not just family",
+            createdAt: "2026-05-01T00:00:00Z",
+            updatedAt: "2026-05-01T00:00:00Z",
+          },
         ],
-        inferredSignals: { calendarDensity: null, sleep: null },
+        operatorStrengths: [
+          {
+            id: "os-1",
+            content: "A good ear when a close friend's stuck",
+            createdAt: "2026-05-01T00:00:00Z",
+            updatedAt: "2026-05-01T00:00:00Z",
+          },
+          {
+            id: "os-2",
+            content: "Help thinking through career moves",
+            createdAt: "2026-05-02T00:00:00Z",
+            updatedAt: "2026-05-02T00:00:00Z",
+          },
+        ],
+        inferredSignals: {
+          calendarDensity: null,
+          sleep: null,
+          calendarEvents: [],
+          sleepRecords: [],
+        },
+        groups: [],
+        otherRelationships: [],
+        characterValuesAlignment: [],
       },
       liveContext: { sessionId: "sess-test", userTurn: "what should I do about Sam" },
     };
@@ -78,7 +112,7 @@ describe("ClaudeAgent.propose — live Anthropic call", () => {
     console.log("LIVE Engaged Pass output:", JSON.stringify(actions, null, 2));
 
     // Structural invariants the issue calls out:
-    expect(actions.length).toBeGreaterThan(1);
+    expect(actions).toHaveLength(1);
     // Every action has a known type from the ontology.
     const knownTypes = new Set([
       "ScheduleInteraction",
@@ -92,10 +126,10 @@ describe("ClaudeAgent.propose — live Anthropic call", () => {
     for (const a of actions) {
       expect(knownTypes.has(a.type)).toBe(true);
     }
-    // DoNothing is always a peer option.
-    expect(actions.some((a) => a.type === "DoNothing")).toBe(true);
-    // The model proposed at least one concrete action (not just DoNothing)
+    // Exactly one Candidate Action per Pass.
+    expect(actions).toHaveLength(1);
+    // The model proposed a concrete action (not just DoNothing)
     // given an Open Thread + live intent + a "be present" goal.
-    expect(actions.some((a) => a.type !== "DoNothing")).toBe(true);
+    expect(actions[0].type).not.toBe("DoNothing");
   }, 60_000);
 });

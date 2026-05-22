@@ -7,6 +7,7 @@ import type {
   DecisionState,
   SessionHandle,
 } from "@related/shared";
+import { resolveSendMessageRecipients } from "@related/shared";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
@@ -40,10 +41,8 @@ interface TranscriptAgentTurn {
    */
   candidateSetId: string;
   /**
-   * Adapted action list. `runEngagedTurn` returns the engine-side
-   * `CandidateActionInput[]` which has no `id` or `decisionState` —
-   * adapt to the richer `CandidateAction` shape used by our card
-   * component, synthesising a stable client-side id per action.
+   * Adapted action list from a Candidate Set returned by voice UI tests
+   * or future ambient review flows.
    */
   actions: CandidateAction[];
   spokenText: string;
@@ -59,8 +58,9 @@ type VoiceState = "idle" | "recording" | "thinking";
  * Interaction model: **press-to-start / press-to-stop** (not hold-to-talk).
  * Click the mic to begin recording, click again to stop. After a stop,
  * the captured audio is handed to `voiceSessionManager.startSession`,
- * which runs STT → Engaged Pass → TTS, and yields a Candidate Set back
- * for display alongside the spoken response.
+ * which runs STT only — Engaged Passes were removed; Ambient Intelligence
+ * runs via baseline and triggered passes. Voice turns reject until a new
+ * voice UX lands.
  *
  * A third press while the agent is still thinking calls `interrupt()`
  * (barge-in), cancelling the in-flight Pass + TTS.
@@ -221,38 +221,25 @@ export function TalkSession({ relationships }: TalkSessionProps) {
   ) {
     if (!selected) return;
     const { agentService } = getBrowserDeps();
-
-    // Decline routes through the DoNothing branch — mirrors mobile.
-    const effectiveAction =
-      intent === "decline"
-        ? { ...action, type: "DoNothing" as const, payload: {} }
-        : action;
-
-    // SendMessage Accept needs a resolved recipient address — the agent
-    // emits `contactIds` only; resolve from the selected contact.
-    let userEditsPayload = edits;
-    if (intent === "accept" && effectiveAction.type === "SendMessage") {
-      const channel = (effectiveAction.payload as { channel?: string })
-        ?.channel;
-      const resolved = resolveRecipientFor(selected, channel);
-      userEditsPayload = { ...(edits ?? {}), to: resolved };
-    }
-
     const candidateSetId = findCandidateSetIdFor(transcript, action.id) ?? "";
 
+    let userEdits: { payload: Record<string, unknown> } | undefined;
+    if (intent === "accept") {
+      let payload = edits;
+      if (action.type === "SendMessage") {
+        const channel = (action.payload as { channel?: string })?.channel;
+        const resolved = resolveSendMessageRecipients(selected, channel);
+        payload = { ...(edits ?? {}), to: resolved };
+      }
+      userEdits = payload ? { payload } : undefined;
+    }
+
     try {
-      await agentService.executeAction({
-        action: {
-          id: action.id,
-          candidateSetId,
-          ownerId: "",
-          type: effectiveAction.type,
-          payload: effectiveAction.payload,
-        },
-        userEdits: userEditsPayload
-          ? { payload: userEditsPayload }
-          : undefined,
-      });
+      if (intent === "accept") {
+        await agentService.acceptAction({ candidateSetId, action, userEdits });
+      } else {
+        await agentService.declineAction({ candidateSetId, action });
+      }
       setDecisions((prev) => ({
         ...prev,
         [action.id]: intent === "accept" ? "picked" : "declined",
@@ -394,16 +381,6 @@ function AgentTurnBlock({
     </div>
   );
 }
-
-function resolveRecipientFor(
-  relationship: RelationshipOption,
-  channel: string | undefined,
-): string[] {
-  if (channel === "email" && relationship.email) return [relationship.email];
-  if (channel === "text" && relationship.phone) return [relationship.phone];
-  return [];
-}
-
 function findCandidateSetIdFor(
   transcript: TranscriptEntry[],
   actionId: string,

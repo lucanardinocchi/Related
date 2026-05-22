@@ -51,13 +51,16 @@ Both surfaces back onto the same `chat-respond` Edge Function and same `chats` /
 _Avoid_: Chatbot, copilot (these flatten the read-only invariant).
 
 **Extraction Pass**:
-A post-processing agent (per **ADR-0009**) that runs over the transcript of a closed **Chat** and writes the User's self-narrative content into **User Context**. Triggered exactly once when a Chat closes. Writes only to **Transient Intent** and **Situational State** — never to Goals & Values (which remain User-authored), never to operational entities (Interactions, Open Threads, Relationship state — which remain gated by the Candidate Action invariant). Named "Pass" to parallel **Agent Pass**: same shape (input → reasoning → write), different input type (transcript, not Relationship state). Idempotent on the Chat: a Chat can only be extracted once.
-_Avoid_: Summariser, analyser (Extraction is structured-write, not summarisation).
+A post-processing agent (per **ADR-0012**, amending ADR-0009) that runs over the transcript of a closed **Chat** — Conversational or Pocket import — and **direct-writes relationship context**: Notes, Interactions, Comms, and Commitments (Open Threads). Triggered exactly once when a Chat closes (or immediately after Pocket import). Every extracted row carries **provenance** (`capture_source`, `source_chat_id`) surfaced on Relationship detail timelines. Writes **Contact and Group Relationships** via `relationship_id` resolution. Does **not** write Goals & Values (User-authored only). Does **not** emit Candidate Actions — Ambient Intelligence continues to propose actions separately. Idempotent on the Chat.
+_Avoid_: Summariser, analyser (Extraction is structured-write to the timeline, not summarisation).
+
+**Context capture source**:
+How a timeline row was created — `manual` (User typed in Add Context), `conversational_extraction` (closed Chat transcript), or `pocket_extraction` (Pocket import). Stored on `interactions` and `open_threads` as `capture_source` + optional `source_chat_id`. See ADR-0012.
 
 **Chat**:
 A bounded conversation between the User and **Conversational Intelligence**. First-class domain entity. Not tied to any single Relationship — Chats are free-form and global to the User. The agent's context for any turn is the full message history of **the current Chat only**; cross-Chat history is never sent to the model. Each Chat is the unit of input to one **Extraction Pass**.
 
-Lifecycle is explicit-close (per ADR-0009): a Chat is `open` (writable, agent responds, Extraction not yet run) until the User clicks "New Chat" or archives it, at which point it becomes `closed` (read-only, Extraction runs exactly once). There is no idle close — a User who walks away mid-Chat picks up where they left off. **Transient Intent** extracted from a Chat decays from the Chat's `closed_at` timestamp, not from the underlying message timestamps.
+Lifecycle is explicit-close (per ADR-0009): a Chat is `open` (writable, agent responds, Extraction not yet run) until the User closes it, at which point it becomes `closed` (read-only, **Extraction Pass** runs exactly once per ADR-0012). There is no idle close — a User who walks away mid-Chat picks up where they left off.
 _Avoid_: Conversation, thread (overloaded — "Open Thread" already means something else), session (overloaded — "session" is used for Engaged Pass voice).
 
 **Agent Pass**:

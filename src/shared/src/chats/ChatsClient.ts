@@ -187,10 +187,20 @@ export class ChatsClient {
   }
 
   async listChats(): Promise<ChatSummary[]> {
-    const { data: chatsData, error: chatsError } = await this.client
+    // Pocket integration hides imported transcripts from the Conversational
+    // rail. Fall back to an unfiltered list when migration 20260530000001
+    // has not landed yet so a web deploy cannot take /agent down.
+    let { data: chatsData, error: chatsError } = await this.client
       .from("chats")
       .select(CHAT_COLUMNS)
+      .eq("source", "conversational")
       .order("created_at", { ascending: false });
+    if (chatsError?.code === "42703") {
+      ({ data: chatsData, error: chatsError } = await this.client
+        .from("chats")
+        .select(CHAT_COLUMNS)
+        .order("created_at", { ascending: false }));
+    }
     if (chatsError) throw chatsError;
     const chats = ((chatsData ?? []) as ChatRow[]).map(toChat);
 
@@ -390,8 +400,9 @@ export class ChatsClient {
 
   /**
    * Invoke the extract-context Edge Function — Extraction Pass per
-   * ADR-0009. Triggered after closeChat. Idempotent on the server: a
-   * second invocation for the same Chat returns { skipped: true }.
+   * ADR-0012. Triggered after closeChat. Direct-writes relationship
+   * context (notes, interactions, comms, commitments) with provenance.
+   * Idempotent on the server: a second invocation returns { skipped: true }.
    */
   async extract(chatId: string): Promise<ExtractionResult> {
     const { data, error } = await this.client.functions.invoke(
@@ -411,11 +422,45 @@ export type ExtractionResult =
   | {
       ok: true;
       extracted_at: string;
-      situationalStateUpdated: boolean;
-      intentsCaptured: number;
+      notesLogged: number;
+      interactionsLogged: number;
+      commsLogged: number;
+      commitmentsOpened: number;
       toolErrors: string[];
     }
   | { skipped: true; reason: string };
+
+/** User-facing summary after close → extract (web + mobile toasts). */
+export function formatExtractionResult(result: ExtractionResult): string {
+  if ("skipped" in result && result.skipped) {
+    return `Extraction skipped: ${result.reason}.`;
+  }
+  if (!("ok" in result)) return "Extraction complete.";
+  const bits: string[] = [];
+  if (result.notesLogged > 0) {
+    bits.push(
+      `${result.notesLogged} note${result.notesLogged === 1 ? "" : "s"}`,
+    );
+  }
+  if (result.interactionsLogged > 0) {
+    bits.push(
+      `${result.interactionsLogged} interaction${result.interactionsLogged === 1 ? "" : "s"}`,
+    );
+  }
+  if (result.commsLogged > 0) {
+    bits.push(`${result.commsLogged} comms`);
+  }
+  if (result.commitmentsOpened > 0) {
+    bits.push(
+      `${result.commitmentsOpened} commitment${result.commitmentsOpened === 1 ? "" : "s"}`,
+    );
+  }
+  const head = bits.length ? bits.join(", ") : "no relationship context logged";
+  const tail = result.toolErrors.length
+    ? ` (with ${result.toolErrors.length} tool error${result.toolErrors.length === 1 ? "" : "s"})`
+    : "";
+  return `Extraction complete: ${head}${tail}.`;
+}
 
 interface ParsedSseEvent {
   event: string;

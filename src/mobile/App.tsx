@@ -26,8 +26,8 @@ import {
   RelationshipsClient,
   SystemLinkingComposer,
   UserContextClient,
+  AmbientIntelligencePreferencesClient,
   UserProviderTokensClient,
-  VoiceSessionManager,
 } from "@related/shared";
 import { AuthGate } from "./src/AuthGate";
 import {
@@ -38,7 +38,6 @@ import {
 import type { OAuthSignInProvider } from "@related/shared";
 import { createMobileAudioPlayer } from "./src/voice/createMobileAudioPlayer";
 import { createMobileMicCapture } from "./src/voice/createMobileMicCapture";
-import { createMobileStreamingAudioPlayer } from "./src/voice/createMobileStreamingAudioPlayer";
 import {
   iosHealthKitSleepAdapter,
   requestPermissionAsync as requestHealthKitPermission,
@@ -84,6 +83,8 @@ const resolveOwnerId = async () => {
   return data.user.id;
 };
 const userContextClient = new UserContextClient(supabase, resolveOwnerId);
+const ambientIntelligencePreferencesClient =
+  new AmbientIntelligencePreferencesClient(supabase, resolveOwnerId);
 const onboardingClient = new OnboardingClient(supabase, resolveOwnerId);
 const userProviderTokensClient = new UserProviderTokensClient(
   supabase,
@@ -94,18 +95,10 @@ const messageComposer = new SystemLinkingComposer({
 });
 const agentService = new AgentService({ supabase, messageComposer });
 
-// Voice pipeline: real STT/TTS adapters proxy through Edge Functions so
-// API keys never reach the client bundle (ADR-0006). The native
-// recorder is now wired through `createMobileMicCapture` (expo-audio +
-// expo-file-system) so the Conversational Chat tab works end-to-end on
-// device, not just web.
+// Voice pipeline for Conversational Chat: STT/TTS adapters proxy through
+// Edge Functions so API keys never reach the client bundle (ADR-0006).
 const sttAdapter = new WisprFlowSTTAdapter({ supabase });
 const ttsAdapter = new ElevenLabsTTSAdapter({ supabase });
-const voiceSessionManager = new VoiceSessionManager({
-  sttAdapter,
-  ttsAdapter,
-  agentService,
-});
 
 // Conversational Intelligence voice plumbing per ADR-0009 mobile
 // amendment. Mic + auto-TTS only render on iOS / Android — Expo Web
@@ -121,9 +114,6 @@ const mobileTTSPlayback = isNative
     })
   : undefined;
 const mobileMicCapture = isNative ? createMobileMicCapture : undefined;
-const agentStreamingPlayerFactory = isNative
-  ? createMobileStreamingAudioPlayer
-  : undefined;
 
 // Where Supabase sends the User back after OAuth consent.
 // Web: same origin (Vercel URL or localhost during dev).
@@ -200,14 +190,15 @@ export default function App() {
         groupsClient={groupsClient}
         candidatesClient={candidatesClient}
         userContextClient={userContextClient}
+        ambientIntelligencePreferencesClient={
+          ambientIntelligencePreferencesClient
+        }
         onboardingClient={onboardingClient}
         agentService={agentService}
         chatsClient={chatsClient}
         chatStartMicCapture={mobileMicCapture}
         chatSttAdapter={isNative ? sttAdapter : undefined}
         chatTTSPlayback={mobileTTSPlayback}
-        voiceSessionManager={voiceSessionManager}
-        agentStreamingPlayerFactory={agentStreamingPlayerFactory}
         userProviderTokensClient={userProviderTokensClient}
         oauthRedirectTo={oauthRedirectTo}
         passwordResetRedirectTo={passwordResetRedirectTo}

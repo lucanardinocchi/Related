@@ -2,11 +2,13 @@
 
 Offline pipeline that creates muxed swipe clips per character:
 
-1. **AI video** — [PixVerse V6](https://replicate.com/pixverse/pixverse-v6) on Replicate (9:16 portrait, character-focused). Override with `REPLICATE_VIDEO_MODEL=kwaivgi/kling-v3-video` if needed.
+1. **AI video** — [Seedance 2.0](https://replicate.com/bytedance/seedance-2.0) on Replicate (9:16 portrait, character-focused). Use `REPLICATE_VIDEO_MODEL=bytedance/seedance-2.0-fast` for cheaper iteration.
 2. **Licensed music** — SoundHelix tracks (CC BY 4.0), mood-matched from character values
 3. **FFmpeg mux** — H.264 + AAC, `-movflags +faststart`, trimmed to ~8s
 4. **Supabase Storage** — public `values-media/{characterId}.mp4`
 5. **Manifest** — writes `src/shared/src/values/valuesMediaManifest.json` (consumed by the web app)
+
+Only characters listed in the manifest appear on `/values` swipe cards.
 
 ## Prerequisites
 
@@ -23,7 +25,13 @@ cd src/backend
 REPLICATE_API_TOKEN=r8_... \
 SUPABASE_URL=https://<ref>.supabase.co \
 SUPABASE_SERVICE_ROLE_KEY=<service_role> \
-node scripts/generate-values-media.mjs --limit 3
+node scripts/generate-values-media.mjs --missing
+```
+
+Or from repo root:
+
+```sh
+npm run generate:values-missing
 ```
 
 ### Useful flags
@@ -32,6 +40,7 @@ node scripts/generate-values-media.mjs --limit 3
 |---|---|
 | `--id ted-lasso` | One character (repeatable) |
 | `--limit 10` | Cap batch size |
+| `--missing` | Only seed characters without manifest URLs |
 | `--force` | Regenerate even if manifest entry exists |
 | `--dry-run` | Print prompts/moods without API calls |
 | `--skip-upload` | Keep muxed files in `.cache/values-media/` only |
@@ -40,7 +49,7 @@ node scripts/generate-values-media.mjs --limit 3
 
 | Variable | Default | Notes |
 |---|---|---|
-| `REPLICATE_VIDEO_MODEL` | `pixverse/pixverse-v6` | Replicate model slug. PixVerse V6 is best for portrait character clips; Kling 3.0 is the fallback. |
+| `REPLICATE_VIDEO_MODEL` | `bytedance/seedance-2.0` | Replicate model slug |
 | `VALUES_MEDIA_DURATION` | `8` | Output clip length (seconds) |
 | `VALUES_MEDIA_MUSIC_VOLUME` | `0.35` | Background music gain |
 
@@ -55,8 +64,8 @@ git add src/shared/src/values/valuesMediaManifest.json
 git commit -m "Update values media manifest"
 ```
 
-Then deploy web as usual. Characters without manifest entries keep the stock Mixkit fallback (split video + music).
+Then deploy web as usual.
 
 ## Cost note
 
-~100 characters × one Replicate video each adds up. Use `--limit` while iterating on prompts, then batch overnight.
+~100 characters × one Replicate video each adds up. Use `--limit` while iterating on prompts, then `npm run generate:values-missing` overnight for the rest.

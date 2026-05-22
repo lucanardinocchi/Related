@@ -1,19 +1,32 @@
 # extract-context
 
-Extraction Pass per [ADR-0009](../../../../../docs/adr/0009-three-agent-architecture.md).
+Relationship context **Extraction Pass** per [ADR-0012](../../../../../docs/adr/0012-relationship-context-extraction.md) (amends ADR-0009).
 
-Runs over the transcript of a **closed** Chat and writes the User's self-narrative content into User Context. Triggered by the frontend immediately after the User closes a Chat.
+Runs over the transcript of a **closed** Chat — Conversational (`source='conversational'`) or Pocket import (`source='pocket'`) — and **direct-writes** structured relationship context with provenance.
 
-## Write surface (only)
+## Write surface
 
-- `situational_state` (singleton per User — replace whole content)
-- `transient_intent` (append, with `expires_at` = chat `closed_at` + 7 days)
+| Tool | Context family | Storage |
+|------|----------------|---------|
+| `log_note` | Note | `interactions` (`kind='note'`) |
+| `log_interaction` | Interaction | `interactions` |
+| `log_comms` | Comms | `interactions` (channel kinds) |
+| `open_commitment` | Commitment | `open_threads` |
 
-**Will not** write to `goals_and_values` (User-authored only) or any operational entity (`interactions`, `open_threads`, `relationships`, …) — those remain gated by the Candidate Action invariant. See ADR-0009 sections (a) and (α).
+Every row is stamped with `capture_source` (`conversational_extraction` | `pocket_extraction`) and `source_chat_id`.
+
+**Will not** write Goals & Values, role/cadence, or Candidate Actions.
+
+Supports **Contact and Group Relationships** — tools take `relationship_id`; group-mode interactions use `extraction_create_interaction` with `p_group_id`.
+
+## Triggers
+
+- User closes a Conversational Chat → client calls `ChatsClient.extract()`
+- Pocket import completes → `invokeExtractContext` (service role + `ownerId`)
 
 ## Idempotency
 
-The function reads `chats.extracted_at`; if set, it returns `{ skipped: true, reason: "already extracted" }` without invoking the model. On success, it stamps `extracted_at = now()`. Empty transcripts are also stamped to avoid wasted future invocations.
+Gates on `chats.extracted_at`. Re-invocations return `{ skipped: true }`.
 
 ## Deploy
 
@@ -22,12 +35,14 @@ supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 supabase functions deploy extract-context
 ```
 
+Apply migration `20260532000001_extraction_provenance.sql` first.
+
 ## Request
 
-POST. `Authorization: Bearer <user_jwt>`. Body:
+POST. `Authorization: Bearer <user_jwt>` or service role with body:
 
 ```json
-{ "chatId": "uuid" }
+{ "chatId": "uuid", "ownerId": "uuid" }
 ```
 
 ## Response
@@ -35,18 +50,11 @@ POST. `Authorization: Bearer <user_jwt>`. Body:
 ```json
 {
   "ok": true,
-  "extracted_at": "2026-05-21T...",
-  "situationalStateUpdated": true,
-  "intentsCaptured": 2,
+  "extracted_at": "2026-05-22T...",
+  "notesLogged": 1,
+  "interactionsLogged": 2,
+  "commsLogged": 0,
+  "commitmentsOpened": 1,
   "toolErrors": []
 }
 ```
-
-Or `{ "skipped": true, "reason": "..." }` for already-extracted or empty transcripts.
-
-## Failure modes
-
-- Chat not closed → 409. Close it first.
-- Already extracted → returns `skipped: true` (200).
-- Caller is not the chat owner → 403.
-- Anthropic / DB errors → 502 / 500.

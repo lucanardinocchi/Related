@@ -6256,6 +6256,18 @@
           ]
         }
       },
+      "src/evals": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@anthropic-ai/sdk@0.96",
+            "npm:@related/shared@*",
+            "npm:@types/node@^22.9.0",
+            "npm:tsx@^4.19.2",
+            "npm:typescript@^5.6.3",
+            "npm:yaml@^2.6.1"
+          ]
+        }
+      },
       "src/mobile": {
         "packageJson": {
           "dependencies": [
@@ -6269,9 +6281,12 @@
             "npm:@types/jest@^29.5.14",
             "npm:@types/react@19.1",
             "npm:expo-audio@~1.1.1",
+            "npm:expo-auth-session@~7.0.11",
             "npm:expo-file-system@~19.0.22",
             "npm:expo-font@~14.0.11",
+            "npm:expo-linking@~8.0.12",
             "npm:expo-status-bar@~3.0.9",
+            "npm:expo-web-browser@~15.0.11",
             "npm:expo@~54.0.33",
             "npm:jest-expo@54.0",
             "npm:jest@^29.7.0",
@@ -6332,6 +6347,7 @@
             "npm:react-dom@19.1.0",
             "npm:react-hook-form@^7.76.0",
             "npm:react@19.1.0",
+            "npm:stripe@^17.4.0",
             "npm:tailwind-merge@^3.6.0",
             "npm:tailwindcss@4",
             "npm:typescript@~5.9.2",

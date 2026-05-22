@@ -1,10 +1,9 @@
-import { NavigationContainer, useNavigation } from "@react-navigation/native";
+import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import {
   createNativeStackNavigator,
-  type NativeStackNavigationProp,
 } from "@react-navigation/native-stack";
-import { StyleSheet, Text, View } from "react-native";
 import type {
   AgentService,
   CandidatesClient,
@@ -18,14 +17,13 @@ import type {
   STTAdapter,
   TTSPlayback,
   UserContextClient,
-  VoiceSessionManager,
+  AmbientIntelligencePreferencesClient,
 } from "@related/shared";
 import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
-import type { StreamingAudioPlayer } from "./voice/createMobileStreamingAudioPlayer";
 import { AddContactScreen } from "./AddContactScreen";
-import { AgentScreen } from "./AgentScreen";
 import { CalendarScreen } from "./CalendarScreen";
 import { CreateGroupScreen } from "./CreateGroupScreen";
+import { relationshipChatDraft } from "./conversationalChatDraft";
 import { GroupDetailScreen } from "./GroupDetailScreen";
 import { GroupsListScreen } from "./GroupsListScreen";
 import { HomeScreen } from "./HomeScreen";
@@ -41,6 +39,7 @@ export interface AuthedAppProps {
   groupsClient: GroupsClient;
   candidatesClient: CandidatesClient;
   userContextClient: UserContextClient;
+  ambientIntelligencePreferencesClient: AmbientIntelligencePreferencesClient;
   agentService: AgentService;
   /**
    * Conversational Intelligence client (per ADR-0009 mobile amendment) —
@@ -54,9 +53,6 @@ export interface AuthedAppProps {
   chatStartMicCapture?: () => Promise<AudioCaptureHandle>;
   chatSttAdapter?: STTAdapter;
   chatTTSPlayback?: TTSPlayback;
-  /** Optional voice pipeline — surfaces the Mic toggle in AgentScreen. */
-  voiceSessionManager?: VoiceSessionManager;
-  agentStreamingPlayerFactory?: () => StreamingAudioPlayer;
   onSignOut: () => void;
 }
 
@@ -64,7 +60,6 @@ type RelationshipsStackParams = {
   List: undefined;
   Detail: { relationship: Relationship };
   AddContact: undefined;
-  Agent: { relationship: Relationship };
 };
 
 type GroupsStackParams = {
@@ -75,7 +70,7 @@ type GroupsStackParams = {
 
 type TabParams = {
   Home: undefined;
-  Chat: undefined;
+  Chat: { initialDraft?: string } | undefined;
   Relationships: undefined;
   Groups: undefined;
   Calendar: undefined;
@@ -86,26 +81,30 @@ const Tab = createBottomTabNavigator<TabParams>();
 const Stack = createNativeStackNavigator<RelationshipsStackParams>();
 const GroupsStackNav = createNativeStackNavigator<GroupsStackParams>();
 
+type TabNavigationProp = BottomTabNavigationProp<TabParams>;
+
+function openConversationalChat(
+  navigation: TabNavigationProp,
+  relationship?: Relationship,
+) {
+  navigation.navigate(
+    "Chat",
+    relationship ? { initialDraft: relationshipChatDraft(relationship) } : undefined,
+  );
+}
+
 function RelationshipsStack({
   relationshipsClient,
   openThreadsClient,
   interactionsClient,
   groupsClient,
   candidatesClient,
-  agentService,
-  voiceSessionManager,
-  chatStartMicCapture,
-  agentStreamingPlayerFactory,
 }: {
   relationshipsClient: RelationshipsClient;
   openThreadsClient: OpenThreadsClient;
   interactionsClient: InteractionsClient;
   groupsClient: GroupsClient;
   candidatesClient: CandidatesClient;
-  agentService: AgentService;
-  voiceSessionManager?: VoiceSessionManager;
-  chatStartMicCapture?: () => Promise<AudioCaptureHandle>;
-  agentStreamingPlayerFactory?: () => StreamingAudioPlayer;
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -131,9 +130,6 @@ function RelationshipsStack({
             candidatesClient={candidatesClient}
             onBack={() => navigation.goBack()}
             onSelectGroup={(group) => {
-              // Cross-stack jump: switch the tab AND push the Group's detail
-              // view in one motion so the back chevron returns into the
-              // Groups tab rather than back to the Contact's view.
               navigation
                 .getParent<TabNavigationProp>()
                 ?.navigate("Groups", {
@@ -141,9 +137,13 @@ function RelationshipsStack({
                   params: { relationship: group },
                 });
             }}
-            onTalkToClaude={(relationship) =>
-              navigation.navigate("Agent", { relationship })
-            }
+            onTalkToClaude={(relationship) => {
+              navigation
+                .getParent<TabNavigationProp>()
+                ?.navigate("Chat", {
+                  initialDraft: relationshipChatDraft(relationship),
+                });
+            }}
           />
         )}
       </Stack.Screen>
@@ -159,25 +159,9 @@ function RelationshipsStack({
           />
         )}
       </Stack.Screen>
-      <Stack.Screen name="Agent">
-        {({ navigation, route }) => (
-          <AgentScreen
-            relationship={route.params.relationship}
-            agentService={agentService}
-            voiceSessionManager={voiceSessionManager}
-            startMicCapture={chatStartMicCapture}
-            createStreamingPlayer={agentStreamingPlayerFactory}
-            onBack={() => navigation.goBack()}
-          />
-        )}
-      </Stack.Screen>
     </Stack.Navigator>
   );
 }
-
-type TabNavigationProp = ReturnType<
-  typeof useNavigation<NativeStackNavigationProp<TabParams>>
->;
 
 function GroupsStack({
   groupsClient,
@@ -231,15 +215,6 @@ function GroupsStack({
   );
 }
 
-function PlaceholderTab({ name }: { name: string }) {
-  return (
-    <View style={styles.placeholderRoot}>
-      <Text style={styles.placeholderLabel}>{name}</Text>
-      <Text style={styles.placeholderHint}>Coming soon</Text>
-    </View>
-  );
-}
-
 export function AuthedApp({
   relationshipsClient,
   openThreadsClient,
@@ -247,13 +222,12 @@ export function AuthedApp({
   groupsClient,
   candidatesClient,
   userContextClient,
-  agentService,
+  ambientIntelligencePreferencesClient,
+  agentService: _agentService,
   chatsClient,
   chatStartMicCapture,
   chatSttAdapter,
   chatTTSPlayback,
-  voiceSessionManager,
-  agentStreamingPlayerFactory,
   onSignOut,
 }: AuthedAppProps) {
   return (
@@ -265,25 +239,18 @@ export function AuthedApp({
               openThreadsClient={openThreadsClient}
               interactionsClient={interactionsClient}
               relationshipsClient={relationshipsClient}
-              onTalkToClaude={(relationship) => {
-                // Cross-tab nav into the Relationships stack's Agent screen,
-                // so the Back chevron returns into Relationships (not Home).
-                // Matches the onSelectGroup cross-stack pattern.
-                navigation
-                  .getParent<TabNavigationProp>()
-                  ?.navigate("Relationships", {
-                    screen: "Agent",
-                    params: { relationship },
-                  });
-              }}
+              onTalkToClaude={(relationship) =>
+                openConversationalChat(navigation, relationship)
+              }
               onSignOut={onSignOut}
             />
           )}
         </Tab.Screen>
         <Tab.Screen name="Chat">
-          {() => (
+          {({ route }) => (
             <MobileChatScreen
               chatsClient={chatsClient}
+              initialDraft={route.params?.initialDraft}
               startMicCapture={chatStartMicCapture}
               sttAdapter={chatSttAdapter}
               ttsPlayback={chatTTSPlayback}
@@ -298,10 +265,6 @@ export function AuthedApp({
               interactionsClient={interactionsClient}
               groupsClient={groupsClient}
               candidatesClient={candidatesClient}
-              agentService={agentService}
-              voiceSessionManager={voiceSessionManager}
-              chatStartMicCapture={chatStartMicCapture}
-              agentStreamingPlayerFactory={agentStreamingPlayerFactory}
             />
           )}
         </Tab.Screen>
@@ -321,30 +284,16 @@ export function AuthedApp({
           )}
         </Tab.Screen>
         <Tab.Screen name="You">
-          {() => <YouScreen userContextClient={userContextClient} />}
+          {() => (
+            <YouScreen
+              userContextClient={userContextClient}
+              ambientIntelligencePreferencesClient={
+                ambientIntelligencePreferencesClient
+              }
+            />
+          )}
         </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  placeholderRoot: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholderLabel: {
-    fontSize: 24,
-    fontFamily: "InterTight_900Black",
-    fontWeight: "900",
-    color: "#000",
-  },
-  placeholderHint: {
-    marginTop: 8,
-    fontSize: 13,
-    color: "#9ca3af",
-    fontFamily: "InterTight_500Medium",
-  },
-});

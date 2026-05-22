@@ -1,19 +1,40 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PassEngine, type AgentCaller, type PassMode } from "./PassEngine";
+import {
+  PassEngine,
+  type AgentCaller,
+  type PassMode,
+  type RelationshipContextSnapshot,
+} from "./PassEngine";
 import type { NotificationDispatcher } from "../notifications/NotificationDispatcher";
+import type { UserContextSnapshot } from "./UserContextBuilder";
+import type { RelationshipContextBuilder } from "./RelationshipContextBuilder";
+import type { UserContextBuilder } from "./UserContextBuilder";
+import {
+  testContact,
+  testRelationshipContextSnapshot,
+} from "./relationshipContextFixtures";
 
 type Resolved<T> = { data: T; error: null } | { data: null; error: { message: string } };
 
-/**
- * Mock of the postgrest chain PassEngine drives. Reads + writes are scoped to
- * a single Relationship per call, so the mock is one builder shared by both.
- */
+const emptyUserContext = (userId = "u-1"): UserContextSnapshot => ({
+  userId,
+  asOf: "2026-05-19T00:00:00.000Z",
+  transientIntent: [],
+  goalsAndValues: [],
+  situationalState: null,
+  operatorStrengths: [],
+  inferredSignals: {
+    calendarDensity: null,
+    sleep: null,
+    calendarEvents: [],
+    sleepRecords: [],
+  },
+  groups: [],
+  otherRelationships: [],
+  characterValuesAlignment: [],
+});
+
 function makeQueryMock() {
-  // For reads:    from('relationships').select('*,...').eq('id', id).single()
-  //               from('open_threads').select(...).eq(...).order(...) etc.
-  //               from('candidate_sets').select(...).eq(...).order(...).limit(...)
-  // For writes:   from('candidate_sets').insert({...}).select().single()
-  //               from('candidate_actions').insert([{...}])
   const single = jest.fn<Promise<Resolved<unknown>>, []>();
   const limit = jest.fn();
   const order = jest.fn(() => ({ limit }));
@@ -32,60 +53,66 @@ function makeQueryMock() {
   return { from, select, single, eq, eqInner, order, limit, insert, insertSelect, insertFlat };
 }
 
-function withEngine(stubActions: { type: string; payload?: unknown; why?: string }[]) {
+function fixedRelationshipContext(
+  over: Partial<RelationshipContextSnapshot> = {},
+): RelationshipContextSnapshot {
+  return testRelationshipContextSnapshot(over);
+}
+
+function withEngine(
+  stubActions: { type: string; payload?: unknown; why?: string }[],
+  over: {
+    relationshipContext?: RelationshipContextSnapshot;
+    userContext?: UserContextSnapshot;
+  } = {},
+) {
   const q = makeQueryMock();
   const supa = { from: q.from } as unknown as SupabaseClient;
   const propose = jest.fn().mockResolvedValue(stubActions);
   const agent: AgentCaller = { propose };
-  const engine = new PassEngine({ supabase: supa, agent });
-  return { q, propose, engine };
+  const relationshipContextBuilder = {
+    buildRelationshipContext: jest
+      .fn()
+      .mockResolvedValue(
+        over.relationshipContext ?? fixedRelationshipContext(),
+      ),
+  } as unknown as RelationshipContextBuilder;
+  const userContextBuilder = {
+    buildUserContext: jest
+      .fn()
+      .mockResolvedValue(over.userContext ?? emptyUserContext()),
+  } as unknown as UserContextBuilder;
+  const engine = new PassEngine({
+    supabase: supa,
+    agent,
+    relationshipContextBuilder,
+    userContextBuilder,
+  });
+  return { q, propose, engine, relationshipContextBuilder, userContextBuilder };
 }
 
 describe("PassEngine.runPass", () => {
-  const fixedRelationship = {
-    id: "r-1",
-    owner_id: "u-1",
-    target_type: "contact",
-    contact: { id: "c-1", name: "Sam" },
-  };
-
-  function primeReads(
-    q: ReturnType<typeof makeQueryMock>,
-    over: { previousSet?: { id: string; mode: PassMode } | null; openThreads?: unknown[] } = {},
-  ) {
-    const previousSet = over.previousSet === undefined ? null : over.previousSet;
-    const openThreads = over.openThreads ?? [];
-    // .single() resolves twice: once for the relationship read, once for the
-    // post-insert select that returns the persisted CandidateSet.
-    q.single
-      .mockResolvedValueOnce({ data: fixedRelationship as unknown as object, error: null })
-      .mockResolvedValueOnce({
-        data: {
-          id: "cs-new",
-          owner_id: "u-1",
-          relationship_id: "r-1",
-          mode: "baseline",
-          created_at: "2026-05-19T00:00:00Z",
-        },
-        error: null,
-      });
-    // .limit() is the terminal awaited call for both the previous-set list
-    // read AND the open-threads list read. Order: previous-set first.
-    q.limit
-      .mockResolvedValueOnce({
-        data: previousSet ? [previousSet] : [],
-        error: null,
-      })
-      .mockResolvedValueOnce({ data: openThreads, error: null });
+  function primeWrites(q: ReturnType<typeof makeQueryMock>) {
+    q.single.mockResolvedValueOnce({
+      data: {
+        id: "cs-new",
+        owner_id: "u-1",
+        relationship_id: "r-1",
+        mode: "baseline",
+        created_at: "2026-05-19T00:00:00Z",
+      },
+      error: null,
+    });
+    q.limit.mockResolvedValueOnce({ data: [], error: null });
     q.insertFlat.mockResolvedValueOnce({ data: null, error: null });
   }
 
-  for (const mode of ["baseline", "triggered", "engaged"] as const) {
+  for (const mode of ["baseline", "triggered"] as const) {
     it(`produces a valid Candidate Set for mode='${mode}' with the stubbed DoNothing action`, async () => {
       const { q, engine, propose } = withEngine([
         { type: "DoNothing", why: "no changes warrant a Candidate Action this Pass" },
       ]);
-      primeReads(q);
+      primeWrites(q);
 
       const result = await engine.runPass({ relationshipId: "r-1", mode });
 
@@ -100,19 +127,14 @@ describe("PassEngine.runPass", () => {
           },
         ],
       });
-      // Engine called the agent with a prompt whose shape includes the
-      // Relationship, Open Threads (empty here), the previous Candidate Set
-      // (none here), the User Context snapshot, and the mode.
       expect(propose).toHaveBeenCalledWith(
         expect.objectContaining({
           mode,
-          relationship: fixedRelationship,
-          openThreads: [],
+          relationshipContext: fixedRelationshipContext(),
           previousCandidateSet: null,
           userContext: expect.objectContaining({ userId: "u-1" }),
         }),
       );
-      // Persistence:
       expect(q.from).toHaveBeenCalledWith("candidate_sets");
       expect(q.from).toHaveBeenCalledWith("candidate_actions");
     });
@@ -120,9 +142,11 @@ describe("PassEngine.runPass", () => {
 
   it("loads the previous Candidate Set so the agent can apply continuity bias", async () => {
     const { q, engine, propose } = withEngine([{ type: "DoNothing" }]);
-    primeReads(q, {
-      previousSet: { id: "cs-prev", mode: "baseline" },
+    q.limit.mockResolvedValueOnce({
+      data: [{ id: "cs-prev", mode: "baseline" }],
+      error: null,
     });
+    primeWrites(q);
 
     await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
     expect(propose).toHaveBeenCalledWith(
@@ -149,8 +173,20 @@ describe("PassEngine.runPass", () => {
       },
       { type: "DoNothing", payload: {} },
     ]);
-    const engine = new PassEngine({ supabase: supa, agent: { propose }, dispatcher });
-    primeReads(q);
+    const engine = new PassEngine({
+      supabase: supa,
+      agent: { propose },
+      dispatcher,
+      relationshipContextBuilder: {
+        buildRelationshipContext: jest
+          .fn()
+          .mockResolvedValue(fixedRelationshipContext()),
+      } as unknown as RelationshipContextBuilder,
+      userContextBuilder: {
+        buildUserContext: jest.fn().mockResolvedValue(emptyUserContext()),
+      } as unknown as UserContextBuilder,
+    });
+    primeWrites(q);
 
     await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
 
@@ -165,24 +201,6 @@ describe("PassEngine.runPass", () => {
     );
   });
 
-  it("does NOT call dispatcher for engaged mode (User is already in the agent UI)", async () => {
-    const dispatcher = {
-      maybeDispatch: jest.fn().mockResolvedValue({ kind: "sent", count: 1 }),
-    } as unknown as NotificationDispatcher;
-    const q = makeQueryMock();
-    const supa = { from: q.from } as unknown as SupabaseClient;
-    const propose = jest.fn().mockResolvedValue([
-      { type: "ScheduleInteraction", payload: {}, why: "x" },
-      { type: "DoNothing", payload: {} },
-    ]);
-    const engine = new PassEngine({ supabase: supa, agent: { propose }, dispatcher });
-    primeReads(q);
-
-    await engine.runPass({ relationshipId: "r-1", mode: "engaged" });
-
-    expect(dispatcher.maybeDispatch).not.toHaveBeenCalled();
-  });
-
   it("does NOT call dispatcher when the only candidate is DoNothing (nothing to notify about)", async () => {
     const dispatcher = {
       maybeDispatch: jest.fn().mockResolvedValue({ kind: "sent", count: 1 }),
@@ -190,8 +208,20 @@ describe("PassEngine.runPass", () => {
     const q = makeQueryMock();
     const supa = { from: q.from } as unknown as SupabaseClient;
     const propose = jest.fn().mockResolvedValue([{ type: "DoNothing", payload: {} }]);
-    const engine = new PassEngine({ supabase: supa, agent: { propose }, dispatcher });
-    primeReads(q);
+    const engine = new PassEngine({
+      supabase: supa,
+      agent: { propose },
+      dispatcher,
+      relationshipContextBuilder: {
+        buildRelationshipContext: jest
+          .fn()
+          .mockResolvedValue(fixedRelationshipContext()),
+      } as unknown as RelationshipContextBuilder,
+      userContextBuilder: {
+        buildUserContext: jest.fn().mockResolvedValue(emptyUserContext()),
+      } as unknown as UserContextBuilder,
+    });
+    primeWrites(q);
 
     await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
 
@@ -199,11 +229,7 @@ describe("PassEngine.runPass", () => {
   });
 
   it("loads the previous Candidate Set's actions + decisions so the agent sees what the User picked, declined, edited, or ignored", async () => {
-    // The candidate_actions fetch is keyed by .eq('candidate_set_id', ...).
-    // We extend the mock so that select-only chains (no order/limit) can
-    // resolve via a terminal .eq() that returns an awaitable.
     const q = makeQueryMock();
-    // Decisions for previous set 'cs-prev':
     const decisions = [
       {
         id: "ca-1",
@@ -220,53 +246,51 @@ describe("PassEngine.runPass", () => {
         decision_state: "picked",
       },
     ];
-    // Override q.eq so the second .from('candidate_actions') chain resolves.
-    // PassEngine call sites:
-    //   from('relationships').select(...).eq('id', id).single()
-    //   from('candidate_sets').select(...).eq('relationship_id', id).order(...).limit(1) → list
-    //   from('open_thread_relationships').select(...).eq(...).order(...).limit(50)
-    //   from('candidate_actions').select(...).eq('candidate_set_id', cs-prev)   ← NEW
-    //   from('candidate_sets').insert(...).select().single()
-    //   from('candidate_actions').insert([...])
-    //
-    // q.eq is already a jest.fn that returns the shared { single, order, limit, eq: eqInner } chain.
-    // We need it to also be awaitable for the candidate_actions list read. Patch via mockImplementation.
     let eqCallCount = 0;
     q.eq.mockImplementation(() => {
       eqCallCount += 1;
-      // PassEngine call order:
-      //   1st: relationships .eq('id', ...).single()
-      //   2nd: candidate_sets .eq('relationship_id', ...).order(...).limit(...)
-      //   3rd: candidate_actions .eq('candidate_set_id', ...) — awaitable
-      //   4th: open_thread_relationships .eq('relationship_id', ...).order(...).limit(...)
-      if (eqCallCount === 3) {
-        return Promise.resolve({ data: decisions, error: null }) as unknown as ReturnType<typeof q.eq>;
+      if (eqCallCount === 2) {
+        return Promise.resolve({ data: decisions, error: null }) as unknown as ReturnType<
+          typeof q.eq
+        >;
       }
-      return { single: q.single, order: q.order, limit: q.limit, eq: q.eqInner } as unknown as ReturnType<typeof q.eq>;
+      return {
+        single: q.single,
+        order: q.order,
+        limit: q.limit,
+        eq: q.eqInner,
+      } as unknown as ReturnType<typeof q.eq>;
     });
 
     const supa = { from: q.from } as unknown as SupabaseClient;
     const propose = jest.fn().mockResolvedValue([{ type: "DoNothing" }]);
-    const engine = new PassEngine({ supabase: supa, agent: { propose } });
+    const engine = new PassEngine({
+      supabase: supa,
+      agent: { propose },
+      relationshipContextBuilder: {
+        buildRelationshipContext: jest
+          .fn()
+          .mockResolvedValue(fixedRelationshipContext()),
+      } as unknown as RelationshipContextBuilder,
+      userContextBuilder: {
+        buildUserContext: jest.fn().mockResolvedValue(emptyUserContext()),
+      } as unknown as UserContextBuilder,
+    });
 
-    q.single
-      .mockResolvedValueOnce({ data: fixedRelationship, error: null })
-      .mockResolvedValueOnce({
-        data: {
-          id: "cs-new",
-          owner_id: "u-1",
-          relationship_id: "r-1",
-          mode: "baseline",
-          created_at: "2026-05-19T00:00:00Z",
-        },
-        error: null,
-      });
-    q.limit
-      .mockResolvedValueOnce({
-        data: [{ id: "cs-prev", mode: "baseline" }],
-        error: null,
-      })
-      .mockResolvedValueOnce({ data: [], error: null });
+    q.single.mockResolvedValueOnce({
+      data: {
+        id: "cs-new",
+        owner_id: "u-1",
+        relationship_id: "r-1",
+        mode: "baseline",
+        created_at: "2026-05-19T00:00:00Z",
+      },
+      error: null,
+    });
+    q.limit.mockResolvedValueOnce({
+      data: [{ id: "cs-prev", mode: "baseline" }],
+      error: null,
+    });
     q.insertFlat.mockResolvedValueOnce({ data: null, error: null });
 
     await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
@@ -294,6 +318,59 @@ describe("PassEngine.runPass", () => {
           ],
         },
       }),
+    );
+  });
+
+  it("passes full relationship context including interactions and open threads to the agent", async () => {
+    const openThreads = [
+      {
+        open_threads: {
+          id: "ot-1",
+          description: "promised book",
+          direction: "me_owes_them",
+          created_at: "2026-05-10T00:00:00Z",
+        },
+      },
+    ];
+    const interactions = [
+      {
+        id: "i-1",
+        time: "2026-05-18T20:00:00Z",
+        kind: "dinner",
+        status: "occurred",
+      },
+    ];
+    const { q, engine, propose } = withEngine([{ type: "DoNothing" }], {
+      relationshipContext: fixedRelationshipContext({
+        openThreads: openThreads as RelationshipContextSnapshot["openThreads"],
+        interactions: interactions as RelationshipContextSnapshot["interactions"],
+      }),
+    });
+    primeWrites(q);
+
+    await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
+
+    expect(propose).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relationshipContext: expect.objectContaining({
+          interactions,
+          openThreads,
+          contact: testContact(),
+        }),
+      }),
+    );
+  });
+
+  it("excludes the current relationship from userContext.otherRelationships", async () => {
+    const { q, engine, userContextBuilder } = withEngine([{ type: "DoNothing" }]);
+    primeWrites(q);
+
+    await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
+
+    expect(userContextBuilder.buildUserContext).toHaveBeenCalledWith(
+      "u-1",
+      expect.any(Date),
+      expect.objectContaining({ excludeRelationshipId: "r-1" }),
     );
   });
 });

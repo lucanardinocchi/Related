@@ -7,6 +7,7 @@ import {
   type CommitmentCommunicationStatus,
   type CommitmentOrigin,
   type OpenThread,
+  type PendingCandidateForUser,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import {
@@ -20,6 +21,10 @@ import {
   OpenThreadRow,
   type AssignableRelationship,
 } from "@/components/open-threads/OpenThreadRow";
+import {
+  SuggestedActionsSection,
+  type CandidateRelationshipContext,
+} from "./_SuggestedActionsSection";
 
 type OriginFilter = "all" | CommitmentOrigin | "unset";
 type StatusFilter = "all" | CommitmentCommunicationStatus;
@@ -29,11 +34,15 @@ export type { AssignableRelationship };
 interface Props {
   initialCommitments: OpenThread[];
   assignableRelationships: AssignableRelationship[];
+  initialSuggestedActions: PendingCandidateForUser[];
+  relationshipsById: Record<string, CandidateRelationshipContext>;
 }
 
 export function CommitmentsView({
   initialCommitments,
   assignableRelationships,
+  initialSuggestedActions,
+  relationshipsById,
 }: Props) {
   const deps = getBrowserDeps();
   const [commitments, setCommitments] = useState(initialCommitments);
@@ -104,6 +113,11 @@ export function CommitmentsView({
     });
   }
 
+  async function refreshCommitments() {
+    const next = await deps.openThreads.listCommitmentsForUser();
+    setCommitments(next);
+  }
+
   return (
     <div className="space-y-10">
       <header className="flex items-start justify-between gap-4">
@@ -123,6 +137,8 @@ export function CommitmentsView({
         </Link>
       </header>
 
+      <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-8 xl:gap-12">
+        <div className="order-2 min-w-0 flex-1 space-y-6 lg:order-1">
       <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-y border-divider py-3">
         <FilterGroup label="Origin">
           <Pill active={origin === "all"} onClick={() => setOrigin("all")}>
@@ -205,6 +221,15 @@ export function CommitmentsView({
           ))}
         </ul>
       )}
+        </div>
+
+        <SuggestedActionsSection
+          className="order-1 lg:order-2"
+          initialPending={initialSuggestedActions}
+          relationshipsById={relationshipsById}
+          onCommitmentsChanged={refreshCommitments}
+        />
+      </div>
     </div>
   );
 }

@@ -28,7 +28,7 @@ export interface HomeScreenProps {
   relationshipsClient: RelationshipsClient;
   /**
    * Fired when the User picks a Relationship from the Talk-to-Claude tile's
-   * picker. AuthedApp wires this to cross-tab navigate into the Agent screen.
+   * picker. AuthedApp navigates to the Chat tab with a starter prompt.
    */
   onTalkToClaude: (relationship: Relationship) => void;
   onSignOut: () => void;

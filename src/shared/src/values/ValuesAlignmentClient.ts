@@ -19,6 +19,11 @@ import {
   type CharacterValuesAlignment,
 } from "./valuesAlignmentStore";
 import type { ValuesCharacter } from "./valuesCharacters";
+import type {
+  GenerateValuesCharacterPollPayload,
+  GenerateValuesCharacterStartPayload,
+  GenerateValuesCharacterStartResult,
+} from "./valuesCharacterGeneration";
 
 export type {
   CharacterValuesAlignment,
@@ -82,8 +87,58 @@ export class ValuesAlignmentClient {
   }
 
   /**
+   * Suggest one character from alignments (if needed), then start Seedance video.
+   * Poll with {@link pollValuesCharacterGeneration} until status is ready.
+   */
+  async startValuesCharacterGeneration(
+    payload: GenerateValuesCharacterStartPayload,
+  ): Promise<GenerateValuesCharacterStartResult> {
+    return this.invokeGenerateValuesCharacter({
+      action: "start",
+      ...payload,
+    });
+  }
+
+  async pollValuesCharacterGeneration(
+    payload: GenerateValuesCharacterPollPayload,
+  ): Promise<GenerateValuesCharacterStartResult> {
+    return this.invokeGenerateValuesCharacter(payload);
+  }
+
+  private async invokeGenerateValuesCharacter(
+    body: Record<string, unknown>,
+  ): Promise<GenerateValuesCharacterStartResult> {
+    const { data, error } = await this.client.functions.invoke(
+      "generate-values-character",
+      { body },
+    );
+    if (!error) return data as GenerateValuesCharacterStartResult;
+
+    const parsed = await this.parseGenerateFunctionError(error);
+    if (parsed) return parsed;
+
+    throw new Error(
+      (error as { message?: string }).message ??
+        "generate-values-character failed",
+    );
+  }
+
+  private async parseGenerateFunctionError(
+    error: unknown,
+  ): Promise<GenerateValuesCharacterStartResult | null> {
+    const ctx = error as { context?: Response };
+    if (!ctx.context) return null;
+    try {
+      return (await ctx.context.json()) as GenerateValuesCharacterStartResult;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * AI-generated characters similar to the User's right-swipes.
    */
+
   async suggestCharacters(
     payload: SuggestCharactersPayload,
   ): Promise<ValuesCharacterDraft[]> {

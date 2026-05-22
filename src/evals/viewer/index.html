@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CI Eval Trace Viewer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <h1 class="title">CI Eval Trace Viewer</h1>
+      <div id="run-picker" class="run-picker">
+        <select id="run-select" class="select" disabled>
+          <option value="">Loading runs…</option>
+        </select>
+        <button id="load-run-btn" class="btn btn-primary" disabled>Load run</button>
+        <span class="divider">or</span>
+        <label class="btn btn-secondary file-label">
+          Load from folder
+          <input type="file" id="folder-input" webkitdirectory multiple hidden>
+        </label>
+        <label class="btn btn-secondary file-label">
+          Load manifest
+          <input type="file" id="manifest-input" accept=".json" hidden>
+        </label>
+      </div>
+    </div>
+    <div class="header-right">
+      <button id="theme-toggle" class="btn btn-icon" title="Toggle theme" aria-label="Toggle theme">◐</button>
+    </div>
+  </header>
+
+  <div id="empty-state" class="empty-state">
+    <p>Select a run from the dropdown or load a manifest / folder to begin.</p>
+    <p class="hint">Serve from <code>viewer/</code>: <code>npx serve viewer</code></p>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside id="sidebar" class="sidebar">
+      <section id="run-summary" class="run-summary"></section>
+      <section class="case-list-section">
+        <h2 class="section-heading">Cases</h2>
+        <ul id="case-list" class="case-list"></ul>
+      </section>
+    </aside>
+
+    <main id="trace-panel" class="trace-panel">
+      <div id="trace-empty" class="trace-empty">
+        <p>Select a case to view its trace.</p>
+      </div>
+      <div id="trace-content" class="trace-content hidden"></div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

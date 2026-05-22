@@ -285,7 +285,7 @@ describe("<RelationshipDetailScreen /> — Candidate Set", () => {
 });
 
 describe("<RelationshipDetailScreen /> — Talk to Claude entry", () => {
-  it("tapping 'Talk to Claude' fires onTalkToClaude with this Relationship (push to AgentScreen)", async () => {
+  it("tapping 'Talk to Claude' fires onTalkToClaude with this Relationship (opens Chat tab)", async () => {
     const onTalkToClaude = jest.fn();
     renderScreen({ onTalkToClaude });
 

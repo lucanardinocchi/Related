@@ -36,9 +36,8 @@ export interface RelationshipDetailScreenProps {
    */
   onSelectGroup: (group: GroupRelationship) => void;
   /**
-   * Called when the User taps 'Talk to Claude'. AuthedApp pushes the
-   * AgentScreen for this Relationship. Voice mode lands in Slice 13;
-   * for now the AgentScreen takes a text turn per send.
+   * Called when the User taps 'Talk to Claude'. AuthedApp navigates to the
+   * Chat tab with a relationship-scoped Conversational starter prompt.
    */
   onTalkToClaude: (relationship: Relationship) => void;
 }

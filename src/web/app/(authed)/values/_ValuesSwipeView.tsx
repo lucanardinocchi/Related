@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import {
+  AlertCircle,
   ArrowRight,
   HeartHandshake,
   HelpCircle,
@@ -20,13 +21,20 @@ import {
 } from "lucide-react";
 import {
   appendUniqueQueue,
+  applyVideoUrl,
   buildSeedQueue,
   buildSuggestCharactersPayload,
+  canSwipeValuesQueue,
+  characterHasVideo,
+  filterCharactersWithMedia,
   mergeCharacterRegistry,
+  pipelineVideoPriorities,
+  pollUntilCharacterReady,
   toValuesCharacter,
-  QUEUE_LOW_WATER,
+  VALUES_SWIPE_PIPELINE_DEPTH,
   VALUES_LAUNCH_CHARACTER_IDS,
   type ValuesCharacter,
+  type ValuesMediaErrorCode,
 } from "@related/shared";
 import { MIN_ALIGNED_FOR_RANKING } from "@related/shared";
 import { cn } from "@/lib/cn";
@@ -49,21 +57,34 @@ export function ValuesSwipeView({
 }: Props) {
   const [alignments, setAlignments] =
     useState<Record<string, boolean>>(initialAlignments);
+  const swipeSeedCharacters = useMemo(
+    () => filterCharactersWithMedia(seedCharacters),
+    [seedCharacters],
+  );
+
   const [registry, setRegistry] = useState(() =>
     mergeCharacterRegistry(seedCharacters, initialDynamicCharacters),
   );
   const [includeReviewed, setIncludeReviewed] = useState(false);
   const [queue, setQueue] = useState(() =>
     buildSeedQueue(
-      seedCharacters,
+      swipeSeedCharacters,
       initialAlignments,
       false,
       VALUES_LAUNCH_CHARACTER_IDS,
     ),
   );
   const [saving, setSaving] = useState(false);
-  const [refilling, setRefilling] = useState(false);
-  const refillLock = useRef(false);
+  const [pipelineBusy, setPipelineBusy] = useState(false);
+  const [pipelineMessage, setPipelineMessage] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<{
+    code: ValuesMediaErrorCode;
+    message: string;
+  } | null>(null);
+  const pipelineLock = useRef(false);
+  const pipelineAbort = useRef<AbortController | null>(null);
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
 
   const seenIds = useMemo(() => {
     const ids = new Set(Object.keys(alignments));
@@ -83,52 +104,216 @@ export function ValuesSwipeView({
     [alignments],
   );
 
-  const refillQueue = useCallback(async () => {
-    if (refillLock.current) return;
-    refillLock.current = true;
-    setRefilling(true);
+  const inferencePayload = useMemo(
+    () => buildSuggestCharactersPayload(alignments, registry, seenIds),
+    [alignments, registry, seenIds],
+  );
+
+  const canSwipe = useMemo(() => canSwipeValuesQueue(queue), [queue]);
+
+  const updateCharacterInQueue = useCallback(
+    (characterId: string, videoUrl: string) => {
+      const patch = (character: ValuesCharacter) =>
+        character.id === characterId ? applyVideoUrl(character, videoUrl) : character;
+
+      setQueue((prev) => prev.map(patch));
+      setRegistry((prev) => prev.map(patch));
+    },
+    [],
+  );
+
+  const appendDraftToQueue = useCallback((draft: ValuesCharacter) => {
+    setRegistry((prev) => mergeCharacterRegistry(prev, [draft]));
+    setQueue((prev) => {
+      if (prev.some((c) => c.id === draft.id)) return prev;
+      return [...prev, draft];
+    });
+  }, []);
+
+  const runMediaPipeline = useCallback(async () => {
+    if (pipelineLock.current) return;
+    pipelineLock.current = true;
+    setPipelineBusy(true);
+    setMediaError(null);
+
+    const abort = new AbortController();
+    pipelineAbort.current = abort;
 
     try {
-      const payload = buildSuggestCharactersPayload(
-        alignments,
-        registry,
-        seenIds,
+      const { valuesAlignment } = getBrowserDeps();
+      let workingQueue = queueRef.current;
+
+      const seedPool = swipeSeedCharacters.filter(
+        (c) => !seenIds.has(c.id) && alignments[c.id] === undefined,
       );
 
-      if (payload.aligned.length > 0) {
-        const drafts = await getBrowserDeps().valuesAlignment.suggestCharacters(
-          payload,
+      while (workingQueue.length < VALUES_SWIPE_PIPELINE_DEPTH) {
+        const slotIndex = workingQueue.length;
+        const needsAlignmentSuggest =
+          slotIndex === VALUES_SWIPE_PIPELINE_DEPTH - 1 &&
+          inferencePayload.aligned.length > 0;
+
+        if (needsAlignmentSuggest) break;
+
+        const nextSeed = seedPool.find(
+          (c) => !workingQueue.some((q) => q.id === c.id),
         );
-        const suggested = drafts.map((draft) => toValuesCharacter(draft));
-        setRegistry((prev) => mergeCharacterRegistry(prev, suggested));
-        setQueue((prev) => appendUniqueQueue(prev, suggested, seenIds));
+        if (!nextSeed) break;
+
+        workingQueue = [...workingQueue, nextSeed];
+        setQueue(workingQueue);
       }
 
-      const seedLeft = seedCharacters.filter(
-        (c) => !seenIds.has(c.id) && alignments[c.id] === undefined,
-      );
-      if (seedLeft.length > 0) {
-        setQueue((prev) => appendUniqueQueue(prev, seedLeft, seenIds));
+      if (
+        workingQueue.length < VALUES_SWIPE_PIPELINE_DEPTH &&
+        inferencePayload.aligned.length > 0
+      ) {
+        setPipelineMessage("Choosing a character from your alignments…");
+        const start = await valuesAlignment.startValuesCharacterGeneration({
+          ...inferencePayload,
+        });
+
+        if (start.status === "error") {
+          setMediaError({
+            code: start.code ?? "generation_failed",
+            message: start.message ?? "Character generation failed",
+          });
+          return;
+        }
+
+        const draft = toValuesCharacter({
+          id: start.character.id,
+          name: start.character.name,
+          source: start.character.source,
+          values: start.character.values,
+        });
+        const withUrl = start.videoUrl
+          ? applyVideoUrl(draft, start.videoUrl)
+          : draft;
+
+        appendDraftToQueue(withUrl);
+        workingQueue = workingQueue.some((c) => c.id === withUrl.id)
+          ? workingQueue.map((c) => (c.id === withUrl.id ? withUrl : c))
+          : [...workingQueue, withUrl];
+
+        if (start.status === "processing" && start.predictionId) {
+          setPipelineMessage(`Generating video for ${withUrl.name}…`);
+          const finished = await pollUntilCharacterReady(
+            (payload) => valuesAlignment.pollValuesCharacterGeneration(payload),
+            start.predictionId,
+            withUrl,
+            { signal: abort.signal },
+          );
+
+          if (finished.status === "error") {
+            setMediaError({
+              code: finished.code ?? "generation_failed",
+              message: finished.message ?? "Video generation failed",
+            });
+            return;
+          }
+          if (finished.videoUrl) {
+            updateCharacterInQueue(withUrl.id, finished.videoUrl);
+          }
+        }
       }
-    } catch {
-      const seedLeft = seedCharacters.filter(
-        (c) => !seenIds.has(c.id) && alignments[c.id] === undefined,
-      );
-      setQueue((prev) => appendUniqueQueue(prev, seedLeft, seenIds));
+
+      const priorities = pipelineVideoPriorities(workingQueue);
+      const targetIndex = priorities[0];
+      if (targetIndex === undefined) {
+        setPipelineMessage(null);
+        return;
+      }
+
+      const target = workingQueue[targetIndex]!;
+      if (characterHasVideo(target)) {
+        setPipelineMessage(null);
+        return;
+      }
+
+      setPipelineMessage(`Generating video for ${target.name}…`);
+      const start = await valuesAlignment.startValuesCharacterGeneration({
+        ...inferencePayload,
+        character: {
+          id: target.id,
+          name: target.name,
+          source: target.source,
+          values: target.values,
+        },
+      });
+
+      if (start.status === "error") {
+        setMediaError({
+          code: start.code ?? "generation_failed",
+          message: start.message ?? "Video generation failed",
+        });
+        return;
+      }
+
+      if (start.status === "ready" && start.videoUrl) {
+        updateCharacterInQueue(target.id, start.videoUrl);
+        setPipelineMessage(null);
+        return;
+      }
+
+      if (start.status === "processing" && start.predictionId) {
+        const finished = await pollUntilCharacterReady(
+          (payload) => valuesAlignment.pollValuesCharacterGeneration(payload),
+          start.predictionId,
+          target,
+          { signal: abort.signal },
+        );
+
+        if (finished.status === "error") {
+          setMediaError({
+            code: finished.code ?? "generation_failed",
+            message: finished.message ?? "Video generation failed",
+          });
+          return;
+        }
+        if (finished.videoUrl) {
+          updateCharacterInQueue(target.id, finished.videoUrl);
+        }
+      }
+
+      setPipelineMessage(null);
+    } catch (err) {
+      if (abort.signal.aborted) return;
+      setMediaError({
+        code: "generation_failed",
+        message: err instanceof Error ? err.message : "Media pipeline failed",
+      });
     } finally {
-      setRefilling(false);
-      refillLock.current = false;
+      pipelineLock.current = false;
+      setPipelineBusy(false);
+      pipelineAbort.current = null;
     }
-  }, [alignments, registry, seedCharacters, seenIds]);
+  }, [
+    swipeSeedCharacters,
+    seenIds,
+    alignments,
+    inferencePayload,
+    appendDraftToQueue,
+    updateCharacterInQueue,
+  ]);
 
   useEffect(() => {
-    if (queue.length > QUEUE_LOW_WATER || refilling) return;
-    void refillQueue();
-  }, [queue.length, refilling, refillQueue]);
+    if (mediaError?.code === "insufficient_credits") return;
+    if (!canSwipe && !pipelineBusy && !pipelineLock.current) {
+      void runMediaPipeline();
+    }
+  }, [canSwipe, mediaError?.code, pipelineBusy, runMediaPipeline, queue]);
+
+  useEffect(() => {
+    return () => {
+      pipelineAbort.current?.abort();
+    };
+  }, []);
 
   const restart = useCallback(
     (withReviewed: boolean) => {
       setIncludeReviewed(withReviewed);
+      setMediaError(null);
       setQueue(
         buildSeedQueue(registry, alignments, withReviewed, VALUES_LAUNCH_CHARACTER_IDS),
       );
@@ -142,6 +327,8 @@ export function ValuesSwipeView({
 
   const recordSwipe = useCallback(
     async (character: ValuesCharacter, aligned: boolean) => {
+      if (!canSwipe) return;
+
       setAlignments((prev) => ({
         ...prev,
         [character.id]: aligned,
@@ -152,9 +339,6 @@ export function ValuesSwipeView({
       try {
         const { valuesAlignment } = getBrowserDeps();
         await valuesAlignment.upsertAlignment(character, aligned);
-        if (aligned && queue.length <= QUEUE_LOW_WATER) {
-          void refillQueue();
-        }
       } catch {
         setAlignments((prev) => {
           const next = { ...prev };
@@ -166,29 +350,61 @@ export function ValuesSwipeView({
         setSaving(false);
       }
     },
-    [advance, queue.length, refillQueue],
+    [advance, canSwipe],
   );
 
   const recordDontKnow = useCallback(() => {
+    if (!canSwipe) return;
     advance();
-  }, [advance]);
+  }, [advance, canSwipe]);
 
   const current = queue[0] ?? null;
   const next = queue[1] ?? null;
   const canRank = alignedCount >= MIN_ALIGNED_FOR_RANKING;
+  const swipeDisabled = saving || !canSwipe || pipelineBusy;
 
-  if (seedCharacters.length === 0) {
+  if (swipeSeedCharacters.length === 0 && inferencePayload.aligned.length === 0) {
     return (
       <EmptyState
         icon={<Users size={28} />}
         title="No characters to review"
-        description="The values roster is empty."
+        description="Align with a character elsewhere first, or add seed media to the roster."
       />
     );
   }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+      {mediaError && (
+        <Card className="border-danger/40 bg-danger/5">
+          <div className="flex gap-3">
+            <AlertCircle size={20} className="mt-0.5 shrink-0 text-danger" />
+            <div>
+              <p className="text-[14px] font-medium text-fg">
+                {mediaError.code === "insufficient_credits"
+                  ? "Insufficient credits"
+                  : "Video generation failed"}
+              </p>
+              <p className="mt-1 text-[13px] text-fg-muted">{mediaError.message}</p>
+              {mediaError.code === "insufficient_credits" && (
+                <p className="mt-2 text-[13px] text-fg-muted">
+                  Add credit at{" "}
+                  <a
+                    href="https://replicate.com/account/billing#billing"
+                    className="text-accent underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Replicate billing
+                  </a>
+                  , then refresh this page.
+                </p>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
       {canRank && (
         <Card className="border border-border/60 bg-surface/80">
           <p className="text-[14px] leading-[22px] text-fg-muted">
@@ -205,9 +421,12 @@ export function ValuesSwipeView({
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-[13px] text-fg-subtle">
-          {reviewedCount} reviewed · suggestions narrow as you align
+          {reviewedCount} reviewed ·{" "}
+          {canSwipe
+            ? "Ready to swipe"
+            : pipelineMessage ?? "Preparing character videos…"}
         </p>
-        {reviewedCount > 0 && !current && (
+        {reviewedCount > 0 && !current && !pipelineBusy && (
           <Button variant="secondary" size="sm" onClick={() => restart(true)}>
             Review again
           </Button>
@@ -226,15 +445,17 @@ export function ValuesSwipeView({
           <SwipeCard
             key={current.id}
             character={current}
-            disabled={saving}
+            disabled={swipeDisabled}
             onSwipe={(aligned) => void recordSwipe(current, aligned)}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            {refilling ? (
+            {pipelineBusy ? (
               <div className="flex flex-col items-center gap-3 text-fg-muted">
                 <Loader2 size={28} className="animate-spin" />
-                <p className="text-[14px]">Finding characters like your picks…</p>
+                <p className="text-[14px]">
+                  {pipelineMessage ?? "Preparing character videos…"}
+                </p>
               </div>
             ) : (
               <EmptyState
@@ -244,11 +465,6 @@ export function ValuesSwipeView({
                   canRank
                     ? "Rank your alignments above, or keep swiping — we'll suggest more like who you aligned with."
                     : "Align with more characters and we'll narrow in on your taste."
-                }
-                action={
-                  <Button variant="primary" onClick={() => void refillQueue()}>
-                    Load more characters
-                  </Button>
                 }
               />
             )}
@@ -263,7 +479,7 @@ export function ValuesSwipeView({
               variant="secondary"
               size="md"
               aria-label="Doesn't align"
-              disabled={saving}
+              disabled={swipeDisabled}
               leading={<ThumbsDown size={16} />}
               onClick={() => void recordSwipe(current, false)}
             >
@@ -273,7 +489,7 @@ export function ValuesSwipeView({
               variant="primary"
               size="md"
               aria-label="Aligns"
-              disabled={saving}
+              disabled={swipeDisabled}
               leading={<ThumbsUp size={16} />}
               onClick={() => void recordSwipe(current, true)}
             >
@@ -284,12 +500,18 @@ export function ValuesSwipeView({
             variant="ghost"
             size="sm"
             aria-label="Don't know"
-            disabled={saving}
+            disabled={swipeDisabled}
             leading={<HelpCircle size={16} />}
             onClick={() => recordDontKnow()}
           >
             Don&apos;t know
           </Button>
+          {!canSwipe && !mediaError && (
+            <p className="text-center text-[12px] text-fg-subtle">
+              Swipe unlocks when the next 10 characters and the 11th in line
+              have videos ready.
+            </p>
+          )}
         </div>
       )}
 
@@ -319,8 +541,10 @@ function SwipeCard({
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const muxed = character.mediaMuxed;
+  const hasVideo = characterHasVideo(character);
 
   useEffect(() => {
+    if (!hasVideo) return;
     const video = videoRef.current;
     const audio = audioRef.current;
     if (!video) return;
@@ -340,7 +564,7 @@ function SwipeCard({
       audio?.pause();
       if (audio) audio.currentTime = 0;
     };
-  }, [character.id, character.themeAudioUrl, muxed]);
+  }, [character.id, character.themeAudioUrl, hasVideo, muxed]);
 
   const resetDrag = () => {
     startRef.current = null;
@@ -404,6 +628,7 @@ function SwipeCard({
           : dragging
             ? ""
             : "transition-transform duration-150",
+        disabled && "pointer-events-none opacity-90",
       )}
       style={{
         transform: `translate(${offset.x}px, ${offset.y}px) rotate(${rotate}deg)`,
@@ -414,15 +639,22 @@ function SwipeCard({
       onPointerCancel={onPointerUp}
     >
       <div className="relative h-full overflow-hidden rounded-3xl border border-border shadow-[0_24px_64px_-28px_rgba(0,0,0,0.45)]">
-        <video
-          ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover"
-          src={character.videoUrl}
-          playsInline
-          loop
-          muted
-          preload="metadata"
-        />
+        {hasVideo ? (
+          <video
+            ref={videoRef}
+            className="absolute inset-0 h-full w-full object-cover"
+            src={character.videoUrl}
+            playsInline
+            loop
+            muted
+            preload="metadata"
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface text-fg-muted">
+            <Loader2 size={28} className="animate-spin" />
+            <p className="text-[14px]">Generating {character.name}…</p>
+          </div>
+        )}
         {!muxed && character.themeAudioUrl ? (
           <audio
             ref={audioRef}

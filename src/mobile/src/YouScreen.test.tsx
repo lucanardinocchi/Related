@@ -1,5 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
-import type { UserContextClient } from "@related/shared";
+import type {
+  AmbientIntelligencePreferencesClient,
+  UserContextClient,
+} from "@related/shared";
 import { YouScreen } from "./YouScreen";
 
 type MockedUC = { [K in keyof UserContextClient]: jest.Mock };
@@ -17,6 +20,31 @@ function makeMock(): MockedUC {
     updateOperatorStrength: jest.fn(),
     deleteOperatorStrength: jest.fn(),
   };
+}
+
+function makeAmbientPrefsMock(): {
+  [K in keyof AmbientIntelligencePreferencesClient]: jest.Mock;
+} {
+  return {
+    getPreferences: jest.fn().mockResolvedValue(null),
+    isEnabled: jest.fn().mockResolvedValue(true),
+    setEnabled: jest.fn().mockResolvedValue({ enabled: false, updatedAt: "x" }),
+  };
+}
+
+function renderYouScreen(
+  userContextClient: UserContextClient,
+  ambientIntelligencePreferencesClient?: AmbientIntelligencePreferencesClient,
+) {
+  return render(
+    <YouScreen
+      userContextClient={userContextClient}
+      ambientIntelligencePreferencesClient={
+        ambientIntelligencePreferencesClient ??
+        (makeAmbientPrefsMock() as unknown as AmbientIntelligencePreferencesClient)
+      }
+    />,
+  );
 }
 
 describe("<YouScreen /> — Goals & Values", () => {
@@ -37,11 +65,7 @@ describe("<YouScreen /> — Goals & Values", () => {
       updatedAt: "x",
     });
 
-    render(
-      <YouScreen
-        userContextClient={client as unknown as UserContextClient}
-      />,
-    );
+    renderYouScreen(client as unknown as UserContextClient);
 
     await screen.findByText("Be more present with family");
 
@@ -65,11 +89,7 @@ describe("<YouScreen /> — Goals & Values", () => {
     ]);
     client.deleteGoal.mockResolvedValue(undefined);
 
-    render(
-      <YouScreen
-        userContextClient={client as unknown as UserContextClient}
-      />,
-    );
+    renderYouScreen(client as unknown as UserContextClient);
 
     await screen.findByText("Be more present with family");
     fireEvent.press(screen.getByText(/^delete$/i));
@@ -93,11 +113,7 @@ describe("<YouScreen /> — Situational State", () => {
       updatedAt: "x",
     });
 
-    render(
-      <YouScreen
-        userContextClient={client as unknown as UserContextClient}
-      />,
-    );
+    renderYouScreen(client as unknown as UserContextClient);
 
     const input = await screen.findByDisplayValue("Just moved to Sydney");
 
@@ -114,25 +130,40 @@ describe("<YouScreen /> — Situational State", () => {
   it("renders an empty state when no Situational State has been authored", async () => {
     const client = makeMock();
     client.getSituationalState.mockResolvedValue(null);
-    render(
-      <YouScreen
-        userContextClient={client as unknown as UserContextClient}
-      />,
-    );
+    renderYouScreen(client as unknown as UserContextClient);
     expect(
       await screen.findByPlaceholderText(/what's going on in your life/i),
     ).toBeTruthy();
   });
 });
 
+describe("<YouScreen /> — Ambient Intelligence", () => {
+  it("lets the User turn background passes off", async () => {
+    const client = makeMock();
+    const ambientPrefs = makeAmbientPrefsMock();
+
+    renderYouScreen(
+      client as unknown as UserContextClient,
+      ambientPrefs as unknown as AmbientIntelligencePreferencesClient,
+    );
+
+    const toggle = await screen.findByRole("switch", {
+      name: /ambient intelligence/i,
+    });
+    expect(toggle.props.value).toBe(true);
+
+    fireEvent(toggle, "valueChange", false);
+
+    await waitFor(() =>
+      expect(ambientPrefs.setEnabled).toHaveBeenCalledWith(false),
+    );
+  });
+});
+
 describe("<YouScreen /> — Sleep signal platform hint", () => {
   it("renders a 'Sleep signal: iOS only in v1' hint so Android/web Users know why", () => {
     const client = makeMock();
-    render(
-      <YouScreen
-        userContextClient={client as unknown as UserContextClient}
-      />,
-    );
+    renderYouScreen(client as unknown as UserContextClient);
     expect(screen.getByText(/sleep signal: iOS only in v1/i)).toBeTruthy();
   });
 });

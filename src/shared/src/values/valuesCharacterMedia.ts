@@ -1,22 +1,16 @@
 import mediaManifest from "./valuesMediaManifest.json";
-import { deterministicHash } from "./deterministicHash";
-import { pickLicensedTrack } from "./valuesMediaVibes";
-
-const VIDEOS = [
-  "https://assets.mixkit.co/videos/preview/mixkit-waves-coming-to-the-beach-5016-large.mp4",
-  "https://assets.mixkit.co/videos/preview/mixkit-tree-with-yellow-flowers-1173-large.mp4",
-  "https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-beach-with-waves-747-large.mp4",
-  "https://assets.mixkit.co/videos/preview/mixkit-young-woman-walking-on-the-beach-538-large.mp4",
-  "https://assets.mixkit.co/videos/preview/mixkit-palm-tree-in-the-wind-1240-large.mp4",
-  "https://assets.mixkit.co/videos/preview/mixkit-sunset-over-the-sea-1199-large.mp4",
-  "https://assets.mixkit.co/videos/preview/mixkit-woman-running-on-the-beach-537-large.mp4",
-  "https://assets.mixkit.co/videos/preview/mixkit-clouds-and-blue-sky-2408-large.mp4",
-] as const;
 
 const manifest = mediaManifest as Record<string, string>;
 
 export function hasGeneratedMedia(characterId: string): boolean {
   return Boolean(manifest[characterId]);
+}
+
+/** Characters with a Seedance clip in valuesMediaManifest — safe for /values swipe cards. */
+export function filterCharactersWithMedia<T extends { id: string }>(
+  characters: T[],
+): T[] {
+  return characters.filter((character) => hasGeneratedMedia(character.id));
 }
 
 export function assignCharacterMedia<
@@ -34,11 +28,17 @@ export function assignCharacterMedia<
     };
   }
 
-  const hash = deterministicHash(character.id);
   return {
     ...character,
-    videoUrl: VIDEOS[hash % VIDEOS.length]!,
-    themeAudioUrl: pickLicensedTrack(character).url,
+    videoUrl: "",
+    themeAudioUrl: null,
     mediaMuxed: false,
   };
+}
+
+export function isSwipeReadyCharacter(character: {
+  id: string;
+  videoUrl: string;
+}): boolean {
+  return Boolean(character.videoUrl?.trim()) || hasGeneratedMedia(character.id);
 }

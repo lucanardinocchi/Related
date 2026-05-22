@@ -88,6 +88,25 @@ function renderChat(ui: ReactElement) {
 }
 
 describe("<MobileChatScreen />", () => {
+  it("pre-fills the composer when initialDraft is provided", async () => {
+    const chats = makeChatsMock();
+    chats.listChats.mockResolvedValue([chat()]);
+    chats.listMessages.mockResolvedValue([]);
+
+    renderChat(
+      <MobileChatScreen
+        chatsClient={chats as unknown as ChatsClient}
+        initialDraft="Help me think through my relationship with Sam"
+      />,
+    );
+
+    expect(
+      await screen.findByDisplayValue(
+        "Help me think through my relationship with Sam",
+      ),
+    ).toBeTruthy();
+  });
+
   it("sends a user turn and renders the streamed assistant reply", async () => {
     const chats = makeChatsMock();
     chats.listChats.mockResolvedValue([chat()]);

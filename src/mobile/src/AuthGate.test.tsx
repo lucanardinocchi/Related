@@ -11,6 +11,7 @@ import type {
   RelationshipsClient,
   UserContextClient,
   UserProviderTokensClient,
+  AmbientIntelligencePreferencesClient,
 } from "@related/shared";
 import { AuthGate } from "./AuthGate";
 
@@ -35,9 +36,8 @@ function makeMockAuthClient(): MockedAuthClient {
 
 function makeMockAgentService(): AgentService {
   return {
-    runEngagedTurn: jest.fn(),
-    executeAction: jest.fn(),
-    captureIntentForTurn: jest.fn().mockResolvedValue({ captured: false }),
+    acceptAction: jest.fn(),
+    declineAction: jest.fn(),
   } as unknown as AgentService;
 }
 
@@ -117,6 +117,14 @@ function makeMockUserContextClient(): UserContextClient {
   } as unknown as UserContextClient;
 }
 
+function makeMockAmbientIntelligencePreferencesClient(): AmbientIntelligencePreferencesClient {
+  return {
+    getPreferences: jest.fn().mockResolvedValue(null),
+    isEnabled: jest.fn().mockResolvedValue(true),
+    setEnabled: jest.fn().mockResolvedValue({ enabled: true, updatedAt: "x" }),
+  } as unknown as AmbientIntelligencePreferencesClient;
+}
+
 function makeMockOnboardingClient(isFinished = true): OnboardingClient {
   return {
     // Default: pre-existing User (no row) ⇒ already past onboarding.
@@ -149,6 +157,9 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        ambientIntelligencePreferencesClient={
+          makeMockAmbientIntelligencePreferencesClient()
+        }
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
         chatsClient={makeMockChatsClient()}
@@ -180,6 +191,9 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        ambientIntelligencePreferencesClient={
+          makeMockAmbientIntelligencePreferencesClient()
+        }
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
         chatsClient={makeMockChatsClient()}
@@ -212,6 +226,9 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        ambientIntelligencePreferencesClient={
+          makeMockAmbientIntelligencePreferencesClient()
+        }
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
         chatsClient={makeMockChatsClient()}
@@ -254,6 +271,9 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        ambientIntelligencePreferencesClient={
+          makeMockAmbientIntelligencePreferencesClient()
+        }
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
         chatsClient={makeMockChatsClient()}
@@ -295,6 +315,9 @@ describe("<AuthGate />", () => {
         groupsClient={makeMockGroupsClient()}
         candidatesClient={makeMockCandidatesClient()}
         userContextClient={makeMockUserContextClient()}
+        ambientIntelligencePreferencesClient={
+          makeMockAmbientIntelligencePreferencesClient()
+        }
         onboardingClient={makeMockOnboardingClient()}
         agentService={makeMockAgentService()}
         chatsClient={makeMockChatsClient()}

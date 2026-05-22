@@ -23,7 +23,7 @@ export default async function ValuesPage() {
     <>
       <PageHeader
         title="Values"
-        subtitle="Swipe through 100+ characters on video — align, pass, or skip. Right-swipes narrow who we show you next."
+        subtitle="Swipe through characters on portrait video — align, pass, or skip. Right-swipes narrow who we show you next."
       />
       <ValuesSwipeView
         seedCharacters={VALUES_CHARACTERS}

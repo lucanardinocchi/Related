@@ -18,7 +18,7 @@ function makeQuery() {
   const eqForDelete = jest.fn(() =>
     Promise.resolve({ data: null, error: null }),
   );
-  const eqForSelect = jest.fn(() => ({ single }));
+  const eqForSelect = jest.fn(() => ({ single, order }));
 
   const update = jest.fn(() => ({ eq: eqForUpdate }));
   const del = jest.fn(() => ({ eq: eqForDelete }));
@@ -162,6 +162,7 @@ describe("ChatsClient", () => {
 
     const list = await chats.listChats();
 
+    expect(q.eqForSelect).toHaveBeenCalledWith("source", "conversational");
     expect(list).toHaveLength(2);
     const c1 = list.find((c) => c.id === "c-1")!;
     expect(c1.lastMessagePreview).toBe("later message");
@@ -169,6 +170,37 @@ describe("ChatsClient", () => {
     const c2 = list.find((c) => c.id === "c-2")!;
     expect(c2.lastMessagePreview).toBe("lone message");
     expect(c2.messageCount).toBe(1);
+  });
+
+  it("listChats falls back when chats.source is missing", async () => {
+    const { q, chats } = withClient();
+    q.order
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "42703", message: "column chats.source does not exist" },
+      } as Awaited<ReturnType<typeof q.order>>)
+      .mockResolvedValueOnce({
+        data: [CHAT_ROW],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: [], error: null });
+
+    const list = await chats.listChats();
+
+    expect(q.eqForSelect).toHaveBeenCalledWith("source", "conversational");
+    expect(q.order).toHaveBeenCalledTimes(3);
+    expect(list).toEqual([
+      {
+        id: "c-1",
+        title: null,
+        createdAt: "2026-05-21T10:00:00Z",
+        closedAt: null,
+        extractedAt: null,
+        lastMessagePreview: null,
+        lastMessageAt: null,
+        messageCount: 0,
+      },
+    ]);
   });
 
   it("appendMessage refuses when the parent chat is closed", async () => {
@@ -391,8 +423,10 @@ describe("ChatsClient", () => {
       data: {
         ok: true,
         extracted_at: "2026-05-21T12:00:00Z",
-        situationalStateUpdated: true,
-        intentsCaptured: 2,
+        notesLogged: 1,
+        interactionsLogged: 2,
+        commsLogged: 0,
+        commitmentsOpened: 1,
         toolErrors: [],
       },
       error: null,
@@ -406,8 +440,10 @@ describe("ChatsClient", () => {
     expect(result).toEqual({
       ok: true,
       extracted_at: "2026-05-21T12:00:00Z",
-      situationalStateUpdated: true,
-      intentsCaptured: 2,
+      notesLogged: 1,
+      interactionsLogged: 2,
+      commsLogged: 0,
+      commitmentsOpened: 1,
       toolErrors: [],
     });
   });

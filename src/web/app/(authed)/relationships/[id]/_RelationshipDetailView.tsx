@@ -133,6 +133,8 @@ export function RelationshipDetailView({
       relationshipIds: [relationship.id],
       whyHelpsPerson: null,
       whyICanHelp: null,
+      captureSource: "manual",
+      sourceChatId: null,
     };
     setOpenThreads((ts) => [...ts, created]);
   }
@@ -190,6 +192,8 @@ export function RelationshipDetailView({
       contacts: [
         { id: relationship.contact.id, name: relationship.contact.name },
       ],
+      captureSource: "manual",
+      sourceChatId: null,
     };
     setInteractions((xs) =>
       [created, ...xs].sort(

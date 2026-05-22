@@ -1,64 +1,32 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import {
+  toCandidateAction,
+  toCandidateSet,
+  type CandidateAction,
+  type CandidateSet,
+  type CandidateSetRow,
+  type PassMode,
+} from "./candidateSet";
 
-export type PassMode = "baseline" | "triggered" | "engaged";
+export type {
+  CandidateAction,
+  CandidateSet,
+  DecisionState,
+  PassMode,
+} from "./candidateSet";
 
-export type DecisionState = "pending" | "picked" | "declined" | "ignored";
-
-export interface CandidateAction {
-  id: string;
-  type: string;
-  payload: unknown;
-  why: string | null;
-  decisionState: DecisionState;
-}
-
-export interface CandidateSet {
-  id: string;
+/** Pending action from the latest Candidate Set for a Relationship. */
+export interface PendingCandidateForUser {
+  action: CandidateAction;
+  candidateSetId: string;
   relationshipId: string;
-  mode: PassMode;
-  createdAt: string;
-  actions: CandidateAction[];
+  passMode: PassMode;
+  setCreatedAt: string;
 }
 
 export interface CandidatesClientConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
-}
-
-interface CandidateActionRow {
-  id: string;
-  type: string;
-  payload: unknown;
-  why: string | null;
-  decision_state: DecisionState;
-}
-
-interface CandidateSetRow {
-  id: string;
-  relationship_id: string;
-  mode: PassMode;
-  created_at: string;
-  candidate_actions: CandidateActionRow[];
-}
-
-function toAction(row: CandidateActionRow): CandidateAction {
-  return {
-    id: row.id,
-    type: row.type,
-    payload: row.payload,
-    why: row.why,
-    decisionState: row.decision_state,
-  };
-}
-
-function toSet(row: CandidateSetRow): CandidateSet {
-  return {
-    id: row.id,
-    relationshipId: row.relationship_id,
-    mode: row.mode,
-    createdAt: row.created_at,
-    actions: (row.candidate_actions ?? []).map(toAction),
-  };
 }
 
 /**
@@ -92,6 +60,43 @@ export class CandidatesClient {
     if (error) throw error;
     const rows = (data ?? []) as unknown as CandidateSetRow[];
     if (rows.length === 0) return null;
-    return toSet(rows[0]);
+    return toCandidateSet(rows[0]);
+  }
+
+  /**
+   * Pending Candidate Actions from each Relationship's most recent Pass.
+   * Older sets are ignored so stale suggestions don't accumulate.
+   */
+  async listPendingForUser(): Promise<PendingCandidateForUser[]> {
+    const { data, error } = await this.client
+      .from("candidate_sets")
+      .select(
+        "id, relationship_id, mode, created_at, candidate_actions(id, type, payload, why, decision_state)",
+      )
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+
+    const rows = (data ?? []) as unknown as CandidateSetRow[];
+    const seenRelationships = new Set<string>();
+    const pending: PendingCandidateForUser[] = [];
+
+    for (const row of rows) {
+      if (seenRelationships.has(row.relationship_id)) continue;
+      seenRelationships.add(row.relationship_id);
+
+      for (const actionRow of row.candidate_actions ?? []) {
+        if (actionRow.decision_state !== "pending") continue;
+        if (actionRow.type === "DoNothing") continue;
+        pending.push({
+          action: toCandidateAction(actionRow),
+          candidateSetId: row.id,
+          relationshipId: row.relationship_id,
+          passMode: row.mode,
+          setCreatedAt: row.created_at,
+        });
+      }
+    }
+
+    return pending;
   }
 }

@@ -126,6 +126,8 @@ export function GroupDetailView({
       relationshipIds: [relationship.id],
       whyHelpsPerson: null,
       whyICanHelp: null,
+      captureSource: "manual",
+      sourceChatId: null,
     };
     setOpenThreads((ts) => [...ts, created]);
   }
@@ -182,6 +184,8 @@ export function GroupDetailView({
       notes: input.notes,
       status: input.status,
       contacts: members.map((m) => ({ id: m.id, name: m.name })),
+      captureSource: "manual",
+      sourceChatId: null,
     };
     setInteractions((xs) =>
       [created, ...xs].sort(

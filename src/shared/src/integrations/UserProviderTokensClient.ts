@@ -7,7 +7,8 @@ export type ProviderName =
   | "x"
   | "whatsapp"
   | "tiktok"
-  | "outlook";
+  | "outlook"
+  | "pocket";
 
 export interface UserProviderToken {
   ownerId: string;

@@ -33,6 +33,8 @@ const NULL_COMMITMENT = {
   communication_status: "not_communicated" as const,
   why_helps_person: null,
   why_i_can_help: null,
+  capture_source: "manual" as const,
+  source_chat_id: null,
 };
 
 const NULL_COMMITMENT_CAMEL = {
@@ -40,6 +42,8 @@ const NULL_COMMITMENT_CAMEL = {
   communicationStatus: "not_communicated" as const,
   whyHelpsPerson: null,
   whyICanHelp: null,
+  captureSource: "manual" as const,
+  sourceChatId: null,
 };
 
 describe("OpenThreadsClient.createOpenThread", () => {

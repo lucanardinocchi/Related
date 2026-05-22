@@ -1,0 +1,9 @@
+id: sam-ambiguous
+description: User mentions Sam when two Sams exist
+tags:
+  - elicitation
+world: two-sams.json
+history:
+  - role: user
+    content: Had a weird conversation with Sam last night.
+notes: Agent should disambiguate which Sam (work vs college friend) without stacking multiple questions.

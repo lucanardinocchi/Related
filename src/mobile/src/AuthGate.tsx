@@ -15,7 +15,7 @@ import type {
   TTSPlayback,
   UserContextClient,
   UserProviderTokensClient,
-  VoiceSessionManager,
+  AmbientIntelligencePreferencesClient,
 } from "@related/shared";
 import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
 import { AuthedApp } from "./AuthedApp";
@@ -30,6 +30,7 @@ export interface AuthGateProps {
   groupsClient: GroupsClient;
   candidatesClient: CandidatesClient;
   userContextClient: UserContextClient;
+  ambientIntelligencePreferencesClient: AmbientIntelligencePreferencesClient;
   onboardingClient: OnboardingClient;
   agentService: AgentService;
   /** Conversational Intelligence client (per ADR-0009 mobile amendment). */
@@ -42,12 +43,6 @@ export interface AuthGateProps {
   chatStartMicCapture?: () => Promise<AudioCaptureHandle>;
   chatSttAdapter?: STTAdapter;
   chatTTSPlayback?: TTSPlayback;
-  /**
-   * Optional. When provided, threads through into AgentScreen so the
-   * Mic toggle renders. Omitted in tests that don't exercise voice.
-   */
-  voiceSessionManager?: VoiceSessionManager;
-  agentStreamingPlayerFactory?: () => import("./voice/createMobileStreamingAudioPlayer").StreamingAudioPlayer;
   userProviderTokensClient: UserProviderTokensClient;
   /** URL Supabase Auth redirects back to after OAuth; web: window.location.origin. */
   oauthRedirectTo: string;
@@ -72,14 +67,13 @@ export function AuthGate({
   groupsClient,
   candidatesClient,
   userContextClient,
+  ambientIntelligencePreferencesClient,
   onboardingClient,
   agentService,
   chatsClient,
   chatStartMicCapture,
   chatSttAdapter,
   chatTTSPlayback,
-  voiceSessionManager,
-  agentStreamingPlayerFactory,
   userProviderTokensClient,
   oauthRedirectTo,
   passwordResetRedirectTo,
@@ -163,13 +157,14 @@ export function AuthGate({
       groupsClient={groupsClient}
       candidatesClient={candidatesClient}
       userContextClient={userContextClient}
+      ambientIntelligencePreferencesClient={
+        ambientIntelligencePreferencesClient
+      }
       agentService={agentService}
       chatsClient={chatsClient}
       chatStartMicCapture={chatStartMicCapture}
       chatSttAdapter={chatSttAdapter}
       chatTTSPlayback={chatTTSPlayback}
-      voiceSessionManager={voiceSessionManager}
-      agentStreamingPlayerFactory={agentStreamingPlayerFactory}
       onSignOut={() => {
         void authClient.signOut();
       }}

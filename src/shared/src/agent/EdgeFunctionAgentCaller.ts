@@ -3,13 +3,13 @@ import type { AgentCaller, AgentPrompt, CandidateActionInput } from "./PassEngin
 
 export interface EdgeFunctionAgentCallerOptions {
   supabase: SupabaseClient;
-  /** Defaults to 'engaged-pass'. Override for staging variants. */
+  /** Defaults to 'ambient-pass'. Override for staging variants. */
   functionName?: string;
 }
 
 /**
  * Client-side AgentCaller that delegates the actual Sonnet 4.6 call to a
- * Supabase Edge Function (`engaged-pass`). The API key never leaves the
+ * Supabase Edge Function (`ambient-pass`). The API key never leaves the
  * server. The client sends the prompt; the function returns the parsed
  * Candidate Action list.
  */
@@ -19,7 +19,7 @@ export class EdgeFunctionAgentCaller implements AgentCaller {
 
   constructor(opts: EdgeFunctionAgentCallerOptions) {
     this.supabase = opts.supabase;
-    this.functionName = opts.functionName ?? "engaged-pass";
+    this.functionName = opts.functionName ?? "ambient-pass";
   }
 
   async propose(prompt: AgentPrompt): Promise<CandidateActionInput[]> {
@@ -30,13 +30,13 @@ export class EdgeFunctionAgentCaller implements AgentCaller {
     if (error) {
       throw new Error(
         (error as { message?: string }).message ??
-          `engaged-pass function call failed`,
+          `ambient-pass function call failed`,
       );
     }
     const actions = (data as { actions?: unknown })?.actions;
     if (!Array.isArray(actions)) {
       throw new Error(
-        "engaged-pass response missing `actions` array",
+        "ambient-pass response missing `actions` array",
       );
     }
     return actions as CandidateActionInput[];

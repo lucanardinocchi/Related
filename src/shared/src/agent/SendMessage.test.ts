@@ -8,10 +8,14 @@ function makeQueryMock() {
   const select = jest.fn(() => ({ single }));
   const eq = jest.fn(() => ({ single, select }));
   const update = jest.fn(() => ({ eq }));
-  const topSelect = jest.fn(() => ({ eq }));
-  const from = jest.fn((_t: string) => ({ update, select: topSelect }));
+  const inFilter = jest.fn();
+  const topSelect = jest.fn(() => ({ eq, in: inFilter }));
+  const from = jest.fn((_t: string) => ({
+    update,
+    select: topSelect,
+  }));
   const rpc = jest.fn<Promise<Resolved<unknown>>, [string, unknown]>();
-  return { from, update, eq, single, select, topSelect, rpc };
+  return { from, update, eq, single, select, topSelect, inFilter, rpc };
 }
 
 function withExecutor(composer?: MessageComposer) {
@@ -29,10 +33,11 @@ function withExecutor(composer?: MessageComposer) {
 }
 
 function primeReads(q: ReturnType<typeof makeQueryMock>) {
-  // 1) update().eq().select().single() → updated row
-  // 2) candidate_sets.select().eq().single() → relationship lookup
-  // 3) RPC create_interaction (for the auto-log) → returns the new id
   q.single
+    .mockResolvedValueOnce({
+      data: { id: "cs-1", relationship_id: "r-1" },
+      error: null,
+    })
     .mockResolvedValueOnce({
       data: {
         id: "ca-1",
@@ -41,10 +46,6 @@ function primeReads(q: ReturnType<typeof makeQueryMock>) {
         type: "SendMessage",
         decision_state: "picked",
       },
-      error: null,
-    })
-    .mockResolvedValueOnce({
-      data: { id: "cs-1", relationship_id: "r-1" },
       error: null,
     });
   q.rpc.mockResolvedValueOnce({ data: "i-new", error: null });
@@ -76,12 +77,9 @@ describe("Executor.execute — SendMessage (text)", () => {
       to: ["+61400000000"],
       body: "Hey Sam, coffee Friday?",
     });
-    // Records the decision as picked (not declined like DoNothing).
     expect(q.update).toHaveBeenCalledWith(
       expect.objectContaining({ decision_state: "picked" }),
     );
-    // Auto-logs an `occurred` Interaction of kind 'text' linked to the
-    // recipient Contact(s).
     expect(q.rpc).toHaveBeenCalledWith(
       "create_interaction",
       expect.objectContaining({
@@ -90,9 +88,41 @@ describe("Executor.execute — SendMessage (text)", () => {
         p_contact_ids: ["c-sam"],
       }),
     );
-    // The Triggered Pass still fires so the agent sees the new Interaction.
     expect(scheduleTriggeredPass).toHaveBeenCalledWith(
       expect.objectContaining({ relationshipId: "r-1" }),
+    );
+  });
+
+  it("resolves `to` from Contact records when the payload omits addresses", async () => {
+    const { q, executor, composer } = withExecutor();
+    q.single
+      .mockResolvedValueOnce({
+        data: { id: "cs-1", relationship_id: "r-1" },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: { id: "ca-1" }, error: null });
+    q.inFilter.mockResolvedValueOnce({
+      data: [{ id: "c-sam", phone: "+61400000000", email: null }],
+      error: null,
+    });
+    q.rpc.mockResolvedValueOnce({ data: "i-new", error: null });
+
+    await executor.execute({
+      action: {
+        id: "ca-1",
+        candidateSetId: "cs-1",
+        ownerId: "u-1",
+        type: "SendMessage",
+        payload: {
+          channel: "text",
+          body: "Hey Sam",
+          contactIds: ["c-sam"],
+        },
+      },
+    });
+
+    expect(composer.compose).toHaveBeenCalledWith(
+      expect.objectContaining({ to: ["+61400000000"] }),
     );
   });
 });

@@ -26,6 +26,8 @@ import {
   TikTokClient,
   OutlookClient,
   MessagesClient,
+  AmbientIntelligencePreferencesClient,
+  PocketClient,
 } from "@related/shared";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 
@@ -57,7 +59,6 @@ function build() {
   const voiceSessionManager = new VoiceSessionManager({
     sttAdapter,
     ttsAdapter,
-    agentService,
   });
 
   return {
@@ -83,6 +84,11 @@ function build() {
     tiktok: new TikTokClient(supabase),
     outlook: new OutlookClient(supabase),
     messages: new MessagesClient(supabase),
+    pocket: new PocketClient(supabase),
+    ambientIntelligencePreferences: new AmbientIntelligencePreferencesClient(
+      supabase,
+      resolveOwnerId,
+    ),
     agentService,
     voiceSessionManager,
     sttAdapter,

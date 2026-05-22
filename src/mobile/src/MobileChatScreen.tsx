@@ -14,10 +14,10 @@ import type {
   ChatMessage,
   ChatSummary,
   ChatsClient,
-  ExtractionResult,
   STTAdapter,
   ToolCallSummary,
   TTSPlayback,
+  formatExtractionResult,
 } from "@related/shared";
 import { useConversationalChat } from "@related/shared/chats/useConversationalChat";
 import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
@@ -26,6 +26,8 @@ import { colors, fonts, fontSizes, lineHeights, radii } from "./ui/tokens";
 export interface MobileChatScreenProps {
   chatsClient: ChatsClient;
   initialChatId?: string;
+  /** Pre-fill the composer — e.g. when redirecting from a Relationship. */
+  initialDraft?: string;
   startMicCapture?: () => Promise<AudioCaptureHandle>;
   sttAdapter?: STTAdapter;
   ttsPlayback?: TTSPlayback;
@@ -49,6 +51,7 @@ const DRAWER_WIDTH = 300;
 export function MobileChatScreen({
   chatsClient,
   initialChatId,
+  initialDraft,
   startMicCapture,
   sttAdapter,
   ttsPlayback,
@@ -96,6 +99,10 @@ export function MobileChatScreen({
     const t = setTimeout(() => setToast(null), 6000);
     return () => clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    if (initialDraft) setDraft(initialDraft);
+  }, [initialDraft]);
 
   const refreshChats = useCallback(async () => {
     const list = await chatsClient.listChats();
@@ -256,7 +263,7 @@ export function MobileChatScreen({
         onExtractResult: (result) => {
           setToast({
             kind: "success",
-            text: extractionToast(result),
+            text: formatExtractionResult(result),
           });
         },
         onExtractError: (err) =>
@@ -688,25 +695,6 @@ function EmptyState({
       </View>
     </View>
   );
-}
-
-function extractionToast(result: ExtractionResult): string {
-  if ("skipped" in result && result.skipped) {
-    return `Extraction skipped: ${result.reason}.`;
-  }
-  if (!("ok" in result)) return "Extraction complete.";
-  const bits: string[] = [];
-  if (result.situationalStateUpdated) bits.push("Situational State updated");
-  if (result.intentsCaptured > 0) {
-    bits.push(
-      `${result.intentsCaptured} intent${result.intentsCaptured === 1 ? "" : "s"} captured`,
-    );
-  }
-  const head = bits.length ? bits.join(", ") : "no User Context updates";
-  const tail = result.toolErrors.length
-    ? ` (with ${result.toolErrors.length} tool error${result.toolErrors.length === 1 ? "" : "s"})`
-    : "";
-  return `Extraction complete: ${head}${tail}.`;
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {

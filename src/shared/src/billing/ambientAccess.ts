@@ -1,4 +1,4 @@
-import type { PassMode } from "../agent/PassEngine";
+import type { PassMode } from "../candidates/candidateSet";
 import { isActiveSubscriptionStatus } from "./SubscriptionsClient";
 import type { SubscriptionState } from "./SubscriptionsClient";
 
@@ -11,8 +11,16 @@ export function isAmbientPassMode(mode: PassMode): mode is AmbientPassMode {
   return (AMBIENT_PASS_MODES as readonly string[]).includes(mode);
 }
 
+export function isAmbientIntelligenceEnabled(
+  preferences: { enabled: boolean } | null | undefined,
+): boolean {
+  return preferences?.enabled ?? true;
+}
+
 export function canRunAmbientIntelligence(
   subscription: Pick<SubscriptionState, "status">,
+  options?: { enabled?: boolean },
 ): boolean {
-  return isActiveSubscriptionStatus(subscription.status);
+  const enabled = options?.enabled ?? true;
+  return enabled && isActiveSubscriptionStatus(subscription.status);
 }

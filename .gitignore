@@ -5,6 +5,10 @@ node_modules/
 dist/
 build/
 
+# Eval run artefacts
+runs/
+src/evals/runs/
+
 # Test artefacts
 coverage/
 .jest-cache/

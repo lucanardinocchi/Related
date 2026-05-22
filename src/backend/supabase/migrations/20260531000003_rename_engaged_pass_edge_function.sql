@@ -1,0 +1,7 @@
+-- Operational note (no DDL): Ambient Intelligence LLM Edge Function slug renamed
+-- engaged-pass → ambient-pass (folder: functions/ambient-pass).
+--
+-- Deploy:  supabase functions deploy ambient-pass
+-- Cleanup: remove the old engaged-pass deployment when all clients use ambient-pass.
+-- Staged rollout: EdgeFunctionAgentCaller({ functionName: 'engaged-pass' }) still works
+-- until environments ship the default rename.

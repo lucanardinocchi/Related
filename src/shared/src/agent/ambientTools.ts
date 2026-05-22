@@ -1,5 +1,5 @@
-// Ambient Intelligence tool definitions — single source of truth for ClaudeAgent.
-// Deno mirror: src/backend/supabase/functions/engaged-pass/ambientTools.ts — keep in sync.
+// Ambient Intelligence tool definitions — single source of truth for ClaudeAgent
+// and Edge Functions (imported via ambientAgentCore.ts relative path).
 
 export interface AmbientToolDefinition {
   name: string;
@@ -157,7 +157,7 @@ export const AMBIENT_TOOLS: AmbientToolDefinition[] = [
   {
     name: "do_nothing",
     description:
-      "Surface 'do nothing' as a peer option. Required: every Candidate Set must include this so leaving a Relationship alone is a legitimate decision.",
+      "Emit when leaving the Relationship alone is the single best decision for this Pass. Include a one-line 'why'.",
     input_schema: {
       type: "object",
       properties: { ...WHY_FIELD },
@@ -181,12 +181,39 @@ export interface ParsedAmbientAction {
   why?: string;
 }
 
-/** DoNothing must always be a peer option — leaving a Relationship alone is a legitimate decision. */
+/** Normalize agent output to exactly one Candidate Action per Pass. */
 export function ensureDoNothingPeer(
   actions: ParsedAmbientAction[],
 ): ParsedAmbientAction[] {
-  if (!actions.some((a) => a.type === "DoNothing")) {
-    return [...actions, { type: "DoNothing", payload: {} }];
+  if (actions.length === 0) {
+    return [{ type: "DoNothing", payload: {} }];
   }
-  return actions;
+  if (actions.length === 1) {
+    return actions;
+  }
+  const firstConcrete = actions.find((a) => a.type !== "DoNothing");
+  return [firstConcrete ?? actions[0]];
+}
+
+/** Map Anthropic tool_use blocks to typed Candidate Actions (exactly-one invariant). */
+export function parseToolUseToActions(content: unknown): ParsedAmbientAction[] {
+  const blocks = (content ?? []) as Array<{
+    type: string;
+    name?: string;
+    input?: Record<string, unknown>;
+  }>;
+  const actions: ParsedAmbientAction[] = [];
+  for (const block of blocks) {
+    if (block.type !== "tool_use") continue;
+    const actionType = TOOL_NAME_TO_ACTION_TYPE[block.name ?? ""];
+    if (!actionType) continue;
+    const input = (block.input ?? {}) as Record<string, unknown>;
+    const { why, ...payload } = input;
+    actions.push({
+      type: actionType,
+      payload,
+      why: typeof why === "string" ? why : undefined,
+    });
+  }
+  return ensureDoNothingPeer(actions);
 }

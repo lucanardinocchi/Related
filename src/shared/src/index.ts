@@ -92,13 +92,17 @@ export type {
 } from "./groups/GroupsClient";
 
 export { CandidatesClient } from "./candidates/CandidatesClient";
+export type { PendingCandidateForUser, CandidatesClientConfig } from "./candidates/CandidatesClient";
 export type {
   CandidateSet,
   CandidateAction,
+  CandidateActionInput,
+  PassCandidateSet,
+  PreviousCandidateSet,
+  PreviousCandidateAction,
   DecisionState,
   PassMode,
-  CandidatesClientConfig,
-} from "./candidates/CandidatesClient";
+} from "./candidates/candidateSet";
 
 export {
   PassEngine,
@@ -107,33 +111,65 @@ export {
 export type {
   AgentCaller,
   AgentPrompt,
-  CandidateActionInput,
-  CandidateSet as EngineCandidateSet,
   PassEngineOptions,
   RunPassInput,
-  PreviousCandidateSet,
-  PreviousCandidateAction,
-  DecisionState as EngineDecisionState,
+  RelationshipContextSnapshot,
 } from "./agent/PassEngine";
+export { RelationshipContextBuilder } from "./agent/RelationshipContextBuilder";
+export type {
+  RelationshipContextBuilderOptions,
+} from "./agent/RelationshipContextBuilder";
 export { ClaudeAgent } from "./agent/ClaudeAgent";
 export type {
   AnthropicMessagesClient,
   ClaudeAgentOptions,
 } from "./agent/ClaudeAgent";
+export {
+  AMBIENT_SYSTEM_PROMPT,
+  buildAmbientUserMessage,
+  parseAmbientToolResults,
+} from "./agent/ambientAgentCore";
+export type { AmbientPromptInput } from "./agent/ambientAgentCore";
+export { parseToolUseToActions } from "./agent/ambientTools";
 export { EdgeFunctionAgentCaller } from "./agent/EdgeFunctionAgentCaller";
 export type { EdgeFunctionAgentCallerOptions } from "./agent/EdgeFunctionAgentCaller";
 export { AgentService } from "./agent/AgentService";
 export type {
   AgentServiceOptions,
-  RunEngagedTurnInput,
-  CaptureIntentInput,
+  CandidateDecisionInput,
 } from "./agent/AgentService";
 export { UserContextBuilder } from "./agent/UserContextBuilder";
+export {
+  loadUserContextCore,
+  USER_CONTEXT_CAPS,
+  MS_PER_DAY as USER_CONTEXT_MS_PER_DAY,
+} from "./agent/userContextCore";
+export type {
+  UserContextCoreSnapshot,
+  LoadUserContextCoreOptions,
+  TransientIntentLoadMode,
+} from "./agent/userContextCore";
+export {
+  projectForAmbientPass,
+  projectForConversationalTurn,
+} from "./agent/userContextProjections";
+export type {
+  ConversationalUserContextSlice,
+  ConversationalUserContextBundle,
+} from "./agent/userContextProjections";
 export type {
   UserContextSnapshot,
   CalendarDensitySignal,
   SleepSignal,
+  GoalEntry,
+  SituationalStateSnapshot,
+  OperatorStrengthEntry,
+  GroupSummary as UserContextGroupSummary,
+  RelationshipSummary as UserContextRelationshipSummary,
+  CharacterValuesAlignmentEntry,
 } from "./agent/UserContextBuilder";
+export { resolveSendMessageRecipients } from "./agent/executor/sendMessageRecipients";
+export type { ContactAddresses } from "./agent/executor/sendMessageRecipients";
 export { Executor } from "./agent/Executor";
 export type {
   PendingCandidateAction,
@@ -190,6 +226,29 @@ export {
 export type { ValuesCharacterDraft } from "./values/valuesCharacters";
 export { deterministicHash } from "./values/deterministicHash";
 export { buildVideoPrompt } from "./values/valuesMediaVibes";
+export {
+  hasGeneratedMedia,
+  filterCharactersWithMedia,
+  isSwipeReadyCharacter,
+} from "./values/valuesCharacterMedia";
+export {
+  VALUES_SWIPE_PIPELINE_DEPTH,
+  VALUES_MEDIA_BUFFER,
+  canSwipeValuesQueue,
+  characterHasVideo,
+  pipelineVideoPriorities,
+  applyVideoUrl,
+} from "./values/valuesMediaPipeline";
+export type { ValuesMediaErrorCode } from "./values/valuesMediaPipeline";
+export {
+  pollUntilCharacterReady,
+} from "./values/valuesCharacterGeneration";
+export type {
+  GenerateValuesCharacterStartResult,
+  GenerateValuesCharacterStartPayload,
+  GenerateValuesCharacterPollPayload,
+  ValuesCharacterWithMedia,
+} from "./values/valuesCharacterGeneration";
 
 export { ValuesAlignmentClient } from "./values/ValuesAlignmentClient";
 export type {
@@ -315,9 +374,16 @@ export type {
 export {
   AMBIENT_PASS_MODES,
   canRunAmbientIntelligence,
+  isAmbientIntelligenceEnabled,
   isAmbientPassMode,
 } from "./billing/ambientAccess";
 export type { AmbientPassMode } from "./billing/ambientAccess";
+
+export { AmbientIntelligencePreferencesClient } from "./billing/AmbientIntelligencePreferencesClient";
+export type {
+  AmbientIntelligencePreferencesRow,
+  AmbientIntelligencePreferencesClientConfig,
+} from "./billing/AmbientIntelligencePreferencesClient";
 
 export {
   AMBIENT_BILLING_MODAL_SESSION_KEY,
@@ -327,6 +393,8 @@ export {
 
 export { AmbientIntelligenceClient } from "./agent/AmbientIntelligenceClient";
 export type { ScheduledAmbientPass } from "./agent/AmbientIntelligenceClient";
+export { AmbientPassDispatcher } from "./agent/AmbientPassDispatcher";
+export type { AmbientPassDispatcherOptions } from "./agent/AmbientPassDispatcher";
 
 export {
   OnboardingClient,
@@ -449,6 +517,36 @@ export type {
 
 export { OutlookClient } from "./integrations/OutlookClient";
 
+export { PocketClient, tokenHasPocketAccess } from "./integrations/PocketClient";
+export type {
+  PocketConnectResult,
+  PocketSyncSummary,
+  PocketSpeakerAmbiguity,
+  PocketIntegrationStatus,
+} from "./integrations/PocketClient";
+
+export {
+  matchUserSpeaker,
+  speakerLabelsMatch,
+  uniqueSpeakersFromTranscript,
+  parseTranscriptSegments,
+  transcriptToChatMessages,
+  formatUtcDate,
+} from "./integrations/pocket/pocketSpeakerMatch";
+export type {
+  SpeakerMatchResult,
+  PocketTranscriptSegment,
+} from "./integrations/pocket/pocketSpeakerMatch";
+
+export {
+  runPocketImportPipeline,
+} from "./integrations/pocket/pocketImportPipeline";
+export type {
+  PocketChatMessage,
+  PocketImportPipelineInput,
+  PocketImportPipelineResult,
+} from "./integrations/pocket/pocketImportPipeline";
+
 export {
   fetchGoogleCalendarEvents,
   refreshGoogleAccessToken,
@@ -487,6 +585,41 @@ export type {
   ChatRespondEvent,
   ExtractionResult,
 } from "./chats/ChatsClient";
+export { formatExtractionResult } from "./chats/ChatsClient";
+
+export {
+  SYSTEM_PROMPT_BASE,
+  renderContextBlock,
+  CONVERSATIONAL_TOOLS,
+  CONVERSATIONAL_MODEL,
+  CONVERSATIONAL_MAX_TOKENS,
+  CONVERSATIONAL_MAX_TOOL_ROUNDS,
+  TOOL_ROUND_LIMIT_MESSAGE,
+  SNAPSHOT_CAPS,
+  MS_PER_DAY as CONVERSATIONAL_MS_PER_DAY,
+  buildConversationalHistoryMessages,
+  buildConversationalSystemBlocks,
+  previewToolResultJson,
+  runConversationalToolLoop,
+  encodeSseEvent,
+} from "./conversational";
+export type {
+  ConversationContextSnapshot,
+  RelationshipSummary as ConversationalRelationshipSummary,
+  GroupSummary as ConversationalGroupSummary,
+  OpenThreadSummary,
+  InteractionSummary as ConversationalInteractionSummary,
+  TransientIntentSummary,
+  ToolCallSummary as ConversationalToolCallSummary,
+  AgentTrace,
+  AgentRoundTrace,
+  ToolUseBlock,
+  ToolResultBlock,
+  AnthropicStreamingClient,
+  ConversationalToolLoopCallbacks,
+  RunConversationalToolLoopOptions,
+  RunConversationalToolLoopResult,
+} from "./conversational";
 
 export {
   createStreamingPlaceholder,
@@ -546,6 +679,7 @@ export type {
   InteractionStatus,
   InteractionCategory,
   InteractionContact,
+  ContextCaptureSource,
   CreateInteractionInput,
   InteractionsClientConfig,
 } from "./interactions/InteractionsClient";
@@ -562,10 +696,7 @@ export type {
   EventsClientConfig,
 } from "./events/EventsClient";
 
-export {
-  VoiceSessionManager,
-  InterruptedError as VoiceSessionInterruptedError,
-} from "./voice/VoiceSessionManager";
+export { VoiceSessionManager } from "./voice/VoiceSessionManager";
 export type {
   SessionHandle,
   AgentTurnResult,

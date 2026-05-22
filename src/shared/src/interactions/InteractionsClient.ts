@@ -23,6 +23,12 @@ export type InteractionCategory =
   | "personal"
   | "errands";
 
+/** How a timeline row was captured — see ADR-0012. */
+export type ContextCaptureSource =
+  | "manual"
+  | "conversational_extraction"
+  | "pocket_extraction";
+
 export interface InteractionContact {
   id: string;
   name: string;
@@ -36,6 +42,8 @@ export interface Interaction {
   notes: string | null;
   status: InteractionStatus;
   contacts: InteractionContact[];
+  captureSource: ContextCaptureSource;
+  sourceChatId: string | null;
 }
 
 export interface CreateInteractionInput {
@@ -67,6 +75,8 @@ interface InteractionRow {
   category: InteractionCategory;
   notes: string | null;
   status: InteractionStatus;
+  capture_source: ContextCaptureSource;
+  source_chat_id: string | null;
   interaction_contacts: {
     contact_id: string;
     contacts: { name: string } | null;
@@ -74,7 +84,7 @@ interface InteractionRow {
 }
 
 const SELECT_WITH_CONTACTS =
-  "id, time, kind, category, notes, status, interaction_contacts(contact_id, contacts(name))";
+  "id, time, kind, category, notes, status, capture_source, source_chat_id, interaction_contacts(contact_id, contacts(name))";
 
 function toInteraction(row: InteractionRow): Interaction {
   return {
@@ -84,6 +94,8 @@ function toInteraction(row: InteractionRow): Interaction {
     category: row.category,
     notes: row.notes,
     status: row.status,
+    captureSource: row.capture_source ?? "manual",
+    sourceChatId: row.source_chat_id ?? null,
     contacts: (row.interaction_contacts ?? []).map((link) => ({
       id: link.contact_id,
       name: link.contacts?.name ?? "",
@@ -202,7 +214,7 @@ export class InteractionsClient {
     const { data, error } = await this.client
       .from("interactions")
       .select(
-        "id, time, kind, notes, status, interaction_contacts!inner(contact_id, contacts(name))",
+        "id, time, kind, category, notes, status, capture_source, source_chat_id, interaction_contacts!inner(contact_id, contacts(name))",
       )
       .eq("interaction_contacts.contact_id", contactId)
       .order("time", { ascending: false });

@@ -48,19 +48,19 @@ Open the Vercel URL. You'll land on `/sign-in`. Create an account via `/sign-up`
 **What works at Tier 0:** sign-up / sign-in (email/password and Google/Apple OAuth once providers are configured in §2.2–2.3), the User Context editor (Goals & Values + Situational State), navigation between `/context` / `/talk` / `/onboarding` in the sidebar.
 
 **What's broken:**
-- `/talk` — the agent calls the `engaged-pass` Edge Function which isn't deployed yet. Move to Tier 1.
+- `/talk` — the agent calls the `ambient-pass` Edge Function which isn't deployed yet. Move to Tier 1.
 - `/onboarding` → Connect Calendar — relies on Google OAuth + the `sync-calendar` Edge Function. Move to Tier 2.
 
 ## Tier 1 — agent works (~10 more min)
 
 Adds the AI agent's voice-mode chat at `/talk`.
 
-### 1.1 Deploy `engaged-pass` Edge Function
+### 1.1 Deploy `ambient-pass` Edge Function
 
 ```sh
 cd src/backend
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-…
-supabase functions deploy engaged-pass
+supabase functions deploy ambient-pass
 ```
 
 Done. Refresh the Vercel URL → `/talk` → pick a Relationship → press mic → speak → Claude responds with typed Candidate Actions.
@@ -131,20 +131,20 @@ supabase secrets set ELEVENLABS_DEFAULT_VOICE_ID=21m00Tcm4TlvDq8ikWAM
 supabase functions deploy voice-stt voice-tts
 ```
 
-`/talk` mic now works end-to-end (browser `MediaRecorder` → Wispr Flow STT → Claude (Sonnet, via `engaged-pass`) → ElevenLabs TTS). The same `voice-stt` is also used by the `/agent` Conversational Intelligence composer (Tier 3.1).
+`/talk` mic now works end-to-end (browser `MediaRecorder` → Wispr Flow STT → Claude (Sonnet, via `ambient-pass`) → ElevenLabs TTS). The same `voice-stt` is also used by the `/agent` Conversational Intelligence composer (Tier 3.1).
 
 ## Tier 3.1 — Conversational Intelligence + Extraction Pass (~5 min)
 
 The `/agent` Chat surface (per [ADR-0009](adr/0009-three-agent-architecture.md)) ships two new Edge Functions:
 
 ```sh
-# ANTHROPIC_API_KEY was already set in Tier 1 via engaged-pass; both new
+# ANTHROPIC_API_KEY was already set in Tier 1 via ambient-pass; both new
 # functions reuse it.
 supabase functions deploy chat-respond extract-context
 ```
 
 - `chat-respond` — Conversational Intelligence agent. Runs a multi-round tool-use loop with the read-only tool surface (Relationships, Contacts, Open Threads, Interactions, Calendar, Groups, User Context). **Streams responses as Server-Sent Events** (`text/event-stream`) — `tool_use`, `tool_result`, `text_delta`, `done`, and `error` events arrive incrementally so the UI can render Claude's reply token-by-token. Web's `_AgentView.tsx` and mobile's `MobileChatScreen.tsx` both consume the stream via `chatsClient.respondStream(chatId)`. See [`src/backend/supabase/functions/chat-respond/README.md`](../src/backend/supabase/functions/chat-respond/README.md).
-- `extract-context` — Extraction Pass. Triggered after the User closes a Chat. Writes to `situational_state` (replace) and `transient_intent` (append, 7-day decay). Idempotent — gates on `chats.extracted_at`. See [`src/backend/supabase/functions/extract-context/README.md`](../src/backend/supabase/functions/extract-context/README.md).
+- `extract-context` — Extraction Pass (ADR-0012). Triggered after the User closes a Chat or Pocket import completes. Direct-writes relationship context (notes, interactions, comms, commitments) with provenance. Idempotent — gates on `chats.extracted_at`. Apply migration `20260532000001_extraction_provenance.sql`. See [`src/backend/supabase/functions/extract-context/README.md`](../src/backend/supabase/functions/extract-context/README.md).
 
 Apply the schema first:
 
@@ -275,6 +275,6 @@ node src/relay/dist/index.js run
 
 **OAuth "Google hasn't verified this app"** — until you submit Google's OAuth verification (separate from App Store), only emails listed as test users in the OAuth consent screen can sign in. Add yours.
 
-**`engaged-pass` returns 401** — your ANTHROPIC_API_KEY is set as a Supabase secret but the function was deployed before the secret existed. Re-deploy the function (`supabase functions deploy engaged-pass`).
+**`ambient-pass` returns 401** — your ANTHROPIC_API_KEY is set as a Supabase secret but the function was deployed before the secret existed. Re-deploy the function (`supabase functions deploy ambient-pass`).
 
 **Migration push fails on a particular file** — the migration was probably already applied. `supabase migration list --linked` shows the state.

@@ -1,27 +1,35 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { EdgeFunctionAgentCaller } from "./EdgeFunctionAgentCaller";
 import type { AgentPrompt } from "./PassEngine";
+import { testRelationshipContextSnapshot } from "./relationshipContextFixtures";
 
 function samplePrompt(): AgentPrompt {
   return {
-    mode: "engaged",
-    relationship: { id: "r-1", contact: { id: "c-1", name: "Sam" } },
-    openThreads: [],
+    mode: "baseline",
+    relationshipContext: testRelationshipContextSnapshot(),
     previousCandidateSet: null,
     userContext: {
       userId: "u-1",
       asOf: "2026-05-19T00:00:00Z",
       transientIntent: [],
-      situationalState: [],
+      situationalState: null,
       goalsAndValues: [],
       operatorStrengths: [],
-      inferredSignals: { calendarDensity: null, sleep: null },
+      inferredSignals: {
+        calendarDensity: null,
+        sleep: null,
+        calendarEvents: [],
+        sleepRecords: [],
+      },
+      groups: [],
+      otherRelationships: [],
+      characterValuesAlignment: [],
     },
   };
 }
 
 describe("EdgeFunctionAgentCaller.propose", () => {
-  it("invokes the engaged-pass function with the prompt and returns the parsed actions", async () => {
+  it("invokes the ambient-pass function with the prompt and returns the parsed actions", async () => {
     const invoke = jest.fn().mockResolvedValue({
       data: {
         actions: [
@@ -41,7 +49,7 @@ describe("EdgeFunctionAgentCaller.propose", () => {
     const actions = await caller.propose(prompt);
 
     expect(invoke).toHaveBeenCalledWith(
-      "engaged-pass",
+      "ambient-pass",
       expect.objectContaining({ body: { prompt } }),
     );
     expect(actions).toEqual([

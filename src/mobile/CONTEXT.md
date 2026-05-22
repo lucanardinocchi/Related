@@ -6,7 +6,7 @@ Per **ADR-0008** (web-primary for CRUD) and **ADR-0009** (three-agent architectu
 
 ## Primary role
 
-**Voice-first Conversational Intelligence.** The User opens the app, taps the mic, talks about whatever is on their mind — a person they bumped into, a commitment they realised they have, how they're feeling about a relationship — and the **Conversational Intelligence** agent listens, reads context, and asks elicitation questions back. When the User closes the **Chat**, the **Extraction Pass** routes the User's self-narrative content to **Situational State** and **Transient Intent**, where it informs the next **Ambient Intelligence** Agent Pass.
+**Voice-first Conversational Intelligence.** The User opens the app, taps the mic, talks about whatever is on their mind — a person they bumped into, a commitment they realised they have, how they're feeling about a relationship — and the **Conversational Intelligence** agent listens, reads context, and asks elicitation questions back. When the User closes the **Chat**, the **Extraction Pass** (ADR-0012) direct-writes relationship context — notes, interactions, comms, commitments — onto the relevant Relationship timelines with provenance.
 
 This is mobile's reason for existing. Phones are where the User is most often in life-context-rich moments (walking from a meeting, on the train, just back from a coffee, lying in bed). Web is where they sit down to reflect; mobile is where they capture.
 
@@ -15,7 +15,7 @@ This is mobile's reason for existing. Phones are where the User is most often in
 Mobile also covers capabilities that only make sense on a phone:
 
 - **HealthKit Sleep signal** — iOS-only native module; feeds the agent's Sleep Inferred Signal per ADR-0001 and ADR-0005.
-- **In-pocket Engaged Pass voice** — `VoiceSessionManager` runs the existing `engaged-pass` Edge Function for Relationship-scoped voice sessions that produce Candidate Sets (the existing `AgentScreen`). Distinct from Conversational Intelligence: Engaged Pass is "talk *about* one Relationship and get Candidate Actions back"; Conversational is "free-form chat that updates User Context."
+- **Conversational voice capture** — mic + STT on `MobileChatScreen` (Chat tab) transcribes into the composer; TTS plays assistant turns by default. User-initiated Engaged Pass voice (`VoiceSessionManager` → Pass LLM) was retired; Ambient Intelligence runs via baseline and triggered passes only.
 - **Push notifications** — lock-screen and notification-tray surfaces for salient Candidate Actions.
 - **Sign-in and onboarding** — initial Supabase Auth + per-device permission flows on the device that will hold the HealthKit grant.
 - **Read-only browsing of state captured on web** — the User can glance at a Relationship while out, but editing is web-shaped work.
@@ -35,7 +35,11 @@ Mobile uses the **same Notion-inspired design language** as web (per ADR-0008's 
 - Calm resting view; affordances appear on press / focus.
 - Pill buttons, soft radii, subtle borders only on framed inputs.
 
-The pre-ADR-0008 `AgentScreen` styling (Strava orange, "InterTight" font family) is **legacy**; the Conversational Chat screen, the navigation chrome, and any newly-written mobile UI uses the shared Notion palette and Outfit type. Tokens are mirrored as JS constants since React Native cannot consume the web `globals.css` `@theme` block — see `src/mobile/src/ui/tokens.ts` (added with the Conversational Chat screen).
+The pre-ADR-0008 Relationship detail styling (Strava orange, "InterTight" font family) is **legacy**; the Conversational Chat screen, the navigation chrome, and any newly-written mobile UI uses the shared Notion palette and Outfit type. Tokens are mirrored as JS constants since React Native cannot consume the web `globals.css` `@theme` block — see `src/mobile/src/ui/tokens.ts` (added with the Conversational Chat screen).
+
+## Navigation: Talk to Claude → Chat tab
+
+"Talk to Claude" entry points (Home tile, Relationship detail) navigate to the **Chat** tab with a relationship-scoped starter prompt — they do **not** open a separate Engaged Pass screen. Voice is Conversational-only: tap the mic in Chat, speak, review the transcript in the composer, then send.
 
 ## Cross-app contract
 

@@ -21,9 +21,7 @@ export interface HomeProps {
   onSignOut: () => void;
   /**
    * Tapping the Talk-to-Claude tile fires this. HomeScreen renders a
-   * Relationship picker; the chosen Relationship is then pushed into the
-   * AgentScreen via cross-tab navigation. Optional so existing tests that
-   * don't care about this can omit it.
+   * Relationship picker; the chosen Relationship opens the Chat tab.
    */
   onTalkToClaude?: () => void;
 }

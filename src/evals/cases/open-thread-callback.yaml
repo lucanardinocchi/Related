@@ -1,0 +1,10 @@
+id: open-thread-callback
+description: Open thread with Priya; user mentions Priya casually
+tags:
+  - open-thread
+  - inference
+world: open-thread-priya.json
+history:
+  - role: user
+    content: Ran into Priya at the coffee shop earlier, felt a bit awkward.
+notes: Agent should connect to the open owed-reply thread when relevant, inviting confirmation rather than prescribing action.

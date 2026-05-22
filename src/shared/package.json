@@ -6,7 +6,9 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./chats/useConversationalChat": "./src/chats/useConversationalChat.ts"
+    "./chats/useConversationalChat": "./src/chats/useConversationalChat.ts",
+    "./conversational": "./src/conversational/index.ts",
+    "./conversational/*": "./src/conversational/*.ts"
   },
   "scripts": {
     "test": "jest"

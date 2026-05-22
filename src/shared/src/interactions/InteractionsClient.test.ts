@@ -172,6 +172,8 @@ describe("InteractionsClient.listForGroup", () => {
           { id: "c-1", name: "Sam" },
           { id: "c-2", name: "Jules" },
         ],
+        captureSource: "manual",
+        sourceChatId: null,
       },
     ]);
   });

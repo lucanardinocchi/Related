@@ -15,20 +15,21 @@ The function is split across modules so the prompt, context loader, and tool sur
 | `index.ts` | Request handler, message-history conversion, Anthropic streaming loop, SSE wire format. |
 | `prompt.ts` | `SYSTEM_PROMPT_BASE` (cached) + `renderContextBlock(snapshot)` (per-turn). |
 | `contextLoader.ts` | `loadConversationContext(supabase)` — one-shot snapshot of the User's world. |
-| `queries.ts` | Shared read layer: Supabase select strings, snapshot/tool query builders, row-to-domain mappers. |
+| `queries.ts` | Barrel re-export for the read layer (see `queries/` + `_shared/conversational/snapshot.ts`). |
 | `tools.ts` | Read-only tool definitions and dispatcher. |
 | `types.ts` | Shared interfaces. |
 
-### Read module (`queries.ts`)
+### Read module (`queries/`)
 
-All Supabase read shapes for Relationships, Groups, Open Threads, Interactions, and User Context (Goals & Values, Situational State, Transient Intent) are defined once in `queries.ts`. Each entity exposes:
+All Supabase read shapes for Relationships, Groups, Open Threads, Interactions, and User Context (Goals & Values, Situational State, Transient Intent) live under `queries/`. Import via `queries.ts` (barrel). Each entity exposes:
 
-- **Select strings** — e.g. `RELATIONSHIP_SELECT_SNAPSHOT` (compact, for context preload) vs `RELATIONSHIP_SELECT_TOOL` (full profile fields for tool responses).
-- **Snapshot fetchers** — used by `contextLoader.ts` (`fetchRelationshipsSnapshot`, `fetchOpenThreadsSnapshot`, …).
-- **Tool query builders** — used by `tools.ts` (`buildRelationshipsListQuery`, `buildOpenThreadsListQuery`, …).
-- **Mappers** — raw PostgREST rows → domain summaries (`mapRelationshipsToSummaries`, …).
+- **Select strings** (`queries/selects.ts`) — e.g. `RELATIONSHIP_SELECT_SNAPSHOT` (compact, for context preload) vs `RELATIONSHIP_SELECT_TOOL` (full profile fields for tool responses).
+- **Snapshot caps** (`_shared/conversational/snapshot.ts`) — `SNAPSHOT_CAPS`, `MS_PER_DAY`; shared with eval harness (#6).
+- **Snapshot fetchers** (`queries/snapshotFetchers.ts`) — used by `contextLoader.ts`.
+- **Mappers** (`queries/mappers.ts`) — raw PostgREST rows → domain summaries; relationship/contact filters for tools.
+- **Tool query builders** (`queries/toolBuilders.ts`) — used by `tools.ts`.
 
-`contextLoader.ts` and `tools.ts` must not duplicate join shapes; add or change a select in `queries.ts` and wire both call sites from there.
+`contextLoader.ts` and `tools.ts` must not duplicate join shapes; add or change a select in `queries/selects.ts` and wire both call sites from there.
 
 The two system blocks are sent together. `SYSTEM_PROMPT_BASE` carries `cache_control: ephemeral` so subsequent turns in the same chat hit Anthropic's prompt cache. The per-turn context block is not cached because Open Threads and Interactions can change between turns.
 
@@ -39,7 +40,7 @@ Two responsibilities (codified in `prompt.ts`):
 1. **Elicit every relevant detail.** When the User raises a person, event, plan, or feeling, the agent works toward who / when / where / what happened / how it landed / what they want / what's different. It picks the highest-leverage gap and weaves it into one natural question rather than stacking three.
 2. **Infer from preloaded context + earlier turns.** The context block exposes Relationships, Groups, Goals & Values, Situational State, recent Transient Intent, Open Threads, and recent Interactions. The agent cross-references new utterances against this snapshot and proposes 1–2 inferences inside its next question.
 
-The agent is still read-only on app state. The Extraction Pass (`extract-context`) routes self-narrative into Situational State and Transient Intent after the Chat closes. The Ambient Intelligence agent (`engaged-pass`) proposes Candidate Actions.
+The agent is still read-only on app state. The Extraction Pass (`extract-context`, ADR-0012) direct-writes relationship context (notes, interactions, comms, commitments) after the Chat closes. The Ambient Intelligence agent (`ambient-pass`) proposes Candidate Actions.
 
 ## Deploy
 

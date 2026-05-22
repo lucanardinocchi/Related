@@ -1,126 +1,55 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { Executor } from "./Executor";
 import { AgentService } from "./AgentService";
-import type { CandidateActionInput } from "./PassEngine";
-import { UserContextBuilder } from "./UserContextBuilder";
 
-/**
- * Smoke-level tests — AgentService composes PassEngine, EdgeFunctionAgentCaller,
- * and Executor. The deep tests live on each of those; here we verify wiring.
- */
+describe("AgentService", () => {
+  const baseInput = {
+    candidateSetId: "cs-1",
+    action: { id: "ca-1", type: "OpenThread", payload: { description: "x" } },
+  };
 
-interface RunOptions {
-  proposed: CandidateActionInput[];
-}
-
-function withService({ proposed }: RunOptions) {
-  const invoke = jest.fn().mockResolvedValue({
-    data: { actions: proposed },
-    error: null,
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
-  // PassEngine.runPass needs the postgrest-style chain. Minimal stub so it
-  // can read relationships + previous set + open threads, and write the new
-  // Candidate Set.
-  const single = jest
-    .fn()
-    .mockResolvedValueOnce({
-      data: {
-        id: "r-1",
-        owner_id: "u-1",
-        target_type: "contact",
-        contact: { id: "c-1", name: "Sam" },
-      },
-      error: null,
-    })
-    .mockResolvedValueOnce({
-      data: {
-        id: "cs-new",
-        owner_id: "u-1",
-        relationship_id: "r-1",
-        mode: "engaged",
-        created_at: "2026-05-19T00:00:00Z",
-      },
-      error: null,
-    });
-  const limit = jest
-    .fn()
-    .mockResolvedValueOnce({ data: [], error: null })
-    .mockResolvedValueOnce({ data: [], error: null });
-  const order = jest.fn(() => ({ limit }));
-  const eq = jest.fn(() => ({ single, order, limit, eq: jest.fn() }));
-  const select = jest.fn(() => ({ single, order, eq, limit }));
-  const insertSelect = jest.fn(() => ({ single }));
-  const insertFlat = jest.fn().mockResolvedValue({ data: null, error: null });
-  const insert = jest.fn((row: unknown) => {
-    if (Array.isArray(row)) return insertFlat(row);
-    return { select: insertSelect };
-  });
-  const from = jest.fn(() => ({ select, insert }));
-
-  const supa = {
-    from,
-    functions: { invoke },
-  } as unknown as SupabaseClient;
-
-  // No-supabase builder returns the empty snapshot — keeps the mock thin.
-  const userContextBuilder = new UserContextBuilder();
-  const service = new AgentService({ supabase: supa, userContextBuilder });
-  return { service, invoke };
-}
-
-describe("AgentService.runEngagedTurn", () => {
-  it("invokes engaged-pass via the Edge Function and returns the new Candidate Set", async () => {
-    const { service, invoke } = withService({
-      proposed: [
-        {
-          type: "ScheduleInteraction",
-          payload: { time: "2026-05-22T17:00:00Z", kind: "coffee", contactIds: ["c-1"] },
-          why: "live intent",
-        },
-        { type: "DoNothing", payload: {} },
-      ],
+  it("acceptAction validates required fields before executing", async () => {
+    const service = new AgentService({
+      supabase: {} as SupabaseClient,
+      scheduleTriggeredPass: jest.fn(),
     });
 
-    const result = await service.runEngagedTurn({
-      relationshipId: "r-1",
-      userTurn: "what about Sam",
-      sessionId: "sess-1",
-    });
-
-    expect(invoke).toHaveBeenCalledWith(
-      "engaged-pass",
-      expect.objectContaining({
-        body: expect.objectContaining({
-          prompt: expect.objectContaining({ mode: "engaged" }),
-        }),
+    await expect(
+      service.acceptAction({ ...baseInput, candidateSetId: "  " }),
+    ).rejects.toThrow(/candidateSetId is required/);
+    await expect(
+      service.acceptAction({
+        ...baseInput,
+        action: { ...baseInput.action, id: "" },
       }),
-    );
-    expect(result.relationshipId).toBe("r-1");
-    expect(result.actions).toHaveLength(2);
-    expect(result.actions[0].type).toBe("ScheduleInteraction");
-  });
-});
-
-describe("AgentService.captureIntentForTurn", () => {
-  it("extracts a wants_to intent from the User turn and reports it captured", async () => {
-    const { service } = withService({ proposed: [] });
-    const result = await service.captureIntentForTurn({
-      userTurn: "I want to plan my birthday next weekend",
-      sessionId: "sess-1",
-      relationshipId: "r-1",
-    });
-    expect(result.captured).toBe(true);
-    expect(result.content).toMatch(/plan my birthday/i);
-    expect(result.kind).toBe("wants_to");
+    ).rejects.toThrow(/action\.id is required/);
   });
 
-  it("returns captured=false when the turn has no detectable intent", async () => {
-    const { service } = withService({ proposed: [] });
-    const result = await service.captureIntentForTurn({
-      userTurn: "hey",
-      sessionId: "sess-1",
-      relationshipId: "r-1",
+  it("declineAction routes through DoNothing on the Executor", async () => {
+    const executeSpy = jest
+      .spyOn(Executor.prototype, "execute")
+      .mockResolvedValue({ kind: "declined", actionId: "ca-1" });
+
+    const service = new AgentService({
+      supabase: {} as SupabaseClient,
+      scheduleTriggeredPass: jest.fn(),
     });
-    expect(result.captured).toBe(false);
+
+    await service.declineAction(baseInput);
+
+    expect(executeSpy).toHaveBeenCalledWith({
+      action: {
+        id: "ca-1",
+        candidateSetId: "cs-1",
+        ownerId: "",
+        type: "DoNothing",
+        payload: {},
+      },
+      userEdits: undefined,
+    });
   });
 });

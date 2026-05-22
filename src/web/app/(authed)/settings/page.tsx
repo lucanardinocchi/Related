@@ -10,20 +10,32 @@ import {
 import { PageHeader } from "@/components/ui/PageHeader";
 import { getServerDeps } from "@/lib/deps/server";
 import { BillingSection } from "./_BillingSection";
+import { AmbientIntelligenceSection } from "./_AmbientIntelligenceSection";
 import { IntegrationsSection } from "./_IntegrationsSection";
+import { PocketSection } from "./_PocketSection";
 import { RelaySection } from "./_RelaySection";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const { userProviderTokens, subscriptions } = await getServerDeps();
+  const { userProviderTokens, subscriptions, pocket, ambientIntelligencePreferences } =
+    await getServerDeps();
   const subscription = await subscriptions.getState();
+  const ambientPrefs = await ambientIntelligencePreferences.getPreferences();
   const googleToken = await userProviderTokens.getForProvider("google");
   const instagramToken = await userProviderTokens.getForProvider("instagram");
   const xToken = await userProviderTokens.getForProvider("x");
   const whatsappToken = await userProviderTokens.getForProvider("whatsapp");
   const tiktokToken = await userProviderTokens.getForProvider("tiktok");
   const outlookToken = await userProviderTokens.getForProvider("outlook");
+  const pocketStatus = await pocket.getStatus();
+  const pocketAmbiguities = pocketStatus.connected
+    ? await pocket.listPendingAmbiguities()
+    : [];
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
+  const pocketWebhookUrl = supabaseUrl
+    ? `${supabaseUrl.replace(/\/$/, "")}/functions/v1/pocket-webhook`
+    : null;
   const instagramAppId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID ?? null;
   const xClientId = process.env.NEXT_PUBLIC_X_CLIENT_ID ?? null;
   const whatsappAppId = process.env.NEXT_PUBLIC_WHATSAPP_APP_ID ?? null;
@@ -42,6 +54,10 @@ export default async function SettingsPage() {
         initialCurrentPeriodEnd={subscription.currentPeriodEnd}
         initialCancelAtPeriodEnd={subscription.cancelAtPeriodEnd}
         initialHasCustomer={subscription.stripeCustomerId !== null}
+      />
+      <AmbientIntelligenceSection
+        initialEnabled={ambientPrefs?.enabled ?? true}
+        initialIsSubscribed={subscription.isActive}
       />
       <IntegrationsSection
         initialCalendarConnected={tokenHasCalendarAccess(googleToken?.scopes)}
@@ -62,6 +78,16 @@ export default async function SettingsPage() {
         whatsappAppId={whatsappAppId}
         tiktokClientKey={tiktokClientKey}
         microsoftClientId={microsoftClientId}
+      />
+      <PocketSection
+        webhookUrl={pocketWebhookUrl}
+        initialConnected={pocketStatus.connected}
+        initialAccountDisplayName={pocketStatus.accountDisplayName}
+        initialConnectedAt={pocketStatus.connectedAt}
+        initialLastSyncedAt={pocketStatus.lastSyncedAt}
+        initialImportCount={pocketStatus.importCount}
+        initialHasWebhookSecret={pocketStatus.hasWebhookSecret}
+        initialAmbiguities={pocketAmbiguities}
       />
       <RelaySection />
     </>

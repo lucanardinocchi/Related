@@ -42,8 +42,8 @@ const { buildVideoPrompt } = jiti(
 );
 
 const BUCKET = "values-media";
-/** PixVerse V6 — top-tier character emotion + native 9:16 on Replicate (May 2026). */
-const DEFAULT_MODEL = "pixverse/pixverse-v6";
+/** Seedance 2.0 — ByteDance portrait clips with strong character fidelity (Replicate). */
+const DEFAULT_MODEL = "bytedance/seedance-2.0";
 const DEFAULT_DURATION = Number(process.env.VALUES_MEDIA_DURATION ?? "8");
 const MUSIC_VOLUME = Number(process.env.VALUES_MEDIA_MUSIC_VOLUME ?? "0.35");
 const PORTRAIT_WIDTH = 1080;
@@ -51,6 +51,28 @@ const PORTRAIT_HEIGHT = 1920;
 
 /** @type {Record<string, { buildInput: (args: { prompt: string; duration: number }) => object }>} */
 const MODEL_PROFILES = {
+  "bytedance/seedance-2.0": {
+    buildInput({ prompt, duration }) {
+      return {
+        prompt,
+        aspect_ratio: "9:16",
+        resolution: "720p",
+        duration: Math.min(15, Math.max(5, duration)),
+        generate_audio: false,
+      };
+    },
+  },
+  "bytedance/seedance-2.0-fast": {
+    buildInput({ prompt, duration }) {
+      return {
+        prompt,
+        aspect_ratio: "9:16",
+        resolution: "720p",
+        duration: Math.min(15, Math.max(5, duration)),
+        generate_audio: false,
+      };
+    },
+  },
   "pixverse/pixverse-v6": {
     buildInput({ prompt, duration }) {
       return {
@@ -94,6 +116,8 @@ function parseArgs(argv) {
     dryRun: false,
     skipUpload: false,
     launch: false,
+    missing: false,
+    uploadCache: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -104,6 +128,8 @@ function parseArgs(argv) {
     else if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "--skip-upload") args.skipUpload = true;
     else if (arg === "--launch") args.launch = true;
+    else if (arg === "--missing") args.missing = true;
+    else if (arg === "--upload-cache") args.uploadCache = true;
     else if (arg === "--help" || arg === "-h") {
       console.log(`Usage: node scripts/generate-values-media.mjs [options]
 
@@ -113,7 +139,9 @@ Options:
   --force               Regenerate even if manifest entry exists
   --dry-run             Print actions without API calls or uploads
   --skip-upload         Keep files local; do not upload or update manifest
-  --launch              Generate the 10 launch characters from valuesLaunchCharacters.json
+  --launch              Generate launch-order characters from valuesLaunchCharacters.json
+  --missing             Only characters without a manifest entry (default batch)
+  --upload-cache        Upload cached muxed.mp4 files (skip Replicate)
 
 Env:
   REPLICATE_API_TOKEN          Required unless --dry-run
@@ -253,23 +281,55 @@ async function downloadToFile(url, dest) {
   await pipeline(Readable.fromWeb(res.body), createWriteStream(dest));
 }
 
+function replicateErrorMessage(status, body) {
+  if (status === 402) {
+    return [
+      "Replicate account has insufficient credit for this model.",
+      "Add credit at https://replicate.com/account/billing#billing",
+      "(Seedance 2.0 needs more than the ~$5 minimum; try $20+ for a full 90-character batch.)",
+      body,
+    ].join(" ");
+  }
+  return `Replicate create failed (${status}): ${body}`;
+}
+
 async function replicateCreateVideo({ token, model, prompt, duration }) {
   const input = buildModelInput(model, prompt, duration);
-  const res = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ input }),
-  });
+  const url = `https://api.replicate.com/v1/models/${model}/predictions`;
+  const maxAttempts = 8;
 
-  if (!res.ok) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ input }),
+    });
+
+    if (res.ok) return res.json();
+
     const body = await res.text();
-    throw new Error(`Replicate create failed (${res.status}): ${body}`);
+    if (res.status === 429 && attempt < maxAttempts) {
+      let waitMs = 12_000;
+      try {
+        const parsed = JSON.parse(body);
+        if (typeof parsed.retry_after === "number") {
+          waitMs = Math.ceil(parsed.retry_after * 1000) + 500;
+        }
+      } catch {
+        /* use default */
+      }
+      console.warn(`  rate limited — retrying in ${Math.round(waitMs / 1000)}s…`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      continue;
+    }
+
+    throw new Error(replicateErrorMessage(res.status, body));
   }
 
-  return res.json();
+  throw new Error("Replicate create failed after retries");
 }
 
 async function replicatePollPrediction({ token, id, timeoutMs = 15 * 60_000 }) {
@@ -457,8 +517,12 @@ async function main() {
 
   /** @type {SeedEntry[]} */
   const seed = JSON.parse(readFileSync(SEED_PATH, "utf8"));
+  const manifest = readManifest();
   let characters = seed;
-  if (args.launch) {
+  if (args.missing) {
+    characters = seed.filter((entry) => !manifest[entry.id]);
+    console.log(`Missing media: ${characters.length} character(s)`);
+  } else if (args.launch) {
     const launchIds = JSON.parse(readFileSync(LAUNCH_PATH, "utf8"));
     characters = launchIds
       .map((id) => seed.find((entry) => entry.id === id))
@@ -496,8 +560,31 @@ async function main() {
         })
       : null;
 
-  const manifest = readManifest();
   let generated = 0;
+
+  if (args.uploadCache) {
+    if (!admin) {
+      console.error("--upload-cache requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
+      process.exit(1);
+    }
+    for (const entry of seed) {
+      if (manifest[entry.id]) continue;
+      const muxedPath = join(CACHE_DIR, entry.id, "muxed.mp4");
+      if (!existsSync(muxedPath)) continue;
+      console.log(`\n↑ cache upload ${entry.id}`);
+      const publicUrl = await uploadToSupabase({
+        admin,
+        localPath: muxedPath,
+        characterId: entry.id,
+      });
+      manifest[entry.id] = publicUrl;
+      writeManifest(manifest);
+      generated += 1;
+      console.log(`  public: ${publicUrl}`);
+    }
+    console.log(`\nDone. Uploaded ${generated} cached clip(s). Manifest: ${MANIFEST_PATH}`);
+    return;
+  }
 
   for (const character of characters) {
     if (!args.force && manifest[character.id]) {
@@ -522,6 +609,9 @@ async function main() {
       writeManifest(manifest);
       generated += 1;
     }
+
+    // Low-balance accounts: Replicate throttles to ~6 creates/min under $5 credit.
+    await new Promise((resolve) => setTimeout(resolve, 11_000));
   }
 
   console.log(`\nDone. Generated ${generated} clip(s). Manifest: ${MANIFEST_PATH}`);

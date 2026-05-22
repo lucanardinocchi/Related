@@ -2,6 +2,7 @@ import {
   createClient,
   SupabaseClient,
 } from "@supabase/supabase-js";
+import type { ContextCaptureSource } from "../interactions/InteractionsClient.ts";
 
 export type ThreadDirection = "me_owes_them" | "they_owe_me";
 
@@ -39,6 +40,8 @@ export interface OpenThread {
    * fills it in. See ADR-0008.
    */
   whyICanHelp: string | null;
+  captureSource: ContextCaptureSource;
+  sourceChatId: string | null;
 }
 
 export interface CreateOpenThreadInput {
@@ -89,6 +92,8 @@ interface OpenThreadRow {
   closed_at: string | null;
   why_helps_person: string | null;
   why_i_can_help: string | null;
+  capture_source: ContextCaptureSource;
+  source_chat_id: string | null;
   open_thread_relationships: { relationship_id: string }[];
 }
 
@@ -98,7 +103,7 @@ interface ClosedPerDayRow {
 }
 
 const SELECT_WITH_LINKS =
-  "id, description, direction, origin, communication_status, created_at, closed_at, why_helps_person, why_i_can_help, open_thread_relationships(relationship_id)";
+  "id, description, direction, origin, communication_status, created_at, closed_at, why_helps_person, why_i_can_help, capture_source, source_chat_id, open_thread_relationships(relationship_id)";
 
 function toOpenThread(row: OpenThreadRow): OpenThread {
   return {
@@ -111,6 +116,8 @@ function toOpenThread(row: OpenThreadRow): OpenThread {
     closedAt: row.closed_at,
     whyHelpsPerson: row.why_helps_person,
     whyICanHelp: row.why_i_can_help,
+    captureSource: row.capture_source ?? "manual",
+    sourceChatId: row.source_chat_id ?? null,
     relationshipIds: (row.open_thread_relationships ?? []).map(
       (l) => l.relationship_id,
     ),

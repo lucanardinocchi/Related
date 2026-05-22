@@ -3,11 +3,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
 } from "react-native";
 import type {
+  AmbientIntelligencePreferencesClient,
   Goal,
   SituationalState,
   UserContextClient,
@@ -15,6 +17,7 @@ import type {
 
 export interface YouScreenProps {
   userContextClient: UserContextClient;
+  ambientIntelligencePreferencesClient: AmbientIntelligencePreferencesClient;
 }
 
 const STRAVA_ORANGE = "#FC4C02";
@@ -22,11 +25,16 @@ const FONT_REGULAR = "InterTight_400Regular";
 const FONT_BOLD = "InterTight_700Bold";
 const FONT_BLACK = "InterTight_900Black";
 
-export function YouScreen({ userContextClient }: YouScreenProps) {
+export function YouScreen({
+  userContextClient,
+  ambientIntelligencePreferencesClient,
+}: YouScreenProps) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [situational, setSituational] = useState<SituationalState | null>(null);
   const [situationalDraft, setSituationalDraft] = useState("");
   const [newGoal, setNewGoal] = useState("");
+  const [ambientEnabled, setAmbientEnabled] = useState(true);
+  const [ambientSaving, setAmbientSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,12 +42,14 @@ export function YouScreen({ userContextClient }: YouScreenProps) {
     Promise.all([
       userContextClient.listGoals(),
       userContextClient.getSituationalState(),
+      ambientIntelligencePreferencesClient.isEnabled(),
     ])
-      .then(([g, s]) => {
+      .then(([g, s, enabled]) => {
         if (cancelled) return;
         setGoals(g);
         setSituational(s);
         setSituationalDraft(s?.content ?? "");
+        setAmbientEnabled(enabled);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -48,7 +58,24 @@ export function YouScreen({ userContextClient }: YouScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [userContextClient]);
+  }, [userContextClient, ambientIntelligencePreferencesClient]);
+
+  async function handleAmbientToggle(next: boolean) {
+    setAmbientSaving(true);
+    setError(null);
+    const previous = ambientEnabled;
+    setAmbientEnabled(next);
+    try {
+      await ambientIntelligencePreferencesClient.setEnabled(next);
+    } catch (err) {
+      setAmbientEnabled(previous);
+      setError(
+        err instanceof Error ? err.message : "Could not update Ambient Intelligence.",
+      );
+    } finally {
+      setAmbientSaving(false);
+    }
+  }
 
   async function handleAddGoal() {
     if (!newGoal.trim()) return;
@@ -146,6 +173,27 @@ export function YouScreen({ userContextClient }: YouScreenProps) {
       {situational?.updatedAt ? (
         <Text style={styles.meta}>Last updated {situational.updatedAt}</Text>
       ) : null}
+
+      <Text style={styles.sectionLabel}>Ambient Intelligence</Text>
+      <Text style={styles.sectionHint}>
+        When on, Related runs background relationship passes and surfaces
+        Candidate Actions for you to accept or decline. Turn off to pause all
+        baseline and triggered passes.
+      </Text>
+      <View style={styles.toggleRow}>
+        <Text style={styles.toggleLabel}>
+          Background passes {ambientEnabled ? "on" : "off"}
+        </Text>
+        <Switch
+          accessibilityRole="switch"
+          accessibilityLabel="Ambient Intelligence"
+          value={ambientEnabled}
+          disabled={ambientSaving}
+          onValueChange={(next) => void handleAmbientToggle(next)}
+          trackColor={{ false: "#d1d5db", true: STRAVA_ORANGE }}
+          thumbColor="#ffffff"
+        />
+      </View>
 
       <Text style={styles.sectionLabel}>Inferred signals</Text>
       <Text style={styles.sectionHint}>
@@ -257,6 +305,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: FONT_REGULAR,
     color: "#9ca3af",
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+  },
+  toggleLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: FONT_REGULAR,
+    color: "#000",
+    paddingRight: 12,
   },
   error: {
     marginTop: 16,

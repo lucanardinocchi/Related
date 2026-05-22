@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -19,6 +19,7 @@ import type {
   SessionHandle,
   VoiceSessionManager,
 } from "@related/shared";
+import { resolveSendMessageRecipients } from "@related/shared";
 import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
 import { colors, fonts, fontSizes, lineHeights, radii } from "./ui/tokens";
 
@@ -55,10 +56,6 @@ interface TranscriptAgentTurn {
 }
 type TranscriptEntry = TranscriptUserTurn | TranscriptAgentTurn;
 
-function generateSessionId(): string {
-  return `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 export function AgentScreen({
   relationship,
   agentService,
@@ -67,7 +64,6 @@ export function AgentScreen({
   startMicCapture,
   createStreamingPlayer,
 }: AgentScreenProps) {
-  const sessionId = useMemo(generateSessionId, []);
   const [draft, setDraft] = useState("");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [sending, setSending] = useState(false);
@@ -104,43 +100,10 @@ export function AgentScreen({
     setSending(true);
     setError(null);
     setDraft("");
-    const userEntryId = `u-${Date.now()}`;
-    setTranscript((prev) => [
-      ...prev,
-      { role: "user", id: userEntryId, text },
-    ]);
-
-    try {
-      const intent = await agentService.captureIntentForTurn({
-        userTurn: text,
-        sessionId,
-        relationshipId: relationship.id,
-      });
-      if (intent.captured && intent.content) {
-        const capturedContent = intent.content;
-        setTranscript((prev) =>
-          prev.map((e) =>
-            e.role === "user" && e.id === userEntryId
-              ? { ...e, capturedIntent: { content: capturedContent } }
-              : e,
-          ),
-        );
-      }
-
-      const set = await agentService.runEngagedTurn({
-        relationshipId: relationship.id,
-        userTurn: text,
-        sessionId,
-      });
-      setTranscript((prev) => [
-        ...prev,
-        { role: "agent", id: set.id, candidateSet: set },
-      ]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Send failed.");
-    } finally {
-      setSending(false);
-    }
+    setError(
+      "Talk to Claude is unavailable. Ambient intelligence runs automatically.",
+    );
+    setSending(false);
   }
 
   async function beginMicCapture(): Promise<AudioCaptureHandle> {
@@ -237,29 +200,31 @@ export function AgentScreen({
     intent: "accept" | "decline",
     edits?: Record<string, unknown>,
   ) {
-    const effectiveAction =
-      intent === "decline"
-        ? { ...action, type: "DoNothing" as const, payload: {} }
-        : action;
+    const candidateSetId = findCandidateSetIdFor(transcript, action.id) ?? "";
 
-    let userEditsPayload = edits;
-    if (intent === "accept" && effectiveAction.type === "SendMessage") {
-      const channel = (effectiveAction.payload as { channel?: string })?.channel;
-      const resolved = resolveRecipientFor(relationship, channel);
-      userEditsPayload = { ...(edits ?? {}), to: resolved };
+    let userEdits: { payload: Record<string, unknown> } | undefined;
+    if (intent === "accept") {
+      let payload = edits;
+      if (action.type === "SendMessage") {
+        const channel = (action.payload as { channel?: string })?.channel;
+        const resolved = resolveSendMessageRecipients(
+        {
+          phone: relationship.contact.phone,
+          email: relationship.contact.email,
+        },
+        channel,
+      );
+        payload = { ...(edits ?? {}), to: resolved };
+      }
+      userEdits = payload ? { payload } : undefined;
     }
 
     try {
-      await agentService.executeAction({
-        action: {
-          id: action.id,
-          candidateSetId: findCandidateSetIdFor(transcript, action.id) ?? "",
-          ownerId: "",
-          type: effectiveAction.type,
-          payload: effectiveAction.payload,
-        },
-        userEdits: userEditsPayload ? { payload: userEditsPayload } : undefined,
-      });
+      if (intent === "accept") {
+        await agentService.acceptAction({ candidateSetId, action, userEdits });
+      } else {
+        await agentService.declineAction({ candidateSetId, action });
+      }
       setDecisions((prev) => ({
         ...prev,
         [action.id]: intent === "accept" ? "picked" : "declined",
@@ -283,7 +248,7 @@ export function AgentScreen({
           <Text style={styles.backLabel}>‹ Back</Text>
         </Pressable>
         <Text style={styles.name}>{relationship.contact.name}</Text>
-        <Text style={styles.eyebrow}>Engaged Pass</Text>
+        <Text style={styles.eyebrow}>Agent</Text>
 
         {transcript.map((entry) =>
           entry.role === "user" ? (
@@ -460,17 +425,6 @@ function stopWebMediaCapture(
   }
   streamRef.current = null;
 }
-
-function resolveRecipientFor(
-  relationship: Relationship,
-  channel: string | undefined,
-): string[] {
-  const contact = relationship.contact;
-  if (channel === "email" && contact.email) return [contact.email];
-  if (channel === "text" && contact.phone) return [contact.phone];
-  return [];
-}
-
 function findCandidateSetIdFor(
   transcript: TranscriptEntry[],
   actionId: string,

@@ -1,24 +1,33 @@
+import { AMBIENT_SYSTEM_PROMPT } from "./ambientAgentCore";
 import { ClaudeAgent, type AnthropicMessagesClient } from "./ClaudeAgent";
 import type { AgentPrompt } from "./PassEngine";
+import {
+  testContact,
+  testOpenThreadLink,
+  testRelationshipContextSnapshot,
+} from "./relationshipContextFixtures";
 
 function samplePrompt(over: Partial<AgentPrompt> = {}): AgentPrompt {
   return {
-    mode: "engaged",
-    relationship: {
-      id: "r-1",
-      target_type: "contact",
-      contact: { id: "c-1", name: "Sam" },
-    },
-    openThreads: [],
+    mode: "baseline",
+    relationshipContext: testRelationshipContextSnapshot(),
     previousCandidateSet: null,
     userContext: {
       userId: "u-1",
       asOf: "2026-05-19T00:00:00Z",
       transientIntent: [],
-      situationalState: [],
+      situationalState: null,
       goalsAndValues: [],
       operatorStrengths: [],
-      inferredSignals: { calendarDensity: null, sleep: null },
+      inferredSignals: {
+        calendarDensity: null,
+        sleep: null,
+        calendarEvents: [],
+        sleepRecords: [],
+      },
+      groups: [],
+      otherRelationships: [],
+      characterValuesAlignment: [],
     },
     ...over,
   };
@@ -48,6 +57,9 @@ describe("ClaudeAgent.propose", () => {
     expect(create).toHaveBeenCalledTimes(1);
     const req = create.mock.calls[0][0];
     expect(req.model).toBe("claude-sonnet-4-6");
+    expect(req.system).toBe(AMBIENT_SYSTEM_PROMPT);
+    expect(req.system).toContain("operatorStrengths");
+    expect(req.system).toContain("Capability fit");
     expect(actions).toEqual([
       {
         type: "DoNothing",
@@ -83,25 +95,49 @@ describe("ClaudeAgent.propose", () => {
     const agent = new ClaudeAgent({ client });
 
     const prompt = samplePrompt({
-      openThreads: [
-        {
-          open_threads: {
-            id: "ot-1",
+      relationshipContext: testRelationshipContextSnapshot({
+        openThreads: [
+          testOpenThreadLink({
             description: "promised to send the book",
-            direction: "me_owes_them",
-            created_at: "2026-05-10T00:00:00Z",
-          },
-        },
-      ],
+          }),
+        ],
+      }),
       previousCandidateSet: { id: "cs-prev", mode: "baseline", actions: [] },
       userContext: {
         userId: "u-1",
         asOf: "2026-05-19T00:00:00Z",
         transientIntent: ["plan a low-key catch-up"],
-        situationalState: ["Just moved to Sydney"],
-        goalsAndValues: ["Be more present with family"],
-        operatorStrengths: ["A good ear when someone's stuck"],
-        inferredSignals: { calendarDensity: null, sleep: null },
+        situationalState: {
+          id: "ss-1",
+          content: "Just moved to Sydney",
+          createdAt: "2026-05-01T00:00:00Z",
+          updatedAt: "2026-05-19T00:00:00Z",
+        },
+        goalsAndValues: [
+          {
+            id: "g-1",
+            content: "Be more present with family",
+            createdAt: "2026-05-01T00:00:00Z",
+            updatedAt: "2026-05-01T00:00:00Z",
+          },
+        ],
+        operatorStrengths: [
+          {
+            id: "os-1",
+            content: "A good ear when someone's stuck",
+            createdAt: "2026-05-01T00:00:00Z",
+            updatedAt: "2026-05-01T00:00:00Z",
+          },
+        ],
+        inferredSignals: {
+          calendarDensity: null,
+          sleep: null,
+          calendarEvents: [],
+          sleepRecords: [],
+        },
+        groups: [],
+        otherRelationships: [],
+        characterValuesAlignment: [],
       },
     });
 
@@ -119,7 +155,16 @@ describe("ClaudeAgent.propose", () => {
     expect(body).toContain("Be more present with family");
   });
 
-  it("appends a DoNothing if the model didn't emit one, so it's always a peer option", async () => {
+  it("defaults to DoNothing when the model emits no tool calls", async () => {
+    const { client } = mockClientReturning([]);
+    const agent = new ClaudeAgent({ client });
+
+    const actions = await agent.propose(samplePrompt());
+
+    expect(actions).toEqual([{ type: "DoNothing", payload: {} }]);
+  });
+
+  it("returns a single concrete action without appending DoNothing", async () => {
     const { client } = mockClientReturning([
       {
         type: "tool_use",
@@ -130,12 +175,20 @@ describe("ClaudeAgent.propose", () => {
     const agent = new ClaudeAgent({ client });
 
     const actions = await agent.propose(samplePrompt());
-    const types = actions.map((a) => a.type);
-    expect(types).toContain("DoNothing");
-    expect(types[types.length - 1]).toBe("DoNothing");
+
+    expect(actions).toEqual([
+      {
+        type: "ScheduleInteraction",
+        payload: {
+          time: "2026-05-22T17:00:00Z",
+          kind: "coffee",
+          contactIds: ["c-1"],
+        },
+      },
+    ]);
   });
 
-  it("does not double up DoNothing when the model already emitted one", async () => {
+  it("keeps a single DoNothing when the model already emitted one", async () => {
     const { client } = mockClientReturning([
       { type: "tool_use", name: "do_nothing", input: { why: "model's reason" } },
     ]);
@@ -146,7 +199,7 @@ describe("ClaudeAgent.propose", () => {
     expect(actions[0].why).toBe("model's reason");
   });
 
-  it("maps every tool_use name to its PascalCase action type", async () => {
+  it("keeps only the first non-DoNothing when the model emits multiple tool calls", async () => {
     const { client } = mockClientReturning([
       {
         type: "tool_use",
@@ -192,23 +245,30 @@ describe("ClaudeAgent.propose", () => {
 
     const actions = await agent.propose(samplePrompt());
 
-    const types = actions.map((a) => a.type);
-    // The DoNothing at the end is the invariant — the model emitted six
-    // non-DoNothing actions, so the agent appends one.
-    expect(types).toEqual([
-      "ScheduleInteraction",
-      "LogInteraction",
-      "OpenThread",
-      "CloseThread",
-      "SendMessage",
-      "UpdateRoleOrCadence",
-      "DoNothing",
+    expect(actions).toEqual([
+      {
+        type: "ScheduleInteraction",
+        payload: {
+          time: "2026-05-22T17:00:00Z",
+          kind: "coffee",
+          contactIds: ["c-1"],
+        },
+        why: "Sam's birthday week",
+      },
     ]);
-    expect(actions[0].payload).toEqual({
-      time: "2026-05-22T17:00:00Z",
-      kind: "coffee",
-      contactIds: ["c-1"],
-    });
-    expect(actions[0].why).toBe("Sam's birthday week");
+  });
+
+  it("keeps the first DoNothing when the model emits multiple DoNothing tool calls", async () => {
+    const { client } = mockClientReturning([
+      { type: "tool_use", name: "do_nothing", input: { why: "first reason" } },
+      { type: "tool_use", name: "do_nothing", input: { why: "second reason" } },
+    ]);
+    const agent = new ClaudeAgent({ client });
+
+    const actions = await agent.propose(samplePrompt());
+
+    expect(actions).toEqual([
+      { type: "DoNothing", payload: {}, why: "first reason" },
+    ]);
   });
 });

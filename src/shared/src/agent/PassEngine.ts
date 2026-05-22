@@ -1,47 +1,35 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ensureDoNothingPeer } from "./ambientTools";
 import {
   UserContextBuilder,
   type UserContextSnapshot,
 } from "./UserContextBuilder";
+import {
+  RelationshipContextBuilder,
+  type RelationshipContextSnapshot,
+} from "./RelationshipContextBuilder";
 import type { NotificationDispatcher } from "../notifications/NotificationDispatcher";
+import type {
+  CandidateActionInput,
+  DecisionState,
+  PassCandidateSet,
+  PassMode,
+  PreviousCandidateSet,
+} from "../candidates/candidateSet";
 
-export type PassMode = "baseline" | "triggered" | "engaged";
-
-export interface CandidateActionInput {
-  type: string;
-  payload?: unknown;
-  why?: string;
-}
-
-export interface CandidateSet {
-  id: string;
-  ownerId: string;
-  relationshipId: string;
-  mode: PassMode;
-  createdAt: string;
-  actions: CandidateActionInput[];
-}
-
-export type DecisionState = "pending" | "picked" | "declined" | "ignored";
-
-export interface PreviousCandidateAction {
-  id: string;
-  type: string;
-  payload: unknown;
-  why: string | null;
-  decisionState: DecisionState;
-}
-
-export interface PreviousCandidateSet {
-  id: string;
-  mode: PassMode;
-  actions: PreviousCandidateAction[];
-}
+export type { RelationshipContextSnapshot } from "./RelationshipContextBuilder";
+export type {
+  CandidateActionInput,
+  DecisionState,
+  PassCandidateSet,
+  PassMode,
+  PreviousCandidateAction,
+  PreviousCandidateSet,
+} from "../candidates/candidateSet";
 
 export interface AgentPrompt {
   mode: PassMode;
-  relationship: unknown;
-  openThreads: unknown[];
+  relationshipContext: RelationshipContextSnapshot;
   previousCandidateSet: PreviousCandidateSet | null;
   userContext: UserContextSnapshot;
   liveContext?: unknown;
@@ -59,11 +47,11 @@ export interface PassEngineOptions {
   supabase: SupabaseClient;
   agent: AgentCaller;
   userContextBuilder?: UserContextBuilder;
+  relationshipContextBuilder?: RelationshipContextBuilder;
   /**
    * Slice 15 trigger. When set, the engine calls dispatcher.maybeDispatch
    * after persisting a baseline/triggered Pass that produced at least one
-   * non-DoNothing candidate. Engaged Passes never notify — the User is in
-   * the agent UI already.
+   * non-DoNothing candidate.
    */
   dispatcher?: NotificationDispatcher;
 }
@@ -71,8 +59,6 @@ export interface PassEngineOptions {
 export interface RunPassInput {
   relationshipId: string;
   mode: PassMode;
-  /** Engaged-Pass-only live context (Transient Intent etc.); Slice 14 wires this. */
-  liveContext?: unknown;
 }
 
 /**
@@ -88,29 +74,34 @@ export class PassEngine {
   private readonly supabase: SupabaseClient;
   private readonly agent: AgentCaller;
   private readonly userContextBuilder: UserContextBuilder;
+  private readonly relationshipContextBuilder: RelationshipContextBuilder;
   private readonly dispatcher: NotificationDispatcher | null;
 
   constructor(opts: PassEngineOptions) {
     this.supabase = opts.supabase;
     this.agent = opts.agent;
-    this.userContextBuilder = opts.userContextBuilder ?? new UserContextBuilder();
+    this.userContextBuilder =
+      opts.userContextBuilder ?? new UserContextBuilder({ supabase: opts.supabase });
+    this.relationshipContextBuilder =
+      opts.relationshipContextBuilder ??
+      new RelationshipContextBuilder({ supabase: opts.supabase });
     this.dispatcher = opts.dispatcher ?? null;
   }
 
-  async runPass(input: RunPassInput): Promise<CandidateSet> {
-    const { relationshipId, mode, liveContext } = input;
+  async runPass(input: RunPassInput): Promise<PassCandidateSet> {
+    const { relationshipId, mode } = input;
 
-    const { data: relationship, error: relErr } = await this.supabase
-      .from("relationships")
-      .select(
-        "id, owner_id, target_type, target_contact_id, target_group_id, contact:contacts(id, name), group:groups(id, name)",
-      )
-      .eq("id", relationshipId)
-      .single();
-    if (relErr || !relationship) {
-      throw relErr ?? new Error(`relationship ${relationshipId} not found`);
+    const relationshipContext =
+      await this.relationshipContextBuilder.buildRelationshipContext(
+        relationshipId,
+      );
+    const { relationship } = relationshipContext;
+    const ownerId = relationship.owner_id;
+    if (!ownerId) {
+      throw new Error(
+        `relationship ${relationshipId} is missing owner_id in context snapshot`,
+      );
     }
-    const ownerId = (relationship as { owner_id: string }).owner_id;
 
     const { data: previousSetRows } = await this.supabase
       .from("candidate_sets")
@@ -148,32 +139,19 @@ export class PassEngine {
       };
     }
 
-    const { data: openThreads } = await this.supabase
-      .from("open_thread_relationships")
-      .select("open_threads(id, description, direction, created_at)")
-      .eq("relationship_id", relationshipId)
-      .order("open_threads(created_at)", { ascending: true })
-      .limit(50);
-
-    // Engaged-Pass live context carries the voice session id so the
-    // builder can pull non-expired Transient Intent for that session.
-    // Other modes leave transientIntent empty by design.
-    const live = liveContext as { sessionId?: string } | undefined;
     const userContext = await this.userContextBuilder.buildUserContext(
       ownerId,
       new Date(),
-      { mode, sessionId: live?.sessionId },
+      { excludeRelationshipId: relationshipId },
     );
 
     const prompt: AgentPrompt = {
       mode,
-      relationship,
-      openThreads: openThreads ?? [],
+      relationshipContext,
       previousCandidateSet,
       userContext,
-      liveContext,
     };
-    const actions = await this.agent.propose(prompt);
+    const actions = ensureDoNothingPeer(await this.agent.propose(prompt));
 
     const { data: newSet, error: setErr } = await this.supabase
       .from("candidate_sets")
@@ -204,17 +182,17 @@ export class PassEngine {
       if (actErr) throw actErr;
     }
 
-    // Slice 15 notification trigger. Skip engaged-mode Passes — the User
-    // is already in the agent UI. Skip when the only candidate is DoNothing
+    // Slice 15 notification trigger. Skip when the only candidate is DoNothing
     // — nothing fresh to notify about. The dispatcher itself enforces
     // quiet hours and the salience threshold; here we just compute a
     // heuristic salience and synthesise a title.
-    if (this.dispatcher && mode !== "engaged") {
+    if (this.dispatcher) {
       const concrete = actions.filter((a) => a.type !== "DoNothing");
       if (concrete.length > 0) {
-        const contactName = (
-          relationship as { contact?: { name?: string } | null }
-        )?.contact?.name;
+        const contactName = relationship.contact?.name;
+        const groupName = relationship.group?.name;
+        const targetName =
+          relationship.target_type === "group" ? groupName : contactName;
         const firstWithWhy = concrete.find((a) => a.why);
         const salience = firstWithWhy ? 1.0 : 0.6;
         await this.dispatcher.maybeDispatch({
@@ -222,11 +200,8 @@ export class PassEngine {
           relationshipId,
           candidateActionId: persistedSet.id,
           salience,
-          title: `Fresh thinking${contactName ? ` for ${contactName}` : ""}`,
-          body:
-            concrete.length === 1
-              ? `1 new option to review`
-              : `${concrete.length} new options to review`,
+          title: `Fresh thinking${targetName ? ` for ${targetName}` : ""}`,
+          body: `1 new option to review`,
           now: new Date(),
         });
       }

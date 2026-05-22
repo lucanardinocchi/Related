@@ -1,0 +1,138 @@
+{
+  "id": "open-thread-priya",
+  "snapshot": {
+    "asOf": "2026-05-22T10:00:00.000Z",
+    "relationships": [
+      {
+        "id": "rel-priya",
+        "target_type": "contact",
+        "role": "friend",
+        "cadence": "biweekly",
+        "name": "Priya Sharma"
+      }
+    ],
+    "relationshipsTotal": 1,
+    "groups": [],
+    "userContext": {
+      "goalsAndValues": [
+        "Reply to people within a few days when I've said I would"
+      ],
+      "situationalState": "Busy week at work; a few social threads have slipped.",
+      "recentTransientIntent": [
+        {
+          "content": "Feeling guilty about unanswered messages",
+          "captured_at": "2026-05-18T14:00:00.000Z",
+          "relationship_id": "rel-priya"
+        }
+      ]
+    },
+    "openThreads": [
+      {
+        "id": "thread-priya-reply",
+        "description": "Owed Priya a reply about weekend plans — she texted Tuesday, still unread",
+        "direction": "me_owes_them",
+        "days_outstanding": 5,
+        "relationship_ids": ["rel-priya"]
+      }
+    ],
+    "openThreadsTotal": 1,
+    "recentInteractions": [
+      {
+        "id": "int-priya-1",
+        "time": "2026-05-12T19:00:00.000Z",
+        "kind": "text",
+        "status": "occurred",
+        "contact_ids": ["contact-priya"]
+      }
+    ],
+    "recentInteractionsTotal": 1
+  },
+  "toolData": {
+    "relationships": [
+      {
+        "id": "rel-priya",
+        "target_type": "contact",
+        "role": "friend",
+        "cadence": "biweekly",
+        "created_at": "2024-03-15T10:00:00.000Z",
+        "contact": {
+          "id": "contact-priya",
+          "name": "Priya Sharma",
+          "phone": "+1-555-0303",
+          "email": "priya.sharma@gmail.com",
+          "birthday": "1990-03-22",
+          "area": "Berkeley",
+          "occupation": "Architect",
+          "education": null
+        },
+        "group_target": null
+      }
+    ],
+    "contacts": [
+      {
+        "id": "contact-priya",
+        "name": "Priya Sharma",
+        "phone": "+1-555-0303",
+        "email": "priya.sharma@gmail.com",
+        "birthday": "1990-03-22",
+        "area": "Berkeley",
+        "occupation": "Architect",
+        "education": null,
+        "created_at": "2024-03-15T10:00:00.000Z"
+      }
+    ],
+    "groups": [],
+    "openThreads": [
+      {
+        "id": "thread-priya-reply",
+        "description": "Owed Priya a reply about weekend plans — she texted Tuesday, still unread",
+        "direction": "me_owes_them",
+        "origin": "message",
+        "communication_status": "unread",
+        "created_at": "2026-05-17T09:30:00.000Z",
+        "closed_at": null,
+        "open_thread_relationships": [
+          { "relationship_id": "rel-priya" }
+        ]
+      }
+    ],
+    "interactions": [
+      {
+        "id": "int-priya-1",
+        "time": "2026-05-12T19:00:00.000Z",
+        "kind": "text",
+        "notes": "She asked about hiking this month.",
+        "status": "occurred",
+        "interaction_contacts": [
+          { "contact_id": "contact-priya", "contacts": { "name": "Priya Sharma" } }
+        ]
+      }
+    ],
+    "events": [],
+    "userContext": {
+      "goalsAndValues": [
+        {
+          "id": "gv-1",
+          "content": "Reply to people within a few days when I've said I would",
+          "created_at": "2025-09-01T08:00:00.000Z",
+          "updated_at": "2025-09-01T08:00:00.000Z"
+        }
+      ],
+      "situationalState": {
+        "id": "ss-1",
+        "content": "Busy week at work; a few social threads have slipped.",
+        "updated_at": "2026-05-20T09:00:00.000Z"
+      },
+      "transientIntent": [
+        {
+          "id": "ti-1",
+          "content": "Feeling guilty about unanswered messages",
+          "captured_at": "2026-05-18T14:00:00.000Z",
+          "expires_at": "2026-05-25T14:00:00.000Z",
+          "relationship_id": "rel-priya"
+        }
+      ],
+      "inferredSignals": null
+    }
+  }
+}

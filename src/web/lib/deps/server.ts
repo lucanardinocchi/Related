@@ -14,6 +14,8 @@ import {
   UserProviderTokensClient,
   ValuesAlignmentClient,
   MessagesClient,
+  AmbientIntelligencePreferencesClient,
+  PocketClient,
 } from "@related/shared";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -49,5 +51,10 @@ export async function getServerDeps() {
     subscriptions: new SubscriptionsClient(supabase),
     userProviderTokens: new UserProviderTokensClient(supabase, resolveOwnerId),
     messages: new MessagesClient(supabase),
+    pocket: new PocketClient(supabase),
+    ambientIntelligencePreferences: new AmbientIntelligencePreferencesClient(
+      supabase,
+      resolveOwnerId,
+    ),
   };
 }

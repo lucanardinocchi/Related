@@ -7,14 +7,18 @@
     "src/mobile",
     "src/web",
     "src/backend",
-    "src/relay"
+    "src/relay",
+    "src/evals"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "build:web": "npm run build --workspace=@related/web",
     "test:e2e": "playwright test",
     "generate:values-media": "node src/backend/scripts/generate-values-media.mjs",
-    "generate:values-launch": "REPLICATE_VIDEO_MODEL=kwaivgi/kling-v3-video node src/backend/scripts/generate-values-media.mjs --launch --force"
+    "generate:values-missing": "node src/backend/scripts/generate-values-media.mjs --missing",
+    "generate:values-launch": "node src/backend/scripts/generate-values-media.mjs --launch --force",
+    "eval": "npm --prefix src/evals run eval --",
+    "eval:view": "npm run eval:view --workspace=@related/evals"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0"

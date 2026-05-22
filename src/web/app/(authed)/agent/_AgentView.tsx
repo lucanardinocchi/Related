@@ -16,9 +16,9 @@ import {
 import type {
   ChatMessage,
   ChatSummary,
-  ExtractionResult,
   ToolCallSummary,
 } from "@related/shared";
+import { formatExtractionResult } from "@related/shared";
 import { useConversationalChat } from "@related/shared/chats/useConversationalChat";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Badge, Button, EmptyState } from "@/components/ui";
@@ -214,7 +214,7 @@ export function AgentView({ initialChats }: AgentViewProps) {
           } else if ("ok" in result) {
             setToast({
               kind: "success",
-              text: extractionToast(result),
+              text: formatExtractionResult(result),
             });
           }
         },
@@ -501,28 +501,6 @@ export function AgentView({ initialChats }: AgentViewProps) {
       </section>
     </div>
   );
-}
-
-function extractionToast(result: {
-  situationalStateUpdated: boolean;
-  intentsCaptured: number;
-  toolErrors: string[];
-}): string {
-  const bits: string[] = [];
-  if (result.situationalStateUpdated) bits.push("Situational State updated");
-  if (result.intentsCaptured > 0)
-    bits.push(
-      `${result.intentsCaptured} intent${
-        result.intentsCaptured === 1 ? "" : "s"
-      } captured`,
-    );
-  const head = bits.length ? bits.join(", ") : "no User Context updates";
-  const tail = result.toolErrors.length
-    ? ` (with ${result.toolErrors.length} tool error${
-        result.toolErrors.length === 1 ? "" : "s"
-      })`
-    : "";
-  return `Extraction complete: ${head}${tail}.`;
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {

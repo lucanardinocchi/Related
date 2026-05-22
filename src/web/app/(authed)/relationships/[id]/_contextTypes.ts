@@ -1,4 +1,9 @@
-import type { Interaction, InteractionStatus, OpenThread } from "@related/shared";
+import type {
+  ContextCaptureSource,
+  Interaction,
+  InteractionStatus,
+  OpenThread,
+} from "@related/shared";
 
 /** Top-level families shown in the add-context flow and timeline. */
 export type ContextFamily = "interaction" | "note" | "comms" | "commitment";
@@ -96,6 +101,20 @@ export const FAMILY_META: Record<
 
 export function familyLabel(family: ContextFamily): string {
   return FAMILY_META[family].label;
+}
+
+/** Provenance badge label for Relationship timeline rows (ADR-0012). */
+export function captureSourceLabel(
+  source: ContextCaptureSource,
+): string | null {
+  switch (source) {
+    case "conversational_extraction":
+      return "From chat";
+    case "pocket_extraction":
+      return "From Pocket";
+    default:
+      return null;
+  }
 }
 
 export function interactionTiming(
