@@ -49,7 +49,9 @@ Do this end-to-end:
 4. Restart the client after saving config.
 
 5. Verify Related MCP is connected:
-   - Look for a plug/MCP icon or a tools list that includes Related tools (e.g. list relationships, search contacts, read calendar).
+   - Look for a plug/MCP icon or a tools list that includes Related tools.
+   - Read tools: list/get relationships, contacts, groups, open threads, interactions, calendar events, user context.
+   - Write tools: create/update/delete interactions; create/update/delete manual events; create/update/close commitments.
    - If auth fails, confirm the API key starts with \`rk_\` and that the Authorization header is forwarded by \`mcp-remote\`.
 
 If anything fails, diagnose JSON syntax, header forwarding, and API key validity. Tell me when Related MCP shows as connected.`;

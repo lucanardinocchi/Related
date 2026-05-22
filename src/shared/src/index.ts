@@ -666,6 +666,7 @@ export {
   mcpApiKeyPrefix,
   mcpServerUrlFromSupabaseUrl,
 } from "./mcp/mcpApiKey";
+export { MCP_TOOLS } from "./mcp/mcpTools";
 export type { McpSetupPromptInput } from "./mcp/mcpSetupPrompt";
 export type {
   McpApiKeyRecord,

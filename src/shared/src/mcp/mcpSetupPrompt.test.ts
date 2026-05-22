@@ -15,6 +15,6 @@ describe("buildMcpSetupPrompt", () => {
     expect(prompt).toContain("Bearer rk_abc123def456");
     expect(prompt).toContain("~/.cursor/mcp.json");
     expect(prompt).toContain("claude mcp add related");
-    expect(prompt).toContain("list relationships");
+    expect(prompt).toContain("create/update/delete interactions");
   });
 });

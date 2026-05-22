@@ -391,6 +391,10 @@ verify_jwt = false
 [functions.ambient-pass]
 verify_jwt = false
 
+# MCP clients authenticate with rk_* API keys inside the handler.
+[functions.related-mcp]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
