@@ -3,6 +3,7 @@
 import {
   Calendar,
   CheckCircle2,
+  HeartHandshake,
   MessageSquareText,
   Sparkles,
   Users,
@@ -95,6 +96,11 @@ const FEATURES = [
     icon: MessageSquareText,
     title: "Agent chat",
     body: "Think out loud with your data. Conversational intelligence, read-only and grounded.",
+  },
+  {
+    icon: HeartHandshake,
+    title: "Values Discovery",
+    body: "Swipe and rank characters to surface what you care about. Proposed Goals and Values save only after you confirm.",
   },
   {
     icon: Users,
