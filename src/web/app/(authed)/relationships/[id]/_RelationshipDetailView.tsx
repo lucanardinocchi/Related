@@ -10,6 +10,13 @@ import type {
   OpenThread,
   Relationship,
 } from "@related/shared";
+import {
+  contextCaptureInputFromModal,
+  resolveContextCapture,
+  writeContextCapture,
+  type InteractionCaptureWrite,
+  type OpenThreadCaptureWrite,
+} from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Eyebrow, H1 } from "@/components/ui";
 import type { ContactLocationValue } from "@/components/ui";
@@ -228,31 +235,62 @@ export function RelationshipDetailView({
   }
 
   async function addContextFromModal(result: AddContextResult): Promise<void> {
-    if (result.commitment) {
-      const { description, timing } = result.commitment;
-      if (timing === "planned") {
-        await addThread(description);
-        return;
-      }
-      const status = timing === "completed" ? "occurred" : "missed";
-      await addContext({
-        time: result.time,
-        kind: "commitment",
-        category: "personal",
-        notes: description,
-        status,
-      });
+    const captureInput = contextCaptureInputFromModal(result);
+    const write = resolveContextCapture(captureInput, {
+      captureSource: "manual",
+      relationshipTarget: {
+        mode: "contact",
+        relationshipId: relationship.id,
+        contactId: relationship.contact.id,
+      },
+    });
+    const written = await writeContextCapture(write, {
+      mode: "manual",
+      interactions: deps.interactions,
+      openThreads: deps.openThreads,
+    });
+
+    if (written.table === "open_threads") {
+      const w = write as OpenThreadCaptureWrite;
+      setOpenThreads((ts) => [
+        ...ts,
+        {
+          id: written.id,
+          description: w.description,
+          direction: w.direction,
+          origin: w.origin,
+          communicationStatus: w.communicationStatus,
+          createdAt: new Date().toISOString(),
+          closedAt: null,
+          relationshipIds: w.relationshipIds,
+          whyHelpsPerson: null,
+          whyICanHelp: null,
+          captureSource: w.captureSource,
+          sourceChatId: w.sourceChatId,
+        },
+      ]);
       return;
     }
-    if (result.interaction) {
-      await addContext({
-        time: result.time,
-        kind: result.interaction.kind,
-        category: result.interaction.category,
-        notes: result.notes,
-        status: result.interaction.status,
-      });
-    }
+
+    const w = write as InteractionCaptureWrite;
+    const created: Interaction = {
+      id: written.id,
+      time: w.time,
+      kind: w.kind,
+      category: w.category,
+      notes: w.notes,
+      status: w.status,
+      contacts: [
+        { id: relationship.contact.id, name: relationship.contact.name },
+      ],
+      captureSource: w.captureSource,
+      sourceChatId: w.sourceChatId,
+    };
+    setInteractions((xs) =>
+      [created, ...xs].sort(
+        (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
+      ),
+    );
   }
 
   return (
