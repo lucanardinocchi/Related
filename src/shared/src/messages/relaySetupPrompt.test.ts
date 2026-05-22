@@ -14,9 +14,11 @@ describe("buildRelaySetupPrompt", () => {
     expect(prompt).toContain("--code AB3K9XYZ");
     expect(prompt).toContain("brew install steipete/tap/imsg");
     expect(prompt).toContain("node src/relay/dist/index.js pair");
-    expect(prompt).toContain("node src/relay/dist/index.js run");
+    expect(prompt).toContain("node src/relay/dist/index.js install-service");
     expect(prompt).toContain("node src/relay/dist/index.js status");
+    expect(prompt).toContain("LaunchAgent loaded");
     expect(prompt).toContain("Full Disk Access");
+    expect(prompt).toContain("Do not skip permission steps or fall back to `run`");
   });
 
   it("uses a custom repo URL when provided", () => {

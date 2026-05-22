@@ -259,11 +259,13 @@ node src/relay/dist/index.js pair \
   --name "My MacBook"
 ```
 
-3. Start the relay:
+3. Start the relay as a persistent service:
 
 ```sh
-node src/relay/dist/index.js run
+node src/relay/dist/index.js install-service
 ```
+
+Grant **Full Disk Access** to your Node binary (often `/opt/homebrew/bin/node`) if not already done.
 
 ### 5.5 Verify
 

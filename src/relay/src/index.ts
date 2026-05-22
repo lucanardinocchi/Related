@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { fileURLToPath } from "node:url";
 import {
   configPath,
   loadConfig,
@@ -13,6 +14,15 @@ import {
   watchMessages,
   type ImsgMessage,
 } from "./imsg.js";
+import {
+  installLaunchAgent,
+  isLaunchAgentLoaded,
+  LAUNCH_AGENT_ERR_PATH,
+  LAUNCH_AGENT_LOG_PATH,
+  LAUNCH_AGENT_PATH,
+  launchAgentServiceId,
+  uninstallLaunchAgent,
+} from "./launchd.js";
 import { drainOutbound } from "./outbound.js";
 import {
   generateDeviceSecret,
@@ -203,12 +213,23 @@ async function cmdRun(): Promise<void> {
   const config = requireConfig(await loadConfig());
   log(`Running relay for ${config.deviceName} (${config.deviceId})`);
 
-  await backfill(config);
+  try {
+    await backfill(config);
+  } catch (err) {
+    log(
+      `Backfill failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
-  const watchAvailable = await probeWatch();
-  const stopWatch = watchAvailable
-    ? await startWatchLoop(config)
-    : await startHistoryPollLoop(config);
+  let stopWatch = () => {};
+  try {
+    const watchAvailable = await probeWatch();
+    stopWatch = watchAvailable
+      ? await startWatchLoop(config)
+      : await startHistoryPollLoop(config);
+  } catch (err) {
+    log(`Watch setup failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   const heartbeatTimer = setInterval(() => {
     void sendHeartbeat(config).catch((err) => {
@@ -256,6 +277,14 @@ async function cmdStatus(): Promise<void> {
   log(`Supabase: ${config.supabaseUrl}`);
   log(`Config: ${configPath()}`);
 
+  const launchAgentLoaded = await isLaunchAgentLoaded();
+  log(`LaunchAgent: ${launchAgentLoaded ? "loaded" : "not loaded"}`);
+  if (launchAgentLoaded) {
+    log(`Service: ${launchAgentServiceId()}`);
+    log(`Logs: ${LAUNCH_AGENT_LOG_PATH}`);
+    log(`Errors: ${LAUNCH_AGENT_ERR_PATH}`);
+  }
+
   try {
     await sendHeartbeat(config);
     log("Heartbeat: ok");
@@ -264,12 +293,34 @@ async function cmdStatus(): Promise<void> {
   }
 }
 
+async function cmdInstallService(): Promise<void> {
+  requireConfig(await loadConfig());
+  const nodePath = process.execPath;
+  const scriptPath = fileURLToPath(import.meta.url);
+
+  await installLaunchAgent(nodePath, scriptPath);
+
+  log(`Installed LaunchAgent at ${LAUNCH_AGENT_PATH}`);
+  log(`Service: ${launchAgentServiceId()}`);
+  log(`Logs: ${LAUNCH_AGENT_LOG_PATH}`);
+  log(
+    `Grant Full Disk Access to ${nodePath} in System Settings if imsg cannot read chat.db`,
+  );
+}
+
+async function cmdUninstallService(): Promise<void> {
+  await uninstallLaunchAgent();
+  log(`Removed LaunchAgent at ${LAUNCH_AGENT_PATH}`);
+}
+
 function printHelp(): void {
   process.stdout.write(`related-relay — sync Messages.app to Related via imsg
 
 Usage:
   related-relay pair --code XXXX-XXXX --supabase-url URL [--name "My Mac"]
   related-relay run
+  related-relay install-service
+  related-relay uninstall-service
   related-relay status
 
 Environment:
@@ -291,6 +342,12 @@ async function main(): Promise<void> {
       return;
     case "run":
       await cmdRun();
+      return;
+    case "install-service":
+      await cmdInstallService();
+      return;
+    case "uninstall-service":
+      await cmdUninstallService();
       return;
     case "status":
       await cmdStatus();

@@ -58,8 +58,10 @@ This exchanges a random 32-byte device secret with the `relay-pair` edge functio
 | Command | Description |
 |---------|-------------|
 | `related-relay pair …` | One-time pairing with a web-generated code |
-| `related-relay run` | Start sync daemon (backfill, watch, heartbeat, outbound) |
-| `related-relay status` | Show local config and test heartbeat |
+| `related-relay run` | Start sync daemon in the foreground (debugging) |
+| `related-relay install-service` | Install a launchd LaunchAgent for always-on sync |
+| `related-relay uninstall-service` | Remove the launchd LaunchAgent |
+| `related-relay status` | Show local config, launchd state, and test heartbeat |
 
 ### `run` behavior
 
@@ -73,9 +75,34 @@ All relay API calls send device auth headers:
 - `X-Relay-Device-Id`
 - `X-Relay-Device-Secret`
 
-## launchd example
+## launchd (always-on)
 
-Save as `~/Library/LaunchAgents/com.related.relay.plist` (adjust paths):
+After pairing, install a user LaunchAgent so the relay survives terminal closes and restarts at login:
+
+```bash
+related-relay install-service
+```
+
+This writes `~/Library/LaunchAgents/com.related.relay.plist`, bootstraps the job, and starts it immediately. Logs go to `/tmp/related-relay.log` and `/tmp/related-relay.err`.
+
+Check status:
+
+```bash
+related-relay status
+tail -f /tmp/related-relay.log
+```
+
+Remove the service:
+
+```bash
+related-relay uninstall-service
+```
+
+**Note:** launchd jobs still need Full Disk Access and Automation granted to the Node binary (`process.execPath`, often `/opt/homebrew/bin/node` on Apple Silicon). If the daemon cannot read `chat.db`, add that Node path to Full Disk Access.
+
+### Manual plist example
+
+If you prefer to edit the plist by hand, save as `~/Library/LaunchAgents/com.related.relay.plist` (adjust paths):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -107,21 +134,21 @@ Save as `~/Library/LaunchAgents/com.related.relay.plist` (adjust paths):
 </plist>
 ```
 
-Load and start:
+Load and start manually:
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.related.relay.plist
-launchctl start com.related.relay
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.related.relay.plist
+launchctl kickstart -k "gui/$(id -u)/com.related.relay"
 tail -f /tmp/related-relay.log
 ```
 
-Unload:
+Unload manually:
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.related.relay.plist
+launchctl bootout "gui/$(id -u)/com.related.relay"
 ```
 
-**Note:** launchd jobs still need Full Disk Access and Automation granted to the process context that runs the agent. If the daemon cannot read `chat.db`, add `/usr/local/bin/node` (or your Node binary) to Full Disk Access.
+Prefer `related-relay install-service` / `uninstall-service` — they handle bootstrap and paths automatically.
 
 ## Development
 
