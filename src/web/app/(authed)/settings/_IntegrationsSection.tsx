@@ -28,19 +28,22 @@ import {
   buildGoogleIntegrationRedirectUri,
   captureGoogleProviderTokens,
   OAUTH_INTENT_KEY,
+  OUTLOOK_CODE_VERIFIER_KEY,
+  OUTLOOK_OAUTH_STATE_KEY,
+  refreshGoogleConnections,
 } from "@/lib/integrations/integrationConnect";
+import { setIntegrationOAuthValue, clearIntegrationOAuthValue } from "@/lib/integrations/integrationOAuthStorage";
 import {
   consumeIntegrationOAuthError,
   consumeIntegrationOAuthQueryFeedback,
   setOAuthReturnPath,
 } from "@/lib/integrations/oauthReturn";
+
 const INSTAGRAM_OAUTH_STATE_KEY = "related.instagram-oauth-state";
 const X_OAUTH_STATE_KEY = "related.x-oauth-state";
 const X_CODE_VERIFIER_KEY = "related.x-oauth-code-verifier";
 const TIKTOK_OAUTH_STATE_KEY = "related.tiktok-oauth-state";
 const WHATSAPP_OAUTH_STATE_KEY = "related.whatsapp-oauth-state";
-const OUTLOOK_OAUTH_STATE_KEY = "related.outlook-oauth-state";
-const OUTLOOK_CODE_VERIFIER_KEY = "related.outlook-oauth-code-verifier";
 
 interface Props {
   initialCalendarConnected: boolean;
@@ -209,6 +212,10 @@ export function IntegrationsSection({
       setSuccess("Outlook connected.");
     }
     captureProviderTokens();
+    void refreshGoogleConnections().then((google) => {
+      setCalendarConnected(google.calendar);
+      setGmailConnected(google.gmail);
+    });
     void refreshInstagramConnection();
     void refreshXConnection();
     void refreshWhatsAppConnection();
@@ -351,7 +358,7 @@ export function IntegrationsSection({
     try {
       const { auth } = getBrowserDeps();
       const { url } = await auth.linkGoogleCalendar(
-        buildGoogleIntegrationRedirectUri(),
+        buildGoogleIntegrationRedirectUri("/settings", "calendar"),
       );
       window.location.href = url;
     } catch (e) {
@@ -369,8 +376,8 @@ export function IntegrationsSection({
       window.location.origin + "/settings/outlook/callback";
     const state = crypto.randomUUID();
     const codeVerifier = generateCodeVerifier();
-    sessionStorage.setItem(OUTLOOK_CODE_VERIFIER_KEY, codeVerifier);
-    sessionStorage.setItem(OUTLOOK_OAUTH_STATE_KEY, state);
+    setIntegrationOAuthValue(OUTLOOK_CODE_VERIFIER_KEY, codeVerifier);
+    setIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY, state);
     try {
       const codeChallenge = await generateCodeChallenge(codeVerifier);
       const { auth } = getBrowserDeps();
@@ -382,8 +389,8 @@ export function IntegrationsSection({
       });
       window.location.href = url;
     } catch (e) {
-      sessionStorage.removeItem(OUTLOOK_CODE_VERIFIER_KEY);
-      sessionStorage.removeItem(OUTLOOK_OAUTH_STATE_KEY);
+      clearIntegrationOAuthValue(OUTLOOK_CODE_VERIFIER_KEY);
+      clearIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY);
       setWorking(null);
       setError(e instanceof Error ? e.message : "Failed to start OAuth");
     }
@@ -397,7 +404,7 @@ export function IntegrationsSection({
     try {
       const { auth } = getBrowserDeps();
       const { url } = await auth.linkGoogleGmail(
-        buildGoogleIntegrationRedirectUri(),
+        buildGoogleIntegrationRedirectUri("/settings", "gmail"),
       );
       window.location.href = url;
     } catch (e) {

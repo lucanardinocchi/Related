@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getBrowserDeps } from "@/lib/deps/client";
+import {
+  OUTLOOK_CODE_VERIFIER_KEY,
+  OUTLOOK_OAUTH_STATE_KEY,
+} from "@/lib/integrations/integrationConnect";
+import {
+  clearIntegrationOAuthValue,
+  getIntegrationOAuthValue,
+} from "@/lib/integrations/integrationOAuthStorage";
 import { ensureOAuthCallbackSession } from "@/lib/integrations/ensureOAuthCallbackSession";
 import { redirectToSettings } from "@/lib/integrations/oauthReturn";
-
-const OUTLOOK_CODE_VERIFIER_KEY = "related.outlook-oauth-code-verifier";
-const OUTLOOK_OAUTH_STATE_KEY = "related.outlook-oauth-state";
+import { getBrowserDeps } from "@/lib/deps/client";
 
 export default function OutlookCallbackPage() {
   const router = useRouter();
@@ -36,7 +41,7 @@ export default function OutlookCallbackPage() {
         return;
       }
 
-      const expectedState = sessionStorage.getItem(OUTLOOK_OAUTH_STATE_KEY);
+      const expectedState = getIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY);
       if (!expectedState || !stateParam || expectedState !== stateParam) {
         redirectToSettings(
           router,
@@ -46,7 +51,7 @@ export default function OutlookCallbackPage() {
         return;
       }
 
-      const codeVerifier = sessionStorage.getItem(OUTLOOK_CODE_VERIFIER_KEY);
+      const codeVerifier = getIntegrationOAuthValue(OUTLOOK_CODE_VERIFIER_KEY);
       if (!codeVerifier) {
         redirectToSettings(
           router,
@@ -56,12 +61,14 @@ export default function OutlookCallbackPage() {
         return;
       }
 
+      const redirectUri =
+        window.location.origin + "/settings/outlook/callback";
+      window.history.replaceState({}, "", window.location.pathname);
+
       try {
         setStatus("Finishing Outlook sign-in…");
         const { outlook, onboarding, supabase } = getBrowserDeps();
         await ensureOAuthCallbackSession(supabase);
-        const redirectUri =
-          window.location.origin + "/settings/outlook/callback";
         const result = await outlook.exchangeOAuthCode({
           code,
           redirectUri,
@@ -75,8 +82,8 @@ export default function OutlookCallbackPage() {
           );
           return;
         }
-        sessionStorage.removeItem(OUTLOOK_CODE_VERIFIER_KEY);
-        sessionStorage.removeItem(OUTLOOK_OAUTH_STATE_KEY);
+        clearIntegrationOAuthValue(OUTLOOK_CODE_VERIFIER_KEY);
+        clearIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY);
         await onboarding.completeStep("calendar");
 
         const { data: userData } = await supabase.auth.getUser();

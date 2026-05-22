@@ -13,6 +13,11 @@ import {
   tokenHasOutlookMailAccess,
 } from "@related/shared";
 import { getBrowserDeps } from "@/lib/deps/client";
+import {
+  getIntegrationOAuthValue,
+  isIntegrationOAuthCallbackPath,
+  setIntegrationOAuthValue,
+} from "./integrationOAuthStorage";
 import { setOAuthReturnPath } from "./oauthReturn";
 
 export const OAUTH_INTENT_KEY = "related.google-oauth-intent";
@@ -34,10 +39,18 @@ function normalizeGoogleIntent(raw: string | null): GoogleConnectIntent | null {
   return null;
 }
 
-/** Supabase Google OAuth redirect — must be allow-listed in Supabase Auth. */
-export function buildGoogleIntegrationRedirectUri(returnPath = "/settings"): string {
+/**
+ * Supabase Google OAuth redirect — must be allow-listed in Supabase Auth.
+ * Routes through /auth/callback so PKCE exchange runs server-side (cookies).
+ */
+export function buildGoogleIntegrationRedirectUri(
+  returnPath = "/settings",
+  intent: GoogleConnectIntent,
+): string {
   const path = returnPath.startsWith("/") ? returnPath : `/${returnPath}`;
-  return window.location.origin + path;
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/auth/callback?next=${encodeURIComponent(path)}&google_intent=${intent}`;
 }
 const INSTAGRAM_OAUTH_STATE_KEY = "related.instagram-oauth-state";
 const X_OAUTH_STATE_KEY = "related.x-oauth-state";
@@ -46,6 +59,8 @@ const TIKTOK_OAUTH_STATE_KEY = "related.tiktok-oauth-state";
 const WHATSAPP_OAUTH_STATE_KEY = "related.whatsapp-oauth-state";
 const OUTLOOK_OAUTH_STATE_KEY = "related.outlook-oauth-state";
 const OUTLOOK_CODE_VERIFIER_KEY = "related.outlook-oauth-code-verifier";
+
+export { OUTLOOK_OAUTH_STATE_KEY, OUTLOOK_CODE_VERIFIER_KEY };
 
 export type IntegrationWorking =
   | "calendar"
@@ -118,23 +133,24 @@ export async function captureGoogleProviderTokens(
 ): Promise<{ calendar: boolean; gmail: boolean } | null> {
   let intent: string | null = null;
   if (typeof window !== "undefined") {
+    if (isIntegrationOAuthCallbackPath(window.location.pathname)) {
+      return null;
+    }
+
     const params = new URLSearchParams(window.location.search);
+    if (
+      params.get("code") &&
+      getIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY)
+    ) {
+      return null;
+    }
+
     const oauthError = params.get("error");
     if (oauthError) {
       throw new Error(params.get("error_description") ?? oauthError);
     }
 
     intent = sessionStorage.getItem(OAUTH_INTENT_KEY);
-    const code = params.get("code");
-    // Only exchange Supabase auth codes from Google Calendar/Gmail connect.
-    // Other integrations (Outlook, X, …) also use ?code= and must not hit
-    // exchangeCodeForSession — that expects Supabase's PKCE verifier.
-    if (code && intent) {
-      const { supabase } = getBrowserDeps();
-      const { error: exchangeError } =
-        await supabase.auth.exchangeCodeForSession(code);
-      if (exchangeError) throw exchangeError;
-    }
   }
 
   const { auth, userProviderTokens, onboarding } = getBrowserDeps();
@@ -179,7 +195,7 @@ export async function connectGoogleCalendar(returnPath: string): Promise<void> {
   sessionStorage.setItem(OAUTH_INTENT_KEY, "calendar");
   const { auth } = getBrowserDeps();
   const { url } = await auth.linkGoogleCalendar(
-    buildGoogleIntegrationRedirectUri(returnPath),
+    buildGoogleIntegrationRedirectUri(returnPath, "calendar"),
   );
   window.location.href = url;
 }
@@ -189,7 +205,7 @@ export async function connectGoogleGmail(returnPath: string): Promise<void> {
   sessionStorage.setItem(OAUTH_INTENT_KEY, "gmail");
   const { auth } = getBrowserDeps();
   const { url } = await auth.linkGoogleGmail(
-    buildGoogleIntegrationRedirectUri(returnPath),
+    buildGoogleIntegrationRedirectUri(returnPath, "gmail"),
   );
   window.location.href = url;
 }
@@ -203,8 +219,8 @@ export async function connectOutlookCalendar(
     window.location.origin + "/settings/outlook/callback";
   const state = crypto.randomUUID();
   const codeVerifier = generateCodeVerifier();
-  sessionStorage.setItem(OUTLOOK_CODE_VERIFIER_KEY, codeVerifier);
-  sessionStorage.setItem(OUTLOOK_OAUTH_STATE_KEY, state);
+  setIntegrationOAuthValue(OUTLOOK_CODE_VERIFIER_KEY, codeVerifier);
+  setIntegrationOAuthValue(OUTLOOK_OAUTH_STATE_KEY, state);
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const { auth } = getBrowserDeps();
   const url = auth.buildOutlookOAuthUrl({
