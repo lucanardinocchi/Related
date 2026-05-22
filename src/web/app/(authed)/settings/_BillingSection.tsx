@@ -97,7 +97,7 @@ export function BillingSection({
     try {
       const { url } = await createCheckoutSession({
         successUrl: `${origin}/settings/billing/success`,
-        cancelUrl: `${origin}/settings/billing/cancel`,
+        cancelUrl: `${origin}/settings`,
       });
       window.location.href = url;
     } catch (err) {
