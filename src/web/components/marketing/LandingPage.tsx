@@ -443,7 +443,7 @@ export function LandingPage() {
       <PocketMarketingSection />
 
       {/* Integrations */}
-      <section id="integrations" className="border-y border-border bg-surface">
+      <section id="integrations" className="border-y border-border">
         <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
           <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
             <div>
@@ -475,25 +475,27 @@ export function LandingPage() {
       </section>
 
       {/* Personas */}
-      <section className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
-        <div className="text-center">
-          <Eyebrow>Built for</Eyebrow>
-          <h2 className="mt-2 text-[28px] font-medium tracking-[-0.02em] text-fg">
-            People who take relationships seriously
-          </h2>
-        </div>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
-          {PERSONAS.map(({ label, quote }) => (
-            <Card key={label} className="border border-border bg-bg p-5">
-              <Badge tone="neutral">{label}</Badge>
-              <p className="mt-4 text-[15px] leading-[24px] text-fg">&ldquo;{quote}&rdquo;</p>
-            </Card>
-          ))}
+      <section className="border-y border-border bg-surface">
+        <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+          <div className="text-center">
+            <Eyebrow>Built for</Eyebrow>
+            <h2 className="mt-2 text-[28px] font-medium tracking-[-0.02em] text-fg">
+              People who take relationships seriously
+            </h2>
+          </div>
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
+            {PERSONAS.map(({ label, quote }) => (
+              <Card key={label} className="border border-border bg-bg p-5">
+                <Badge tone="neutral">{label}</Badge>
+                <p className="mt-4 text-[15px] leading-[24px] text-fg">&ldquo;{quote}&rdquo;</p>
+              </Card>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Pricing repeat */}
-      <section className="border-t border-border bg-surface">
+      <section className="border-t border-border">
         <div className="mx-auto max-w-6xl px-6 py-16 text-center sm:py-20">
           <Eyebrow>Pricing</Eyebrow>
           <h2 className="mt-2 text-[28px] font-medium tracking-[-0.02em] text-fg">
