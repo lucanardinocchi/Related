@@ -165,6 +165,54 @@ export function MobileChatScreen({
     else if (!result.ok && result.phase === "other") showErrorToast(result.error);
   }, [draft, responding, selectedChat?.closedAt, selectedChatId, sendMessage, showErrorToast]);
 
+  const handleMic = useCallback(async () => {
+    if (!startMicCapture || !sttAdapter) return;
+
+    if (voiceState === "idle") {
+      try {
+        captureRef.current = await startMicCapture();
+        setVoiceState("recording");
+      } catch (err) {
+        showErrorToast(
+          err instanceof Error ? err.message : "Could not start microphone.",
+        );
+      }
+      return;
+    }
+
+    if (voiceState !== "recording") return;
+
+    const handle = captureRef.current;
+    captureRef.current = null;
+    if (!handle) {
+      setVoiceState("idle");
+      return;
+    }
+
+    handle.stop();
+    setVoiceState("transcribing");
+    try {
+      let final = "";
+      for await (const event of sttAdapter.transcribeStream({
+        audio: handle.audio,
+      })) {
+        if (typeof event.final === "string") {
+          final = event.final;
+        }
+      }
+      if (final) {
+        setDraft((prev) => (prev ? `${prev} ${final}` : final));
+      }
+    } catch (err) {
+      showErrorToast(
+        "Voice transcription failed: " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    } finally {
+      setVoiceState("idle");
+    }
+  }, [voiceState, startMicCapture, sttAdapter, showErrorToast]);
+
   const headerTitle = selectedChat?.title ?? "Related";
   const isPocket = selectedChat?.source === "pocket";
   const isClosed = !!selectedChat?.closedAt || isPocket;

@@ -1,4 +1,5 @@
 import {
+  type OperatorStrength,
   tokenHasCalendarAccess,
   tokenHasGmailAccess,
   tokenHasInstagramAccess,
@@ -14,6 +15,18 @@ import { ContextEditor } from "./_ContextEditor";
 import { ContextOnboardingLauncher } from "./_ContextOnboardingLauncher";
 
 export const dynamic = "force-dynamic";
+
+async function listOperatorStrengthsSafe(
+  list: () => Promise<OperatorStrength[]>,
+): Promise<OperatorStrength[]> {
+  try {
+    return await list();
+  } catch {
+    // Hosted DBs that missed migration 20260521000010 would 500 here;
+    // keep the rest of the context editor usable until db push lands.
+    return [];
+  }
+}
 
 export default async function ContextPage() {
   const { userContext, userProviderTokens } = await getServerDeps();
@@ -31,7 +44,7 @@ export default async function ContextPage() {
   ] = await Promise.all([
     userContext.listGoals(),
     userContext.getSituationalState(),
-    userContext.listOperatorStrengths(),
+    listOperatorStrengthsSafe(() => userContext.listOperatorStrengths()),
     userProviderTokens.getForProvider("google"),
     userProviderTokens.getForProvider("instagram"),
     userProviderTokens.getForProvider("x"),

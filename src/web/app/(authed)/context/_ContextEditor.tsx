@@ -97,7 +97,7 @@ function SituationalStateSection({
           {error && <p className="text-sm text-danger">{error}</p>}
 
           <div className="flex items-center justify-between gap-4">
-            <p className="text-xs text-muted">
+            <p className="text-xs text-muted" suppressHydrationWarning>
               {savedNotice
                 ? "Saved."
                 : updatedAt

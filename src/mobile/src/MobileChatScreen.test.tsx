@@ -228,11 +228,7 @@ describe("<MobileChatScreen />", () => {
 
     const sttAdapter: Pick<STTAdapter, "transcribeStream"> = {
       transcribeStream: async function* () {
-        yield {
-          type: "final",
-          text: "captured by voice",
-          isFinal: true,
-        } as never;
+        yield { final: "captured by voice" };
       },
     };
 

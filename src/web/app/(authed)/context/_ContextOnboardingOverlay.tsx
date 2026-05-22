@@ -35,9 +35,11 @@ export function ContextOnboardingOverlay({
     router.refresh();
   }, [onClose, router]);
 
+  if (!open) return null;
+
   return (
     <Modal
-      open={open}
+      open
       onClose={onClose}
       title="Set up Related"
       size="xl"
