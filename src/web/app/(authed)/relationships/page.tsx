@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { User, Users, Plus } from "lucide-react";
 import { getServerDeps } from "@/lib/deps/server";
+import { ContactsOnboardingModal } from "./_ContactsOnboardingModal";
 import { NewRelationshipModal } from "./_NewRelationshipModal";
 import { RelationshipsIndexCharts } from "./_RelationshipsIndexCharts";
 import {
@@ -277,6 +278,7 @@ export default async function RelationshipsIndexPage() {
       )}
 
       <Suspense fallback={null}>
+        <ContactsOnboardingModal contactCount={contactRels.length} />
         <NewRelationshipModal contacts={contactOptions} />
       </Suspense>
     </div>
