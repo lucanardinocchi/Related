@@ -1,8 +1,14 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   EVENTS_GOOGLE_OWNED_COLUMNS,
   EVENTS_USER_OWNED_COLUMNS,
+  eventsUpsertKeys,
+  persistCalendarSyncSnapshot,
   toEventsGoogleRow,
+  toEventsOutlookRow,
+  toEventsRowForProvider,
   toSignalRow,
+  toSignalRowForProvider,
 } from "./calendarSyncDualWrite";
 
 describe("calendarSyncDualWrite", () => {
@@ -32,6 +38,17 @@ describe("calendarSyncDualWrite", () => {
     });
   });
 
+  it("prefixes Outlook signal event_ids", () => {
+    expect(toSignalRowForProvider("outlook", "owner-1", event)).toEqual({
+      owner_id: "owner-1",
+      event_id: "outlook:google-abc",
+      title: "Standup",
+      start: event.start,
+      end: event.end,
+      is_all_day: false,
+    });
+  });
+
   it("maps a fetcher event to events table Google upsert shape", () => {
     expect(toEventsGoogleRow("owner-1", event)).toEqual({
       owner_id: "owner-1",
@@ -43,5 +60,71 @@ describe("calendarSyncDualWrite", () => {
       is_all_day: false,
       location: "Zoom",
     });
+  });
+
+  it("maps Outlook events with prefixed external_event_id", () => {
+    expect(toEventsOutlookRow("owner-1", event)).toEqual({
+      owner_id: "owner-1",
+      external_event_id: "outlook:google-abc",
+      source: "outlook",
+      title: "Standup",
+      start: event.start,
+      end: event.end,
+      is_all_day: false,
+      location: "Zoom",
+    });
+  });
+
+  it("events upsert payload omits user-owned enrichment columns", () => {
+    for (const provider of ["google", "outlook"] as const) {
+      const row = toEventsRowForProvider(provider, "owner-1", event);
+      const keys = eventsUpsertKeys(row);
+      for (const col of EVENTS_USER_OWNED_COLUMNS) {
+        expect(keys).not.toContain(col);
+      }
+      for (const col of EVENTS_GOOGLE_OWNED_COLUMNS) {
+        expect(keys).toContain(col);
+      }
+    }
+  });
+
+  it("persistCalendarSyncSnapshot upserts only provider-owned events columns", async () => {
+    const upsert = jest.fn().mockResolvedValue({ data: null, error: null });
+    const makeDeleteChain = () => {
+      const chain: { eq: jest.Mock; not: jest.Mock; like: jest.Mock } = {} as never;
+      chain.eq = jest.fn(() => chain);
+      chain.not = jest.fn(() => chain);
+      chain.like = jest.fn(() => chain);
+      return chain;
+    };
+    const deleteFn = jest.fn(() => makeDeleteChain());
+    const from = jest.fn((table: string) => {
+      if (table === "events") {
+        return {
+          upsert,
+          delete: deleteFn,
+          select: jest.fn(() => ({
+            eq: jest.fn(() => ({
+              in: jest.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+          })),
+        };
+      }
+      return { upsert, delete: deleteFn };
+    });
+    const supabase = { from } as unknown as SupabaseClient;
+
+    await persistCalendarSyncSnapshot(supabase, "google", "owner-1", [event]);
+
+    const eventsUpsertCall = upsert.mock.calls.find(
+      ([rows]) =>
+        Array.isArray(rows) &&
+        rows[0]?.external_event_id === "google-abc",
+    );
+    expect(eventsUpsertCall).toBeDefined();
+    const row = (eventsUpsertCall![0] as Array<Record<string, unknown>>)[0];
+    for (const col of EVENTS_USER_OWNED_COLUMNS) {
+      expect(row).not.toHaveProperty(col);
+    }
   });
 });
