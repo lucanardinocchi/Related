@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Mic, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
@@ -9,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Body, Eyebrow, Mono, Small } from "@/components/ui/Typography";
 import { cn } from "@/lib/cn";
 import { MarketingLinkButton } from "./MarketingLinkButton";
+import { PocketDeviceIllustration } from "./PocketDeviceIllustration";
 
 const POCKET_URL = "https://heypocket.com";
 
@@ -163,15 +163,8 @@ function PocketDeviceShowcase({
           />
         ) : null}
 
-        <div className="relative aspect-square">
-          <Image
-            src="/marketing/pocket-device.png"
-            alt="Pocket AI voice recorder on a phone"
-            fill
-            sizes="(max-width: 768px) 280px, 340px"
-            className="object-contain"
-            priority={false}
-          />
+        <div className="relative flex aspect-[3/5] items-center justify-center px-6 py-2">
+          <PocketDeviceIllustration recording={recording} />
         </div>
 
         <div className="mt-4 rounded-lg border border-border bg-surface px-4 py-3">
