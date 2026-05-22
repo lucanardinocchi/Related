@@ -67,16 +67,7 @@ export function AgentView({ initialChats }: AgentViewProps) {
     [],
   );
 
-  const [chats, setChats] = useState<ChatSummary[]>(initialChats);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialChats.find((c) => !c.closedAt)?.id ??
-      initialChats[0]?.id ??
-      null,
-  );
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
-  const [working, setWorking] = useState(false);
   const [voiceState, setVoiceState] = useState<
     "idle" | "recording" | "transcribing"
   >("idle");
@@ -96,6 +87,33 @@ export function AgentView({ initialChats }: AgentViewProps) {
   const chatListRef = useRef<HTMLDivElement>(null);
   const [chatListOverflows, setChatListOverflows] = useState(false);
 
+  const showErrorToast = useCallback(
+    (text: string) => setToast({ kind: "error", text }),
+    [],
+  );
+
+  const {
+    chats,
+    selectedChatId,
+    selectedChat,
+    selectChat,
+    messages,
+    loadingMessages,
+    responding: agentResponding,
+    working,
+    refreshChats,
+    createChat,
+    deleteSelectedChat,
+    sendMessage,
+    closeSelectedChat,
+  } = useConversationalChat({
+    chatsClient,
+    initialChats,
+    streamErrorPrefix: "Agent didn't respond: ",
+    onStreamError: showErrorToast,
+    onMessageLoadError: showErrorToast,
+  });
+
   const { promptOpen, dismissPrompt } = useSpeakerResolutionPrompt(
     ambiguities.length,
   );
@@ -112,11 +130,6 @@ export function AgentView({ initialChats }: AgentViewProps) {
   useEffect(() => {
     void refreshAmbiguities();
   }, [refreshAmbiguities]);
-
-  const selectedChat = useMemo(
-    () => chats.find((c) => c.id === selectedId) ?? null,
-    [chats, selectedId],
-  );
 
   const filteredChats = useMemo(
     () => filterChatSummaries(chats, chatSearch),
@@ -138,189 +151,82 @@ export function AgentView({ initialChats }: AgentViewProps) {
     return () => ro.disconnect();
   }, [filteredChats, chatListScrollable, ambiguities.length]);
 
-  const { responding: agentResponding, runAgentRespondStream, closeChatAndExtract } =
-    useConversationalChat({
-      chatsClient,
-      streamErrorPrefix: "Agent didn't respond: ",
-      onStreamError: (text) => setToast({ kind: "error", text }),
-    });
-
-  // Toast auto-dismiss.
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 6000);
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Load messages whenever the selected chat changes.
-  useEffect(() => {
-    if (!selectedId) {
-      setMessages([]);
-      return;
-    }
-    let cancelled = false;
-    setLoadingMessages(true);
-    chatsClient
-      .listMessages(selectedId)
-      .then((rows) => {
-        if (!cancelled) setMessages(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setToast({
-            kind: "error",
-            text: err instanceof Error ? err.message : String(err),
-          });
-          setMessages([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingMessages(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId, chatsClient]);
-
-  // Pin transcript to bottom on new content.
   useEffect(() => {
     const el = transcriptRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [messages, agentResponding]);
 
-  const refreshChats = useCallback(async () => {
-    const list = await chatsClient.listAgentChats();
-    setChats(list);
-  }, [chatsClient]);
-
   const handleSpeakerResolved = useCallback(
     async (chatId: string) => {
       await refreshChats();
       await refreshAmbiguities();
-      setSelectedId(chatId);
+      selectChat(chatId);
       setToast({
         kind: "success",
         text: "Transcript imported. Relationship context extracted.",
       });
     },
-    [refreshChats, refreshAmbiguities],
+    [refreshAmbiguities, refreshChats, selectChat],
   );
 
   const handleNewChat = async () => {
-    setWorking(true);
     try {
-      const chat = await chatsClient.createChat();
-      setSelectedId(chat.id);
-      setMessages([]);
-      await refreshChats();
+      await createChat();
     } catch (err) {
-      setToast({
-        kind: "error",
-        text: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setWorking(false);
+      showErrorToast(err instanceof Error ? err.message : String(err));
     }
   };
 
-  const sendUserMessage = async (text: string) => {
+  const handleSend = async () => {
     if (!selectedChat || selectedChat.closedAt) return;
-    const trimmed = text.trim();
+    const trimmed = draft.trim();
     if (!trimmed) return;
-
-    setWorking(true);
     setDraft("");
-    try {
-      const userMsg = await chatsClient.appendMessage({
-        chatId: selectedChat.id,
-        role: "user",
-        content: trimmed,
-      });
-      setMessages((prev) => [...prev, userMsg]);
-
-      // Auto-title the chat from the first user message (Q12).
-      if (!selectedChat.title && messages.length === 0) {
-        const proposed = trimmed.slice(0, 60);
-        try {
-          await chatsClient.renameChat(selectedChat.id, proposed);
-        } catch {
-          // non-fatal
-        }
-      }
-
-      await runAgentRespondStream(selectedChat.id, setMessages);
-      await refreshChats();
-    } catch (err) {
-      setToast({
-        kind: "error",
-        text: err instanceof Error ? err.message : String(err),
-      });
+    const result = await sendMessage(trimmed);
+    if (!result.ok) {
+      showErrorToast(result.error);
       setDraft(trimmed);
-    } finally {
-      setWorking(false);
     }
   };
-
-  const handleSend = () => sendUserMessage(draft);
 
   const handleClose = async () => {
     if (!selectedChat || selectedChat.closedAt) return;
-    setWorking(true);
     try {
-      await closeChatAndExtract(selectedChat.id, {
-        onClosed: refreshChats,
+      await closeSelectedChat({
         onExtracting: () =>
           setToast({ kind: "info", text: "Chat closed. Extracting context…" }),
         onExtractResult: (result) => {
           if ("skipped" in result && result.skipped) {
-            setToast({
-              kind: "info",
-              text: `Extraction skipped: ${result.reason}.`,
-            });
+            setToast({ kind: "info", text: `Extraction skipped: ${result.reason}.` });
           } else if ("ok" in result) {
-            setToast({
-              kind: "success",
-              text: formatExtractionResult(result),
-            });
+            setToast({ kind: "success", text: formatExtractionResult(result) });
           }
         },
         onExtractError: (err) =>
           setToast({
             kind: "error",
-            text:
-              "Chat closed, but extraction failed: " +
-              (err instanceof Error ? err.message : String(err)),
+            text: "Chat closed, but extraction failed: " + (err instanceof Error ? err.message : String(err)),
           }),
       });
-      await refreshChats();
     } catch (err) {
-      setToast({
-        kind: "error",
-        text: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setWorking(false);
+      showErrorToast(err instanceof Error ? err.message : String(err));
     }
   };
 
   const handleDelete = async () => {
     if (!selectedChat) return;
     if (!window.confirm("Delete this chat? This cannot be undone.")) return;
-    setWorking(true);
     try {
-      await chatsClient.deleteChat(selectedChat.id);
-      const remaining = chats.filter((c) => c.id !== selectedChat.id);
-      setChats(remaining);
-      setSelectedId(remaining[0]?.id ?? null);
-      setMessages([]);
+      await deleteSelectedChat();
     } catch (err) {
-      setToast({
-        kind: "error",
-        text: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setWorking(false);
+      showErrorToast(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -447,10 +353,10 @@ export function AgentView({ initialChats }: AgentViewProps) {
                   <li key={chat.id}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(chat.id)}
+                      onClick={() => selectChat(chat.id)}
                       className={cn(
                         "w-full rounded-md px-2.5 py-2 text-left transition-colors",
-                        chat.id === selectedId
+                        chat.id === selectedChatId
                           ? "bg-active text-fg"
                           : "text-fg-muted hover:bg-hover hover:text-fg",
                       )}

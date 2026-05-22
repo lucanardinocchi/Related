@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./chats/useConversationalChat": "./src/chats/useConversationalChat.ts",
+    "./chats/useChatLifecycle": "./src/chats/useChatLifecycle.ts",
     "./conversational": "./src/conversational/index.ts",
     "./conversational/*": "./src/conversational/*.ts"
   },
@@ -21,11 +22,15 @@
     "react": ">=18"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.9.0",
     "@types/react": "~19.1.0",
+    "@types/react-dom": "~19.1.0",
     "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
     "react": "19.1.0",
+    "react-dom": "19.1.0",
     "ts-jest": "^29.2.5",
     "typescript": "^5.6.3"
   }
