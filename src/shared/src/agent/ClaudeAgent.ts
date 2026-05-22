@@ -1,4 +1,4 @@
-import type { AgentCaller, AgentPrompt, CandidateActionInput } from "./PassEngine";
+import type { AgentCaller, AgentPrompt, CandidateActionInput } from "./agentPassRun";
 import {
   AMBIENT_SYSTEM_PROMPT,
   AMBIENT_TOOLS,

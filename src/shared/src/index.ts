@@ -109,6 +109,8 @@ export {
   isUserVisibleCandidateAction,
 } from "./candidates/candidateSet";
 
+export { runAgentPass } from "./agent/agentPassRun";
+export type { AgentPassRunDeps } from "./agent/agentPassRun";
 export {
   PassEngine,
   DoNothingAgent,
