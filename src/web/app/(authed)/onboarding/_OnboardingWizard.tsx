@@ -38,7 +38,7 @@ import {
   type OnboardingWizardStepId,
 } from "./onboardingSteps";
 
-const RETURN_PATH = "/onboarding";
+const DEFAULT_RETURN_PATH = "/onboarding";
 
 interface ConnectionSnapshot {
   calendar: boolean;
@@ -50,7 +50,11 @@ interface ConnectionSnapshot {
   tiktok: boolean;
 }
 
-interface Props extends ConnectionSnapshot, IntegrationEnvConfig {}
+interface Props extends ConnectionSnapshot, IntegrationEnvConfig {
+  returnPath?: string;
+  onFinished?: () => void;
+  embedded?: boolean;
+}
 
 export function OnboardingWizard({
   calendar: initialCalendar,
@@ -65,6 +69,9 @@ export function OnboardingWizard({
   whatsappAppId,
   tiktokClientKey,
   microsoftClientId,
+  returnPath = DEFAULT_RETURN_PATH,
+  onFinished,
+  embedded = false,
 }: Props) {
   const router = useRouter();
   const [currentStepId, setCurrentStepId] =
@@ -114,7 +121,7 @@ export function OnboardingWizard({
     if (captureRunning.current) return;
     captureRunning.current = true;
     try {
-      const result = await captureGoogleProviderTokens(RETURN_PATH);
+      const result = await captureGoogleProviderTokens(returnPath);
       if (result) {
         setCalendarConnected(result.calendar);
         setGmailConnected(result.gmail);
@@ -128,10 +135,10 @@ export function OnboardingWizard({
     } finally {
       captureRunning.current = false;
     }
-  }, []);
+  }, [returnPath]);
 
   useEffect(() => {
-    setOAuthReturnPath(RETURN_PATH);
+    setOAuthReturnPath(returnPath);
     let cancelled = false;
     (async () => {
       const { onboarding } = getBrowserDeps();
@@ -149,7 +156,7 @@ export function OnboardingWizard({
       cancelled = true;
       unsubscribe();
     };
-  }, [captureProviderTokens, refreshAll]);
+  }, [captureProviderTokens, refreshAll, returnPath]);
 
   function markStepComplete(stepId: OnboardingWizardStepId) {
     setCompletedStepIds((prev) =>
@@ -196,8 +203,12 @@ export function OnboardingWizard({
     try {
       const { onboarding } = getBrowserDeps();
       await onboarding.finishOnboarding();
-      router.replace("/relationships");
-      router.refresh();
+      if (onFinished) {
+        onFinished();
+      } else {
+        router.replace("/relationships");
+        router.refresh();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not finish setup");
       setFinishing(false);
@@ -217,7 +228,12 @@ export function OnboardingWizard({
   const connectedCount = Object.values(connections).filter(Boolean).length;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 lg:flex-row lg:gap-12">
+    <div
+      className={cn(
+        "mx-auto flex w-full flex-col lg:flex-row",
+        embedded ? "gap-6 lg:gap-8" : "max-w-3xl gap-8 lg:gap-12",
+      )}
+    >
       <aside className="lg:w-56 lg:shrink-0">
         <OnboardingStepChecklist
           currentStepId={currentStepId}
@@ -249,7 +265,7 @@ export function OnboardingWizard({
                 disabled={working !== null}
                 onConnect={() =>
                   void runConnect("calendar", () =>
-                    connectGoogleCalendar(RETURN_PATH),
+                    connectGoogleCalendar(returnPath),
                   )
                 }
               />
@@ -268,7 +284,7 @@ export function OnboardingWizard({
                 }
                 onConnect={() =>
                   void runConnect("outlook", () =>
-                    connectOutlookCalendar(RETURN_PATH, microsoftClientId!),
+                    connectOutlookCalendar(returnPath, microsoftClientId!),
                   )
                 }
               />
@@ -285,7 +301,7 @@ export function OnboardingWizard({
               loading={working === "gmail"}
               disabled={working !== null}
               onConnect={() =>
-                void runConnect("gmail", () => connectGoogleGmail(RETURN_PATH))
+                void runConnect("gmail", () => connectGoogleGmail(returnPath))
               }
             />
           ) : null}
@@ -307,7 +323,7 @@ export function OnboardingWizard({
                 }
                 onConnect={() =>
                   void runConnect("instagram", () =>
-                    connectInstagram(RETURN_PATH, instagramAppId!),
+                    connectInstagram(returnPath, instagramAppId!),
                   )
                 }
               />
@@ -329,7 +345,7 @@ export function OnboardingWizard({
                     : undefined
                 }
                 onConnect={() =>
-                  void runConnect("x", () => connectX(RETURN_PATH, xClientId!))
+                  void runConnect("x", () => connectX(returnPath, xClientId!))
                 }
               />
               <IntegrationCard
@@ -347,7 +363,7 @@ export function OnboardingWizard({
                 }
                 onConnect={() =>
                   void runConnect("whatsapp", () =>
-                    connectWhatsApp(RETURN_PATH, whatsappAppId!),
+                    connectWhatsApp(returnPath, whatsappAppId!),
                   )
                 }
               />
@@ -370,7 +386,7 @@ export function OnboardingWizard({
                 }
                 onConnect={() =>
                   void runConnect("tiktok", () =>
-                    connectTikTok(RETURN_PATH, tiktokClientKey!),
+                    connectTikTok(returnPath, tiktokClientKey!),
                   )
                 }
               />

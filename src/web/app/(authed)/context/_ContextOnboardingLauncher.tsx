@@ -4,9 +4,23 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { Button, Modal } from "@/components/ui";
+import type { IntegrationEnvConfig } from "@/lib/integrations/integrationConnect";
+import { ContextOnboardingOverlay } from "./_ContextOnboardingOverlay";
 
-export function ContextOnboardingLauncher() {
+interface ConnectionSnapshot {
+  calendar: boolean;
+  outlook: boolean;
+  gmail: boolean;
+  instagram: boolean;
+  x: boolean;
+  whatsapp: boolean;
+  tiktok: boolean;
+}
+
+export type ContextOnboardingLauncherProps = ConnectionSnapshot &
+  IntegrationEnvConfig;
+
+export function ContextOnboardingLauncher(props: ContextOnboardingLauncherProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const open = searchParams.get("onboarding") === "1";
@@ -41,21 +55,7 @@ export function ContextOnboardingLauncher() {
         <span>Set up Related</span>
       </button>
 
-      <Modal
-        open={open}
-        onClose={close}
-        title="Set up Related"
-        subtitle="Connect accounts and finish your setup."
-        footer={
-          <Button variant="ghost" onClick={close}>
-            Close
-          </Button>
-        }
-      >
-        <p className="text-[14px] text-fg-muted">
-          Onboarding setup will appear here.
-        </p>
-      </Modal>
+      <ContextOnboardingOverlay open={open} onClose={close} {...props} />
     </>
   );
 }
