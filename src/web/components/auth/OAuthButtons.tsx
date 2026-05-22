@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { OAuthSignInProvider } from "@related/shared";
 import { ProviderSignInButton } from "@/components/auth/ProviderSignInButton";
+import { Button, Modal } from "@/components/ui";
 import { buildAuthOAuthRedirectTo } from "@/lib/auth/oauthRedirect";
 import { getBrowserDeps } from "@/lib/deps/client";
 
@@ -20,6 +21,7 @@ export function OAuthButtons({
   const [error, setError] = useState<string | null>(null);
   const [loadingProvider, setLoadingProvider] =
     useState<OAuthSignInProvider | null>(null);
+  const [appleComingSoonOpen, setAppleComingSoonOpen] = useState(false);
 
   async function startOAuth(provider: OAuthSignInProvider) {
     setError(null);
@@ -48,11 +50,29 @@ export function OAuthButtons({
       <ProviderSignInButton
         provider="apple"
         action={action}
-        loading={loadingProvider === "apple"}
         disabled={loadingProvider !== null}
-        onClick={() => void startOAuth("apple")}
+        onClick={() => setAppleComingSoonOpen(true)}
       />
       {error ? <p className="text-sm text-danger">{error}</p> : null}
+
+      <Modal
+        open={appleComingSoonOpen}
+        onClose={() => setAppleComingSoonOpen(false)}
+        title={action === "sign-up" ? "Sign up with Apple" : "Sign in with Apple"}
+        subtitle="Coming soon"
+        size="sm"
+        footer={
+          <Button type="button" onClick={() => setAppleComingSoonOpen(false)}>
+            OK
+          </Button>
+        }
+      >
+        <p className="text-[14px] leading-[22px] text-fg-subtle">
+          {action === "sign-up" ? "Sign up" : "Sign in"} with Apple isn&apos;t
+          available yet. Use Google or email to
+          {action === "sign-up" ? " create your account" : " sign in"} for now.
+        </p>
+      </Modal>
     </div>
   );
 }
