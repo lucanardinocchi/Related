@@ -12,14 +12,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type {
   ChatMessage,
-  ChatSummary,
   ChatsClient,
   STTAdapter,
   ToolCallSummary,
   TTSPlayback,
-  formatExtractionResult,
 } from "@related/shared";
-import { filterChatSummaries } from "@related/shared";
+import { filterChatSummaries, formatExtractionResult } from "@related/shared";
 import { useConversationalChat } from "@related/shared/chats/useConversationalChat";
 import type { AudioCaptureHandle } from "./voice/ExpoAudioRecorder";
 import { colors, fonts, fontSizes, lineHeights, radii } from "./ui/tokens";
@@ -58,16 +56,9 @@ export function MobileChatScreen({
   ttsPlayback,
 }: MobileChatScreenProps) {
   const insets = useSafeAreaInsets();
-  const [chatList, setChatList] = useState<ChatSummary[]>([]);
-  const [selectedChatId, setSelectedChatId] = useState<string | null>(
-    initialChatId ?? null,
-  );
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMsg | null>(null);
-  const [working, setWorking] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [ttsMuted, setTtsMuted] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -82,10 +73,38 @@ export function MobileChatScreen({
   const micEnabled = !!(startMicCapture && sttAdapter);
   const hasDraft = draft.trim().length > 0;
 
-  const selectedChat = useMemo(
-    () => chatList.find((c) => c.id === selectedChatId) ?? null,
-    [chatList, selectedChatId],
+  const showErrorToast = useCallback(
+    (text: string) => setToast({ kind: "error", text }),
+    [],
   );
+
+  const {
+    chats: chatList,
+    selectedChatId,
+    selectedChat,
+    selectChat,
+    messages,
+    loadingMessages,
+    responding,
+    working,
+    createChat,
+    deleteSelectedChat,
+    sendMessage,
+    closeSelectedChat,
+  } = useConversationalChat({
+    chatsClient,
+    initialChatId,
+    autoCreateWhenEmpty: true,
+    streamErrorPrefix: "Agent didn't respond: ",
+    onStreamError: showErrorToast,
+    onMessageLoadError: showErrorToast,
+    onListLoadError: (message) => setError(message),
+    onStreamDone: (message) => {
+      if (ttsPlayback && !ttsMuted && message.content) {
+        void ttsPlayback.play(message.content).catch(() => {});
+      }
+    },
+  });
 
   const filteredChatList = useMemo(
     () => filterChatSummaries(chatList, chatSearch),
@@ -99,18 +118,6 @@ export function MobileChatScreen({
     !chatListScrollable &&
     drawerContentHeight > drawerListHeight + 2 &&
     drawerListHeight > 0;
-
-  const { responding, runAgentRespondStream, closeChatAndExtract } =
-    useConversationalChat({
-      chatsClient,
-      streamErrorPrefix: "Agent didn't respond: ",
-      onStreamError: (text) => setToast({ kind: "error", text }),
-      onStreamDone: (message) => {
-        if (ttsPlayback && !ttsMuted && message.content) {
-          void ttsPlayback.play(message.content).catch(() => {});
-        }
-      },
-    });
 
   useEffect(() => {
     if (!toast) return;
@@ -128,255 +135,35 @@ export function MobileChatScreen({
     }
   }, [drawerOpen]);
 
-  const refreshChats = useCallback(async () => {
-    const list = await chatsClient.listAgentChats();
-    setChatList(list);
-  }, [chatsClient]);
-
-  const handleMic = useCallback(async () => {
-    if (!micEnabled) return;
-    if (responding || voiceState === "transcribing" || selectedChat?.closedAt) {
-      return;
-    }
-
-    if (voiceState === "idle") {
-      try {
-        const handle = await startMicCapture!();
-        captureRef.current = handle;
-        setVoiceState("recording");
-      } catch (err) {
-        setToast({
-          kind: "error",
-          text: err instanceof Error ? err.message : String(err),
-        });
-      }
-      return;
-    }
-
-    const handle = captureRef.current;
-    if (!handle) return;
-    handle.stop();
-    captureRef.current = null;
-    setVoiceState("transcribing");
-    try {
-      let transcript = "";
-      for await (const ev of sttAdapter!.transcribeStream({
-        audio: handle.audio,
-      })) {
-        const text = (ev as { text?: string; final?: string }).text;
-        const final = (ev as { final?: string }).final;
-        if (final) transcript = final;
-        else if (text) transcript += text;
-      }
-      if (transcript) {
-        setDraft((prev) => (prev ? `${prev} ${transcript}` : transcript));
-      }
-    } catch (err) {
-      setToast({
-        kind: "error",
-        text:
-          "Voice transcription failed: " +
-          (err instanceof Error ? err.message : String(err)),
-      });
-    } finally {
-      setVoiceState("idle");
-    }
-  }, [
-    micEnabled,
-    responding,
-    selectedChat?.closedAt,
-    sttAdapter,
-    startMicCapture,
-    voiceState,
-  ]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = await chatsClient.listAgentChats();
-        if (cancelled) return;
-        setChatList(list);
-
-        const preferredId =
-          initialChatId ?? list.find((c) => !c.closedAt)?.id ?? null;
-
-        if (preferredId) {
-          setSelectedChatId(preferredId);
-          return;
-        }
-
-        const created = await chatsClient.createChat();
-        if (cancelled) return;
-        setChatList((prev) => [
-          {
-            id: created.id,
-            title: created.title,
-            source: created.source,
-            createdAt: created.createdAt,
-            closedAt: created.closedAt,
-            extractedAt: created.extractedAt,
-            lastMessagePreview: null,
-            lastMessageAt: null,
-            messageCount: 0,
-          },
-          ...prev,
-        ]);
-        setSelectedChatId(created.id);
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [chatsClient, initialChatId]);
-
-  useEffect(() => {
-    if (!selectedChatId) return;
-    let cancelled = false;
-    setLoadingMessages(true);
-    chatsClient
-      .listMessages(selectedChatId)
-      .then((rows) => {
-        if (!cancelled) setMessages(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setToast({
-            kind: "error",
-            text: err instanceof Error ? err.message : String(err),
-          });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingMessages(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [chatsClient, selectedChatId]);
-
   const handleNewChat = async () => {
-    setWorking(true);
     setDrawerOpen(false);
-    try {
-      const chat = await chatsClient.createChat();
-      setSelectedChatId(chat.id);
-      setMessages([]);
-      setDraft("");
-      await refreshChats();
-    } catch (err) {
-      setToast({
-        kind: "error",
-        text: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setWorking(false);
-    }
+    try { await createChat(); setDraft(""); }
+    catch (err) { showErrorToast(err instanceof Error ? err.message : String(err)); }
   };
-
   const handleClose = async () => {
     if (!selectedChat || selectedChat.closedAt) return;
-    setWorking(true);
     try {
-      await closeChatAndExtract(selectedChat.id, {
-        onClosed: refreshChats,
-        onExtracting: () =>
-          setToast({ kind: "info", text: "Chat closed. Extracting context…" }),
-        onExtractResult: (result) => {
-          setToast({
-            kind: "success",
-            text: formatExtractionResult(result),
-          });
-        },
-        onExtractError: (err) =>
-          setToast({
-            kind: "error",
-            text:
-              "Chat closed, but extraction failed: " +
-              (err instanceof Error ? err.message : String(err)),
-          }),
+      await closeSelectedChat({
+        onExtracting: () => setToast({ kind: "info", text: "Chat closed. Extracting context…" }),
+        onExtractResult: (result) => setToast({ kind: "success", text: formatExtractionResult(result) }),
+        onExtractError: (err) => setToast({ kind: "error", text: "Chat closed, but extraction failed: " + (err instanceof Error ? err.message : String(err)) }),
       });
-      await refreshChats();
       setDrawerOpen(false);
-    } catch (err) {
-      setToast({
-        kind: "error",
-        text: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setWorking(false);
-    }
+    } catch (err) { showErrorToast(err instanceof Error ? err.message : String(err)); }
   };
-
   const handleDelete = async () => {
     if (!selectedChat) return;
-    setWorking(true);
-    try {
-      await chatsClient.deleteChat(selectedChat.id);
-      const remaining = chatList.filter((c) => c.id !== selectedChat.id);
-      setChatList(remaining);
-      setSelectedChatId(remaining[0]?.id ?? null);
-      setMessages([]);
-      setDrawerOpen(false);
-    } catch (err) {
-      setToast({
-        kind: "error",
-        text: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setWorking(false);
-    }
+    try { await deleteSelectedChat(); setDrawerOpen(false); }
+    catch (err) { showErrorToast(err instanceof Error ? err.message : String(err)); }
   };
-
   const sendTurn = useCallback(async () => {
     const trimmed = draft.trim();
-    if (!trimmed || !selectedChatId || responding || selectedChat?.closedAt) {
-      return;
-    }
-    setDraft("");
-    setError(null);
-    setWorking(true);
-
-    let userMsg: ChatMessage;
-    try {
-      userMsg = await chatsClient.appendMessage({
-        chatId: selectedChatId,
-        role: "user",
-        content: trimmed,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setWorking(false);
-      return;
-    }
-    setMessages((prev) => [...prev, userMsg]);
-
-    if (!selectedChat?.title && messages.length === 0) {
-      try {
-        await chatsClient.renameChat(selectedChatId, trimmed.slice(0, 60));
-        await refreshChats();
-      } catch {
-        /* non-fatal */
-      }
-    }
-
-    await runAgentRespondStream(selectedChatId, setMessages);
-    await refreshChats();
-    setWorking(false);
-  }, [
-    chatsClient,
-    draft,
-    messages.length,
-    refreshChats,
-    responding,
-    runAgentRespondStream,
-    selectedChat?.closedAt,
-    selectedChat?.title,
-    selectedChatId,
-  ]);
+    if (!trimmed || !selectedChatId || responding || selectedChat?.closedAt) return;
+    setDraft(""); setError(null);
+    const result = await sendMessage(trimmed);
+    if (!result.ok && result.phase === "append") setError(result.error);
+    else if (!result.ok && result.phase === "other") showErrorToast(result.error);
+  }, [draft, responding, selectedChat?.closedAt, selectedChatId, sendMessage, showErrorToast]);
 
   const headerTitle = selectedChat?.title ?? "Related";
   const isPocket = selectedChat?.source === "pocket";
@@ -665,7 +452,7 @@ export function MobileChatScreen({
                   <Pressable
                     accessibilityRole="button"
                     onPress={() => {
-                      setSelectedChatId(item.id);
+                      selectChat(item.id);
                       setDrawerOpen(false);
                     }}
                     style={[
