@@ -22,16 +22,18 @@ export interface AnthropicContentBlock {
   input?: Record<string, unknown>;
 }
 
+export interface AnthropicUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+}
+
 export interface AnthropicMessageStream {
   on(event: "text", handler: (delta: string) => void): void;
   finalMessage(): Promise<{
     content?: AnthropicContentBlock[];
-    usage?: {
-      input_tokens?: number;
-      output_tokens?: number;
-      cache_creation_input_tokens?: number | null;
-      cache_read_input_tokens?: number | null;
-    };
+    usage?: AnthropicUsage;
   }>;
 }
 
@@ -47,7 +49,22 @@ export interface AnthropicStreamingClient {
   };
 }
 
-export interface ConversationalToolLoopCallbacks {
+export interface AnthropicCreateClient {
+  messages: {
+    create(req: {
+      model: string;
+      max_tokens: number;
+      system: unknown;
+      tools: unknown;
+      messages: unknown;
+    }): Promise<{
+      content?: AnthropicContentBlock[];
+      usage?: AnthropicUsage;
+    }>;
+  };
+}
+
+export interface AgentToolLoopCallbacks {
   onTextDelta?: (delta: string) => void;
   onToolUse?: (tool: {
     id: string;
@@ -62,6 +79,42 @@ export interface ConversationalToolLoopCallbacks {
   onRoundComplete?: (round: AgentRoundTrace) => void;
 }
 
+/** @deprecated Use AgentToolLoopCallbacks */
+export type ConversationalToolLoopCallbacks = AgentToolLoopCallbacks;
+
+export type CallModelFn = (params: {
+  model: string;
+  max_tokens: number;
+  system: unknown;
+  tools: unknown;
+  messages: unknown;
+  onTextDelta?: (delta: string) => void;
+}) => Promise<{
+  content: AnthropicContentBlock[];
+  usage?: AnthropicUsage;
+}>;
+
+export interface RunAgentToolLoopOptions {
+  callModel: CallModelFn;
+  system: unknown;
+  tools: unknown;
+  messages: Array<{ role: "user" | "assistant"; content: string | unknown[] }>;
+  dispatchTool: (
+    name: string,
+    input: Record<string, unknown>,
+  ) => Promise<unknown> | unknown;
+  model: string;
+  maxTokens: number;
+  maxToolRounds: number;
+  roundLimitMessage?: string | null;
+  callbacks?: AgentToolLoopCallbacks;
+}
+
+export interface RunAgentToolLoopResult {
+  text: string;
+  toolCalls: ToolCallSummary[];
+}
+
 export interface RunConversationalToolLoopOptions {
   client: AnthropicStreamingClient;
   history: Array<{ role: "user" | "assistant"; content: string }>;
@@ -73,13 +126,10 @@ export interface RunConversationalToolLoopOptions {
   model?: string;
   maxTokens?: number;
   maxToolRounds?: number;
-  callbacks?: ConversationalToolLoopCallbacks;
+  callbacks?: AgentToolLoopCallbacks;
 }
 
-export interface RunConversationalToolLoopResult {
-  text: string;
-  toolCalls: ToolCallSummary[];
-}
+export type RunConversationalToolLoopResult = RunAgentToolLoopResult;
 
 export function buildConversationalSystemBlocks(contextBlock: string) {
   return [
@@ -97,45 +147,80 @@ export function previewToolResultJson(result: unknown): string {
   return json.length > 4000 ? json.slice(0, 4000) + "…" : json;
 }
 
-/**
- * Multi-round Anthropic tool-use loop shared by chat-respond (SSE) and eval harness (trace).
- */
-export async function runConversationalToolLoop(
-  options: RunConversationalToolLoopOptions,
-): Promise<RunConversationalToolLoopResult> {
-  const model = options.model ?? CONVERSATIONAL_MODEL;
-  const maxTokens = options.maxTokens ?? CONVERSATIONAL_MAX_TOKENS;
-  const maxToolRounds = options.maxToolRounds ?? CONVERSATIONAL_MAX_TOOL_ROUNDS;
-  const toolCalls: ToolCallSummary[] = [];
-  const systemBlocks = buildConversationalSystemBlocks(options.contextBlock);
-
-  const working: Array<{
-    role: "user" | "assistant";
-    content: string | unknown[];
-  }> = options.history.map((m) => ({ role: m.role, content: m.content }));
-
-  let finalText = "";
-
-  for (let round = 0; round < maxToolRounds; round++) {
-    const roundStarted = Date.now();
-    const textParts: string[] = [];
-
-    const stream = options.client.messages.stream({
-      model,
-      max_tokens: maxTokens,
-      system: systemBlocks,
-      tools: CONVERSATIONAL_TOOLS,
-      messages: working,
+export function streamingCallModel(
+  client: AnthropicStreamingClient,
+): CallModelFn {
+  return async (params) => {
+    const stream = client.messages.stream({
+      model: params.model,
+      max_tokens: params.max_tokens,
+      system: params.system,
+      tools: params.tools,
+      messages: params.messages,
     });
 
     stream.on("text", (delta: string) => {
       if (!delta) return;
-      textParts.push(delta);
-      options.callbacks?.onTextDelta?.(delta);
+      params.onTextDelta?.(delta);
     });
 
     const finalMessage = await stream.finalMessage();
-    const blocks = finalMessage.content ?? [];
+    return {
+      content: finalMessage.content ?? [],
+      usage: finalMessage.usage,
+    };
+  };
+}
+
+export function createCallModel(client: AnthropicCreateClient): CallModelFn {
+  return async (params) => {
+    const resp = await client.messages.create({
+      model: params.model,
+      max_tokens: params.max_tokens,
+      system: params.system,
+      tools: params.tools,
+      messages: params.messages,
+    });
+
+    for (const block of resp.content ?? []) {
+      if (block.type === "text" && block.text) {
+        params.onTextDelta?.(block.text);
+      }
+    }
+
+    return {
+      content: resp.content ?? [],
+      usage: resp.usage,
+    };
+  };
+}
+
+export async function runAgentToolLoop(
+  options: RunAgentToolLoopOptions,
+): Promise<RunAgentToolLoopResult> {
+  const toolCalls: ToolCallSummary[] = [];
+  const working = options.messages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  let finalText = "";
+
+  for (let round = 0; round < options.maxToolRounds; round++) {
+    const roundStarted = Date.now();
+    const textParts: string[] = [];
+
+    const { content: blocks, usage } = await options.callModel({
+      model: options.model,
+      max_tokens: options.maxTokens,
+      system: options.system,
+      tools: options.tools,
+      messages: working,
+      onTextDelta: (delta) => {
+        textParts.push(delta);
+        options.callbacks?.onTextDelta?.(delta);
+      },
+    });
 
     const toolUses: ToolUseBlock[] = blocks
       .filter((b) => b.type === "tool_use")
@@ -151,14 +236,13 @@ export async function runConversationalToolLoop(
       toolUses,
       toolResults: [],
       text: textParts.join(""),
-      usage: finalMessage.usage
+      usage: usage
         ? {
-            input_tokens: finalMessage.usage.input_tokens,
-            output_tokens: finalMessage.usage.output_tokens,
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
             cache_creation_input_tokens:
-              finalMessage.usage.cache_creation_input_tokens ?? undefined,
-            cache_read_input_tokens:
-              finalMessage.usage.cache_read_input_tokens ?? undefined,
+              usage.cache_creation_input_tokens ?? undefined,
+            cache_read_input_tokens: usage.cache_read_input_tokens ?? undefined,
           }
         : undefined,
       latencyMs: Date.now() - roundStarted,
@@ -247,21 +331,31 @@ export async function runConversationalToolLoop(
     options.callbacks?.onRoundComplete?.(roundTrace);
     working.push({ role: "user", content: results });
 
-    if (round === maxToolRounds - 1) {
-      finalText = TOOL_ROUND_LIMIT_MESSAGE;
+    if (round === options.maxToolRounds - 1) {
+      finalText = options.roundLimitMessage ?? "";
     }
   }
 
   return { text: finalText, toolCalls };
 }
 
-/**
- * Build Anthropic message array from stored chat history.
- *
- * Per ADR-0009: stored assistant turns capture the final text plus
- * tool_calls metadata for UI rendering. Intermediate tool_use /
- * tool_result rounds are ephemeral within a single invocation.
- */
+export async function runConversationalToolLoop(
+  options: RunConversationalToolLoopOptions,
+): Promise<RunConversationalToolLoopResult> {
+  return runAgentToolLoop({
+    callModel: streamingCallModel(options.client),
+    system: buildConversationalSystemBlocks(options.contextBlock),
+    tools: CONVERSATIONAL_TOOLS,
+    messages: options.history.map((m) => ({ role: m.role, content: m.content })),
+    dispatchTool: options.dispatchTool,
+    model: options.model ?? CONVERSATIONAL_MODEL,
+    maxTokens: options.maxTokens ?? CONVERSATIONAL_MAX_TOKENS,
+    maxToolRounds: options.maxToolRounds ?? CONVERSATIONAL_MAX_TOOL_ROUNDS,
+    roundLimitMessage: TOOL_ROUND_LIMIT_MESSAGE,
+    callbacks: options.callbacks,
+  });
+}
+
 export function buildConversationalHistoryMessages(
   rows: Array<{ role: string; content: string }>,
 ): Array<{ role: "user" | "assistant"; content: string }> {

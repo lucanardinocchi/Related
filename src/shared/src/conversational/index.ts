@@ -15,14 +15,23 @@ export {
   TOOL_ROUND_LIMIT_MESSAGE,
   buildConversationalHistoryMessages,
   buildConversationalSystemBlocks,
+  createCallModel,
   previewToolResultJson,
+  runAgentToolLoop,
   runConversationalToolLoop,
+  streamingCallModel,
 } from "./agentLoop.ts";
 export type {
+  AgentToolLoopCallbacks,
   AnthropicContentBlock,
+  AnthropicCreateClient,
   AnthropicMessageStream,
   AnthropicStreamingClient,
+  AnthropicUsage,
+  CallModelFn,
   ConversationalToolLoopCallbacks,
+  RunAgentToolLoopOptions,
+  RunAgentToolLoopResult,
   RunConversationalToolLoopOptions,
   RunConversationalToolLoopResult,
 } from "./agentLoop.ts";
