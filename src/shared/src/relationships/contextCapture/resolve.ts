@@ -1,9 +1,9 @@
-import type { InteractionStatus } from "../../interactions/InteractionsClient";
-import type { ThreadDirection } from "../../open-threads/OpenThreadsClient";
+import type { InteractionStatus } from "../../interactions/InteractionsClient.ts";
+import type { ThreadDirection } from "../../open-threads/OpenThreadsClient.ts";
 import type {
   CommitmentTiming, ContextCaptureInput, ContextCaptureWrite, InteractionTiming,
   RelationshipTarget, ResolveContextCaptureOptions,
-} from "./types";
+} from "./types.ts";
 
 export function interactionStatusFromTiming(timing: InteractionTiming): InteractionStatus {
   return timing === "future" ? "planned" : "occurred";

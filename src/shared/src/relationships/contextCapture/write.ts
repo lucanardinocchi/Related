@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { InteractionsClient } from "../../interactions/InteractionsClient";
-import { OpenThreadsClient } from "../../open-threads/OpenThreadsClient";
-import type { ContextCaptureWrite, InteractionCaptureWrite, OpenThreadCaptureWrite } from "./types";
+import type { InteractionsClient } from "../../interactions/InteractionsClient.ts";
+import type { OpenThreadsClient } from "../../open-threads/OpenThreadsClient.ts";
+import type { ContextCaptureWrite, InteractionCaptureWrite, OpenThreadCaptureWrite } from "./types.ts";
 
 export type ManualContextCaptureWriter = {
   mode: "manual"; interactions: InteractionsClient; openThreads: OpenThreadsClient;

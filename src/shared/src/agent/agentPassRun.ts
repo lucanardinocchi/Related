@@ -1,16 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ensureDoNothingPeer } from "./ambientTools";
-import { initialDecisionStateForCandidateAction } from "../candidates/candidateSet";
+import { ensureDoNothingPeer } from "./ambientTools.ts";
+import { initialDecisionStateForCandidateAction } from "../candidates/candidateSet.ts";
 import type {
   CandidateActionInput,
   DecisionState,
   PassCandidateSet,
   PassMode,
   PreviousCandidateSet,
-} from "../candidates/candidateSet";
-import type { NotificationDispatcher } from "../notifications/NotificationDispatcher";
-import type { UserContextSnapshot } from "./userContextCore";
-import type { RelationshipContextSnapshot } from "./RelationshipContextBuilder";
+} from "../candidates/candidateSet.ts";
+import type { NotificationDispatcher } from "../notifications/NotificationDispatcher.ts";
+import type { UserContextSnapshot } from "./userContextCore.ts";
+import type { RelationshipContextSnapshot } from "./RelationshipContextBuilder.ts";
 
 export type {
   CandidateActionInput,
@@ -19,9 +19,9 @@ export type {
   PassMode,
   PreviousCandidateAction,
   PreviousCandidateSet,
-} from "../candidates/candidateSet";
+} from "../candidates/candidateSet.ts";
 
-export type { RelationshipContextSnapshot } from "./RelationshipContextBuilder";
+export type { RelationshipContextSnapshot } from "./RelationshipContextBuilder.ts";
 
 export interface AgentPrompt {
   mode: PassMode;

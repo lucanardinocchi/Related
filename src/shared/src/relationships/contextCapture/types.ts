@@ -2,12 +2,12 @@ import type {
   ContextCaptureSource,
   InteractionCategory,
   InteractionStatus,
-} from "../../interactions/InteractionsClient";
+} from "../../interactions/InteractionsClient.ts";
 import type {
   CommitmentCommunicationStatus,
   CommitmentOrigin,
   ThreadDirection,
-} from "../../open-threads/OpenThreadsClient";
+} from "../../open-threads/OpenThreadsClient.ts";
 
 export type ContextFamily = "interaction" | "note" | "comms" | "commitment";
 export type InteractionTiming = "past" | "future";

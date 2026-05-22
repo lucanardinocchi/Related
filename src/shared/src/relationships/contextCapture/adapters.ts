@@ -1,6 +1,6 @@
-import type { InteractionCategory, InteractionStatus } from "../../interactions/InteractionsClient";
-import type { CommitmentCommunicationStatus, CommitmentOrigin, ThreadDirection } from "../../open-threads/OpenThreadsClient";
-import type { CommitmentTiming, ContextCaptureInput, ContextFamily } from "./types";
+import type { InteractionCategory, InteractionStatus } from "../../interactions/InteractionsClient.ts";
+import type { CommitmentCommunicationStatus, CommitmentOrigin, ThreadDirection } from "../../open-threads/OpenThreadsClient.ts";
+import type { CommitmentTiming, ContextCaptureInput, ContextFamily } from "./types.ts";
 
 export type ModalContextCapturePayload = {
   family: ContextFamily; time: string; notes: string | null;
