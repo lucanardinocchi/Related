@@ -1,102 +1,71 @@
-import type {
-  AmbientUserContextSnapshot,
-  OperatorStrengthEntry,
-  TransientIntentEntry,
-  UserContextCoreSnapshot,
-  UserContextGroupSummary,
-  UserContextRelationshipSummary,
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  loadAmbientPassExtras,
+  loadUserContextCore,
+  type AmbientPassExtrasSnapshot,
+  type AmbientUserContextSnapshot,
+  type LoadUserContextCoreOptions,
+  type TransientIntentEntry,
+  type TransientIntentLoadMode,
+  type UserContextCoreSnapshot,
+  type UserContextGroupSummary,
+  type UserContextRelationshipSummary,
 } from "./userContextCore.ts";
 
-/** Conversational user-context slice embedded in ConversationContextSnapshot. */
+export const AMBIENT_PASS_USER_CONTEXT_FLAVOURS = [
+  "transientIntent", "situationalState", "goalsAndValues", "operatorStrengths", "inferredSignals",
+] as const;
+export const CONVERSATIONAL_USER_CONTEXT_FLAVOURS = [
+  "goalsAndValues", "situationalState", "recentTransientIntent",
+] as const;
+
 export interface ConversationalUserContextSlice {
   goalsAndValues: string[];
   situationalState: string | null;
   recentTransientIntent: ConversationalTransientIntentSummary[];
 }
-
 export interface ConversationalTransientIntentSummary {
-  content: string;
-  captured_at: string;
-  relationship_id: string | null;
+  content: string; captured_at: string; relationship_id: string | null;
 }
-
-/** snake_case summaries used by chat-respond prompt rendering. */
 export interface ConversationalRelationshipSummary {
-  id: string;
-  target_type: "contact" | "group";
-  role: string | null;
-  cadence: string | null;
-  name: string;
+  id: string; target_type: "contact" | "group"; role: string | null; cadence: string | null; name: string;
 }
-
-export interface ConversationalGroupSummary {
-  id: string;
-  name: string;
-  member_count: number;
-}
-
+export interface ConversationalGroupSummary { id: string; name: string; member_count: number; }
 export interface ConversationalUserContextBundle {
   userContext: ConversationalUserContextSlice;
   relationships: ConversationalRelationshipSummary[];
   relationshipsTotal: number;
   groups: ConversationalGroupSummary[];
 }
-
-export interface AmbientPassExtras {
-  userId: string;
-  operatorStrengths: OperatorStrengthEntry[];
+export interface AmbientPassExtras extends AmbientPassExtrasSnapshot { userId: string; }
+export interface AssembleAmbientUserContextOptions {
+  userId: string; asOf: Date; excludeRelationshipId?: string; transientIntent?: TransientIntentLoadMode;
 }
 
-function mapTransientToConversational(
-  rows: TransientIntentEntry[],
-): ConversationalTransientIntentSummary[] {
-  return rows.map((r) => ({
-    content: r.content,
-    captured_at: r.capturedAt,
-    relationship_id: r.relationshipId,
-  }));
+function mapTransientToConversational(rows: TransientIntentEntry[]) {
+  return rows.map((r) => ({ content: r.content, captured_at: r.capturedAt, relationship_id: r.relationshipId }));
+}
+function mapRelationshipToConversational(r: UserContextRelationshipSummary): ConversationalRelationshipSummary {
+  return { id: r.id, target_type: r.targetType, role: r.role, cadence: r.cadence, name: r.name };
+}
+function mapGroupToConversational(g: UserContextGroupSummary): ConversationalGroupSummary {
+  return { id: g.id, name: g.name, member_count: g.memberCount };
 }
 
-function mapRelationshipToConversational(
-  r: UserContextRelationshipSummary,
-): ConversationalRelationshipSummary {
+export function projectForAmbientPass(core: UserContextCoreSnapshot, extras: AmbientPassExtras): AmbientUserContextSnapshot {
   return {
-    id: r.id,
-    target_type: r.targetType,
-    role: r.role,
-    cadence: r.cadence,
-    name: r.name,
+    userId: extras.userId, asOf: core.asOf,
+    transientIntent: core.transientIntent.map((t) => t.content),
+    goalsAndValues: core.goalsAndValues, situationalState: core.situationalState,
+    operatorStrengths: extras.operatorStrengths, inferredSignals: extras.inferredSignals,
+    groups: core.groups, otherRelationships: core.relationships,
+    characterValuesAlignment: extras.characterValuesAlignment,
   };
 }
-
-function mapGroupToConversational(
-  g: UserContextGroupSummary,
-): ConversationalGroupSummary {
-  return {
-    id: g.id,
-    name: g.name,
-    member_count: g.memberCount,
-  };
+export function projectForEngagedPass(core: UserContextCoreSnapshot, extras: AmbientPassExtras): AmbientUserContextSnapshot {
+  return projectForAmbientPass(core, extras);
 }
-
-/** Project core load into Ambient Pass user context (G&V, situational, strengths). */
-export function projectForAmbientPass(
-  core: UserContextCoreSnapshot,
-  extras: AmbientPassExtras,
-): AmbientUserContextSnapshot {
-  return {
-    userId: extras.userId,
-    asOf: core.asOf,
-    goalsAndValues: core.goalsAndValues,
-    situationalState: core.situationalState,
-    operatorStrengths: extras.operatorStrengths,
-  };
-}
-
-/** Project core load into chat-respond's userContext + relationship/group summaries. */
-export function projectForConversationalTurn(
-  core: UserContextCoreSnapshot,
-): ConversationalUserContextBundle {
+export function projectForConversationalTurn(core: UserContextCoreSnapshot): ConversationalUserContextBundle {
   return {
     userContext: {
       goalsAndValues: core.goalsAndValues.map((g) => g.content),
@@ -107,4 +76,19 @@ export function projectForConversationalTurn(
     relationshipsTotal: core.relationshipsTotal,
     groups: core.groups.map(mapGroupToConversational),
   };
+}
+export async function assembleUserContextForAmbientPass(
+  supabase: SupabaseClient,
+  options: AssembleAmbientUserContextOptions,
+): Promise<AmbientUserContextSnapshot> {
+  const transientIntent = options.transientIntent ?? { kind: "none" as const };
+  const [core, extras] = await Promise.all([
+    loadUserContextCore(supabase, {
+      asOf: options.asOf, transientIntent,
+      excludeRelationshipId: options.excludeRelationshipId,
+      groupsOrder: "created_at_desc",
+    } satisfies LoadUserContextCoreOptions),
+    loadAmbientPassExtras(supabase, options.asOf),
+  ]);
+  return projectForAmbientPass(core, { userId: options.userId, ...extras });
 }

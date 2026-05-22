@@ -1,8 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CalendarDensitySignal } from "../signals/calendarDensity";
-import type { RawCalendarEvent } from "../signals/calendarDensity";
-import type { SleepSignal } from "../signals/sleepSummary";
-import type { RawSleepRecord } from "../signals/sleepSummary";
+import {
+  summariseCalendarDensity,
+  type CalendarDensitySignal,
+  type RawCalendarEvent,
+} from "../signals/calendarDensity";
+import {
+  summariseSleep,
+  type SleepSignal,
+  type RawSleepRecord,
+} from "../signals/sleepSummary";
 
 export type { CalendarDensitySignal, RawCalendarEvent, SleepSignal, RawSleepRecord };
 
@@ -100,13 +106,30 @@ export interface CharacterValuesAlignmentEntry {
 export interface AmbientUserContextSnapshot {
   userId: string;
   asOf: string;
+  transientIntent: string[];
   goalsAndValues: GoalEntry[];
   situationalState: SituationalStateSnapshot | null;
   operatorStrengths: OperatorStrengthEntry[];
+  inferredSignals: InferredSignalsSnapshot;
+  groups: UserContextGroupSummary[];
+  otherRelationships: UserContextRelationshipSummary[];
+  characterValuesAlignment: CharacterValuesAlignmentEntry[];
 }
 
-/** @deprecated Alias — use AmbientUserContextSnapshot */
 export type UserContextSnapshot = AmbientUserContextSnapshot;
+
+export interface InferredSignalsSnapshot {
+  calendarDensity: CalendarDensitySignal | null;
+  sleep: SleepSignal | null;
+  calendarEvents: RawCalendarEvent[];
+  sleepRecords: RawSleepRecord[];
+}
+
+export interface AmbientPassExtrasSnapshot {
+  operatorStrengths: OperatorStrengthEntry[];
+  inferredSignals: InferredSignalsSnapshot;
+  characterValuesAlignment: CharacterValuesAlignmentEntry[];
+}
 
 /** Loaded once from Supabase; projected per consumer via forAmbientPass / forConversationalTurn. */
 export interface UserContextCoreSnapshot {
@@ -146,6 +169,12 @@ export const RELATIONSHIP_SELECT =
   "id, target_type, role, cadence, contact:contacts!target_contact_id(name), group_target:groups!target_group_id(name)";
 export const GROUP_SELECT =
   "id, name, created_at, contact_groups(contact_id)";
+export const OPERATOR_STRENGTHS_SELECT = "id, content, created_at, updated_at";
+export const CALENDAR_SIGNAL_SELECT = "event_id, title, start, end, is_all_day";
+export const SLEEP_SIGNAL_SELECT = "record_id, started_at, ended_at, duration_minutes, quality";
+export const CHARACTER_ALIGNMENT_SELECT = "id, character_id, aligned, rank_position, character_name, character_source, character_values, created_at, updated_at";
+const CALENDAR_SIGNAL_WINDOW_DAYS = 7;
+const SLEEP_SIGNAL_WINDOW_DAYS = 3;
 
 // --- Raw row shapes ---
 
@@ -185,9 +214,11 @@ interface RawTransientConversationalRow {
   relationship_id: string | null;
 }
 
-interface RawTransientSessionRow {
-  content: string;
-}
+interface RawTransientSessionRow { content: string; }
+interface OperatorStrengthRow { id: string; content: string; created_at: string; updated_at: string; }
+interface RawCalendarSignalRow { event_id: string; title: string | null; start: string; end: string; is_all_day: boolean; }
+interface RawSleepSignalRow { record_id: string; started_at: string; ended_at: string; duration_minutes: number; quality: string | null; }
+interface CharacterValuesAlignmentRow { id: string; character_id: string; aligned: boolean; rank_position: number | null; character_name: string | null; character_source: string | null; character_values: string[] | null; created_at: string; updated_at: string; }
 
 // --- Mappers ---
 
@@ -244,6 +275,20 @@ export function mapTransientConversationalRows(
     capturedAt: r.captured_at,
     relationshipId: r.relationship_id,
   }));
+}
+
+
+export function mapOperatorStrengthRows(rows: OperatorStrengthRow[]): OperatorStrengthEntry[] {
+  return rows.map((r) => ({ id: r.id, content: r.content, createdAt: r.created_at, updatedAt: r.updated_at }));
+}
+export function mapCalendarSignalRows(rows: RawCalendarSignalRow[]): RawCalendarEvent[] {
+  return rows.map((r) => ({ id: r.event_id, title: r.title ?? undefined, start: r.start, end: r.end, isAllDay: r.is_all_day }));
+}
+export function mapSleepSignalRows(rows: RawSleepSignalRow[]): RawSleepRecord[] {
+  return rows.map((r) => ({ id: r.record_id, startedAt: r.started_at, endedAt: r.ended_at, durationMinutes: r.duration_minutes, quality: r.quality }));
+}
+export function mapCharacterValuesAlignmentRows(rows: CharacterValuesAlignmentRow[]): CharacterValuesAlignmentEntry[] {
+  return rows.map((r) => ({ id: r.id, characterId: r.character_id, aligned: r.aligned, rankPosition: r.rank_position, characterName: r.character_name, characterSource: r.character_source, characterValues: r.character_values, createdAt: r.created_at, updatedAt: r.updated_at }));
 }
 
 // --- Fetch helpers (usable from Node and Deno) ---
@@ -309,6 +354,42 @@ export async function fetchGroups(
     q = q.order("created_at", { ascending: false });
   }
   return q.limit(cap);
+}
+
+export async function fetchOperatorStrengths(supabase: SupabaseClient) {
+  return supabase.from("operator_strengths").select(OPERATOR_STRENGTHS_SELECT).order("created_at", { ascending: true });
+}
+export async function fetchInferredSignalCalendar(supabase: SupabaseClient, asOf: Date) {
+  const windowEnd = new Date(asOf); windowEnd.setUTCDate(windowEnd.getUTCDate() + CALENDAR_SIGNAL_WINDOW_DAYS);
+  return supabase.from("inferred_signal_calendar").select(CALENDAR_SIGNAL_SELECT).gte("start", asOf.toISOString()).lte("start", windowEnd.toISOString()).order("start", { ascending: true });
+}
+export async function fetchInferredSignalSleep(supabase: SupabaseClient, asOf: Date) {
+  const windowStart = new Date(asOf); windowStart.setUTCDate(windowStart.getUTCDate() - SLEEP_SIGNAL_WINDOW_DAYS);
+  return supabase.from("inferred_signal_sleep").select(SLEEP_SIGNAL_SELECT).gte("started_at", windowStart.toISOString()).lte("started_at", asOf.toISOString()).order("started_at", { ascending: false });
+}
+export async function fetchCharacterValuesAlignment(supabase: SupabaseClient) {
+  return supabase.from("user_character_values_alignment").select(CHARACTER_ALIGNMENT_SELECT).order("updated_at", { ascending: false });
+}
+export async function loadAmbientPassExtras(supabase: SupabaseClient, asOf: Date): Promise<AmbientPassExtrasSnapshot> {
+  const [operatorRes, calendarRes, sleepRes, alignmentRes] = await Promise.all([
+    fetchOperatorStrengths(supabase), fetchInferredSignalCalendar(supabase, asOf),
+    fetchInferredSignalSleep(supabase, asOf), fetchCharacterValuesAlignment(supabase),
+  ]);
+  if (operatorRes.error) throw operatorRes.error;
+  if (calendarRes.error) throw calendarRes.error;
+  if (sleepRes.error) throw sleepRes.error;
+  if (alignmentRes.error) throw alignmentRes.error;
+  const calendarEvents = mapCalendarSignalRows((calendarRes.data ?? []) as RawCalendarSignalRow[]);
+  const sleepRecords = mapSleepSignalRows((sleepRes.data ?? []) as RawSleepSignalRow[]);
+  return {
+    operatorStrengths: mapOperatorStrengthRows((operatorRes.data ?? []) as OperatorStrengthRow[]),
+    inferredSignals: {
+      calendarEvents, sleepRecords,
+      calendarDensity: calendarEvents.length ? summariseCalendarDensity(calendarEvents, asOf) : null,
+      sleep: sleepRecords.length ? summariseSleep(sleepRecords, asOf) : null,
+    },
+    characterValuesAlignment: mapCharacterValuesAlignmentRows((alignmentRes.data ?? []) as CharacterValuesAlignmentRow[]),
+  };
 }
 
 /** Single parallel load of overlapping User Context tables. */
