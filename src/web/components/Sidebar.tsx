@@ -186,8 +186,7 @@ export function Sidebar({
 
       <div
         className={cn(
-          "py-3",
-          collapsed ? "flex flex-col items-center gap-2 px-1" : "px-4",
+          collapsed ? "flex flex-col items-center gap-2 px-1 py-3" : "px-4 pb-3 pt-2",
         )}
       >
         <button
@@ -199,7 +198,7 @@ export function Sidebar({
             "inline-flex items-center rounded text-fg-subtle hover:bg-hover hover:text-fg",
             collapsed
               ? "h-8 w-8 justify-center"
-              : "gap-2 px-2 py-1.5 text-[13px] text-fg-muted",
+              : "mb-3 gap-2 px-2 py-1.5 text-[13px] text-fg-muted",
           )}
         >
           <MessageSquarePlus size={16} />
