@@ -112,6 +112,33 @@ describe("runPocketImportPipeline", () => {
     });
   });
 
+  it("keeps separate message blocks per contact speaker (3+ participants)", () => {
+    const result = runPocketImportPipeline({
+      transcript: [
+        { speaker: "Luca", text: "Opening" },
+        { speaker: "Sam", text: "Reply from Sam" },
+        { speaker: "Emma", text: "Reply from Emma" },
+        { speaker: "Luca", text: "Closing" },
+      ],
+      accountDisplayName: "Luca",
+      speakerAssignments: {
+        Luca: { kind: "self" },
+        Sam: { kind: "contact", contactId: "c-sam" },
+        Emma: { kind: "contact", contactId: "c-emma" },
+      },
+      contactNamesById: { "c-sam": "Sam Chen", "c-emma": "Emma Walsh" },
+    });
+    expect(result).toMatchObject({
+      status: "ready",
+      messages: [
+        { role: "user", content: "Opening" },
+        { role: "assistant", content: "[Sam (Sam Chen)]: Reply from Sam" },
+        { role: "assistant", content: "[Emma (Emma Walsh)]: Reply from Emma" },
+        { role: "user", content: "Closing" },
+      ],
+    });
+  });
+
   it("imports with explicit speaker assignments", () => {
     const result = runPocketImportPipeline({
       transcript: [

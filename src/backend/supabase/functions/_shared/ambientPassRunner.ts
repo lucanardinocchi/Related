@@ -1,7 +1,11 @@
 // Deno mirror of PassEngine.runPass — keep in sync with src/shared/src/agent/PassEngine.ts.
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
+import {
+  createClient,
+  type SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2.46.1";
 import { ensureDoNothingPeer } from "../../../../shared/src/agent/ambientTools.ts";
+import { initialDecisionStateForCandidateAction } from "../../../../shared/src/candidates/candidateSet.ts";
 import { buildRelationshipContext } from "./relationshipContext.ts";
 import { buildUserContext } from "./userContext.ts";
 
@@ -28,20 +32,24 @@ export async function invokeAmbientPass(
   serviceRoleKey: string,
   prompt: AgentPrompt,
 ): Promise<CandidateActionInput[]> {
-  const response = await fetch(`${supabaseUrl}/functions/v1/ambient-pass`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${serviceRoleKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ prompt }),
+  const client = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
   });
-  const json = await response.json().catch(() => ({})) as {
-    actions?: unknown;
-    error?: string;
-  };
-  if (!response.ok) {
-    throw new Error(json.error ?? `ambient-pass failed (${response.status})`);
+  const { data, error } = await client.functions.invoke("ambient-pass", {
+    body: { prompt },
+  });
+  if (error) {
+    const ctx = error as { context?: Response };
+    const detail = ctx.context
+      ? await ctx.context.json().catch(() => null) as { error?: string } | null
+      : null;
+    throw new Error(
+      detail?.error ?? error.message ?? "ambient-pass invoke failed",
+    );
+  }
+  const json = (data ?? {}) as { actions?: unknown; error?: string };
+  if (json.error) {
+    throw new Error(json.error);
   }
   if (!Array.isArray(json.actions)) {
     throw new Error("ambient-pass response missing `actions` array");
@@ -133,6 +141,7 @@ export async function runAmbientPass(
           type: a.type,
           payload: a.payload ?? null,
           why: a.why ?? null,
+          decision_state: initialDecisionStateForCandidateAction(a.type),
         })),
       );
     if (actErr) throw actErr;

@@ -9,6 +9,12 @@ describe("AMBIENT_SYSTEM_PROMPT", () => {
     expect(AMBIENT_SYSTEM_PROMPT).toContain("operatorStrengths");
     expect(AMBIENT_SYSTEM_PROMPT).toContain("Capability fit");
   });
+
+  it("requires context-grounded specificity in proposals", () => {
+    expect(AMBIENT_SYSTEM_PROMPT).toContain("Specificity (required)");
+    expect(AMBIENT_SYSTEM_PROMPT).toContain("reason-from-context");
+    expect(AMBIENT_SYSTEM_PROMPT).toContain("Reject vague outputs");
+  });
 });
 
 describe("buildAmbientUserMessage", () => {

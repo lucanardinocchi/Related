@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Contact } from "@related/shared";
 import type {
   PocketClient,
   PocketSpeakerAmbiguity,
@@ -14,6 +15,7 @@ import {
   POCKET_UNLABELED_SPEAKER,
   speakerKeysFromTranscript,
 } from "@related/shared";
+import { AddContactModal } from "@/components/AddContactModal";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui";
 
@@ -39,17 +41,10 @@ interface SpeakerResolutionFlowProps {
   open: boolean;
   onClose: () => void;
   onResolved: (chatId: string) => void;
-  /** When set, open directly on this recording's resolution panel. */
   initialRecordingId?: string | null;
 }
 
-export function useSpeakerResolutionPrompt(
-  ambiguityCount: number,
-): {
-  promptOpen: boolean;
-  openPrompt: () => void;
-  dismissPrompt: () => void;
-} {
+export function useSpeakerResolutionPrompt(ambiguityCount: number) {
   const [promptOpen, setPromptOpen] = useState(false);
 
   useEffect(() => {
@@ -105,8 +100,8 @@ export function SpeakerResolutionPromptModal({
       }
     >
       <p className="text-[13px] leading-[20px] text-fg-muted">
-        Match each voice in the transcript to you or a contact. Imported
-        Pocket chats will then appear in this list with a Pocket label.
+        Conversations can include any number of speakers. Assign each voice to
+        you or a contact, then import the transcript.
       </p>
     </Modal>
   );
@@ -129,8 +124,11 @@ export function SpeakerResolutionFlow({
   const [contacts, setContacts] = useState<Relationship[]>([]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [addForSpeaker, setAddForSpeaker] = useState<string | null>(null);
-  const [newContactName, setNewContactName] = useState("");
+  const [addContactOpen, setAddContactOpen] = useState(false);
+  const [addContactForSpeaker, setAddContactForSpeaker] = useState<string | null>(
+    null,
+  );
+  const [addContactInitialName, setAddContactInitialName] = useState("");
 
   const loadContacts = useCallback(async () => {
     const rows = await relationships.listRelationships();
@@ -172,36 +170,39 @@ export function SpeakerResolutionFlow({
     if (speakerKeys.length === 0) return false;
     const values = speakerKeys.map((k) => assignments[k]);
     if (values.some((v) => !v)) return false;
-    return values.filter((v) => v?.kind === "self").length === 1;
+    if (values.filter((v) => v?.kind === "self").length !== 1) return false;
+    return values.every(
+      (v) =>
+        v?.kind === "self" ||
+        (v?.kind === "contact" && Boolean(v.contactId)),
+    );
   }, [speakerKeys, assignments]);
 
   const openResolve = (item: PocketSpeakerAmbiguity) => {
     setSelected(item);
     setAssignments({});
     setError(null);
-    setAddForSpeaker(null);
+    setAddContactForSpeaker(null);
     setStep("resolve");
   };
 
-  const handleAddContact = async (speakerKey: string) => {
-    const name = newContactName.trim();
-    if (!name) return;
-    setWorking(true);
-    setError(null);
-    try {
-      const contact = await relationships.createContact({ name });
-      await loadContacts();
-      setAssignments((prev) => ({
-        ...prev,
-        [speakerKey]: { kind: "contact", contactId: contact.id },
-      }));
-      setAddForSpeaker(null);
-      setNewContactName("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setWorking(false);
-    }
+  const openAddContact = (speakerKey: string) => {
+    setAddContactForSpeaker(speakerKey);
+    setAddContactInitialName(
+      speakerKey === POCKET_UNLABELED_SPEAKER ? "" : speakerKey,
+    );
+    setAddContactOpen(true);
+  };
+
+  const handleContactCreated = async (contact: Contact) => {
+    const speakerKey = addContactForSpeaker;
+    if (!speakerKey) return;
+    await loadContacts();
+    setAssignments((prev) => ({
+      ...prev,
+      [speakerKey]: { kind: "contact", contactId: contact.id },
+    }));
+    setAddContactForSpeaker(null);
   };
 
   const handleSubmit = async () => {
@@ -256,7 +257,9 @@ export function SpeakerResolutionFlow({
                   </div>
                 ) : null}
                 <div className="mt-1 text-[12px] text-fg-muted">
-                  Speakers: {item.speakers.join(", ") || "—"}
+                  {item.speakers.length} speaker
+                  {item.speakers.length === 1 ? "" : "s"}:{" "}
+                  {item.speakers.join(", ") || "—"}
                 </div>
               </button>
             </li>
@@ -268,197 +271,189 @@ export function SpeakerResolutionFlow({
 
   if (!selected) return null;
 
+  const resolveSubtitle = [
+    selected.recordingCreatedAt
+      ? formatWhen(selected.recordingCreatedAt)
+      : null,
+    `${speakerKeys.length} speaker${speakerKeys.length === 1 ? "" : "s"} — assign each to you or a contact`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={selected.recordingTitle ?? "Resolve speakers"}
-      subtitle={
-        selected.recordingCreatedAt
-          ? formatWhen(selected.recordingCreatedAt)
-          : "Match each voice to you or a contact"
-      }
-      size="lg"
-      footer={
-        <>
-          {ambiguities.length > 1 ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={working}
-              onClick={() => {
-                setStep("list");
-                setSelected(null);
-              }}
-            >
-              Back
-            </Button>
-          ) : null}
-          <Button variant="ghost" size="sm" disabled={working} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            loading={working}
-            disabled={!allAssigned}
-            onClick={() => void handleSubmit()}
-          >
-            Import transcript
-          </Button>
-        </>
-      }
-    >
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-3">
-          <p className="text-[13px] font-medium text-fg">Assign speakers</p>
-          {speakerKeys.map((key) => {
-            const current = assignments[key];
-            return (
-              <div
-                key={key}
-                className="rounded-md border border-border p-3"
+    <>
+      <Modal
+        open
+        onClose={onClose}
+        title={selected.recordingTitle ?? "Resolve speakers"}
+        subtitle={resolveSubtitle}
+        size="lg"
+        footer={
+          <>
+            {ambiguities.length > 1 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={working}
+                onClick={() => {
+                  setStep("list");
+                  setSelected(null);
+                }}
               >
-                <div className="text-[14px] font-medium text-fg">
-                  {speakerDisplayLabel(key)}
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button
-                    variant={current?.kind === "self" ? "primary" : "secondary"}
-                    size="sm"
-                    disabled={working}
-                    onClick={() =>
-                      setAssignments((prev) => ({
-                        ...prev,
-                        [key]: { kind: "self" },
-                      }))
-                    }
-                  >
-                    This is me
-                  </Button>
-                  <Button
-                    variant={
-                      current?.kind === "contact" ? "primary" : "secondary"
-                    }
-                    size="sm"
-                    disabled={working}
-                    onClick={() => {
-                      const first = contacts[0];
-                      if (first) {
-                        setAssignments((prev) => ({
-                          ...prev,
-                          [key]: {
-                            kind: "contact",
-                            contactId: first.contact.id,
-                          },
-                        }));
-                      } else {
-                        setAddForSpeaker(key);
-                        setNewContactName(
-                          key === POCKET_UNLABELED_SPEAKER ? "" : key,
-                        );
-                      }
-                    }}
-                  >
-                    A contact
-                  </Button>
-                </div>
-                {current?.kind === "contact" ? (
-                  <label className="mt-2 block text-[12px] text-fg-muted">
-                    Contact
-                    <select
-                      className="mt-1 w-full rounded-md border border-border bg-bg px-2 py-1.5 text-[13px] text-fg"
-                      value={current.contactId}
+                Back
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="sm" disabled={working} onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={working}
+              disabled={!allAssigned}
+              onClick={() => void handleSubmit()}
+            >
+              Import transcript
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+            <p className="text-[13px] font-medium text-fg">Assign speakers</p>
+            <p className="text-[12px] text-fg-muted">
+              Exactly one voice must be you. Every other speaker needs a contact
+              (existing or new).
+            </p>
+            {speakerKeys.map((key) => {
+              const current = assignments[key];
+              const contactMode = current?.kind === "contact";
+              return (
+                <div key={key} className="rounded-md border border-border p-3">
+                  <div className="text-[14px] font-medium text-fg">
+                    {speakerDisplayLabel(key)}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      variant={current?.kind === "self" ? "primary" : "secondary"}
+                      size="sm"
                       disabled={working}
-                      onChange={(e) =>
+                      onClick={() =>
                         setAssignments((prev) => ({
                           ...prev,
-                          [key]: {
-                            kind: "contact",
-                            contactId: e.target.value,
-                          },
+                          [key]: { kind: "self" },
                         }))
                       }
                     >
-                      {contacts.map((r) => (
-                        <option key={r.contact.id} value={r.contact.id}>
-                          {r.contact.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-                {addForSpeaker === key ? (
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      type="text"
-                      value={newContactName}
-                      onChange={(e) => setNewContactName(e.target.value)}
-                      placeholder="Contact name"
-                      className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1.5 text-[13px]"
-                    />
+                      This is me
+                    </Button>
                     <Button
-                      variant="secondary"
+                      variant={contactMode ? "primary" : "secondary"}
                       size="sm"
-                      loading={working}
-                      onClick={() => void handleAddContact(key)}
+                      disabled={working}
+                      onClick={() => {
+                        if (contacts.length === 0) {
+                          openAddContact(key);
+                          return;
+                        }
+                        setAssignments((prev) => ({
+                          ...prev,
+                          [key]: {
+                            kind: "contact",
+                            contactId:
+                              prev[key]?.kind === "contact"
+                                ? prev[key].contactId
+                                : contacts[0]!.contact.id,
+                          },
+                        }));
+                      }}
                     >
-                      Add
+                      A contact
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={working}
+                      onClick={() => openAddContact(key)}
+                    >
+                      Add new contact
                     </Button>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="mt-2 text-[12px] text-accent hover:underline"
-                    onClick={() => {
-                      setAddForSpeaker(key);
-                      setNewContactName(
-                        key === POCKET_UNLABELED_SPEAKER ? "" : key,
-                      );
-                    }}
-                  >
-                    + Add new contact
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          {error ? (
-            <p className="text-[13px] text-danger">{error}</p>
-          ) : null}
-        </div>
+                  {contactMode ? (
+                    <label className="mt-2 block text-[12px] text-fg-muted">
+                      Which contact?
+                      <select
+                        className="mt-1 w-full rounded-md border border-border bg-bg px-2 py-1.5 text-[13px] text-fg"
+                        value={current.contactId}
+                        disabled={working}
+                        onChange={(e) =>
+                          setAssignments((prev) => ({
+                            ...prev,
+                            [key]: {
+                              kind: "contact",
+                              contactId: e.target.value,
+                            },
+                          }))
+                        }
+                      >
+                        {contacts.map((r) => (
+                          <option key={r.contact.id} value={r.contact.id}>
+                            {r.contact.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
+              );
+            })}
+            {error ? (
+              <p className="text-[13px] text-danger">{error}</p>
+            ) : null}
+          </div>
 
-        <div>
-          <p className="text-[13px] font-medium text-fg">Transcript preview</p>
-          <div className="mt-2 max-h-[50vh] space-y-2 overflow-y-auto rounded-md border border-border bg-bg-subtle p-3">
-            {segments.length === 0 ? (
-              <p className="text-[13px] text-fg-muted">
-                No preview stored — speakers listed above still need assignment
-                before import.
-              </p>
-            ) : (
-              segments.map((seg, i) => {
-                const key = normalizeSpeakerKey(seg.speaker);
-                const label = speakerDisplayLabel(key);
-                const assigned = assignments[key];
-                const who =
-                  assigned?.kind === "self"
-                    ? "You"
-                    : assigned?.kind === "contact"
-                      ? contacts.find((r) => r.contact.id === assigned.contactId)
-                          ?.contact.name ?? "Contact"
-                      : label;
-                return (
-                  <div key={i} className="text-[13px] leading-[20px]">
-                    <span className="font-medium text-fg-muted">{who}: </span>
-                    <span className="text-fg">{seg.text?.trim()}</span>
-                  </div>
-                );
-              })
-            )}
+          <div>
+            <p className="text-[13px] font-medium text-fg">Transcript preview</p>
+            <div className="mt-2 max-h-[50vh] space-y-2 overflow-y-auto rounded-md border border-border bg-bg-subtle p-3">
+              {segments.length === 0 ? (
+                <p className="text-[13px] text-fg-muted">
+                  No preview stored — assign speakers above before import.
+                </p>
+              ) : (
+                segments.map((seg, i) => {
+                  const key = normalizeSpeakerKey(seg.speaker);
+                  const assigned = assignments[key];
+                  const who =
+                    assigned?.kind === "self"
+                      ? "You"
+                      : assigned?.kind === "contact"
+                        ? contacts.find(
+                            (r) => r.contact.id === assigned.contactId,
+                          )?.contact.name ?? "Contact"
+                        : speakerDisplayLabel(key);
+                  return (
+                    <div key={i} className="text-[13px] leading-[20px]">
+                      <span className="font-medium text-fg-muted">{who}: </span>
+                      <span className="text-fg">{seg.text?.trim()}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </Modal>
+      </Modal>
+
+      <AddContactModal
+        open={addContactOpen}
+        onClose={() => {
+          setAddContactOpen(false);
+          setAddContactForSpeaker(null);
+        }}
+        relationships={relationships}
+        initialName={addContactInitialName}
+        onCreated={(contact) => void handleContactCreated(contact)}
+      />
+    </>
   );
 }

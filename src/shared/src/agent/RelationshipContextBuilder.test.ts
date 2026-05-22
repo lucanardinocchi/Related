@@ -16,12 +16,23 @@ jest.mock("./loadRelationshipAmbientContext", () => ({
 
 type Resolved<T> = { data: T; error: null } | { data: null; error: { message: string } };
 
-function makeQueryMock() {
+function makeQueryMock(opts?: {
+  eqData?: unknown;
+}) {
   const single = jest.fn<Promise<Resolved<unknown>>, []>();
   const limit = jest.fn<Promise<Resolved<unknown>>, []>();
   const order = jest.fn<Promise<Resolved<unknown>>, []>();
   const eqInner = jest.fn(() => ({ single, order, limit }));
-  const eq = jest.fn(() => ({ single, order, limit, eq: eqInner }));
+  const eq = jest.fn((column?: string) => {
+    const chain = { single, order, limit, eq: eqInner };
+    if (column === "relationship_id" && opts?.eqData !== undefined) {
+      return Object.assign(
+        Promise.resolve({ data: opts.eqData, error: null }),
+        chain,
+      );
+    }
+    return chain;
+  });
   const select = jest.fn(() => ({ single, order, eq, limit }));
   const from = jest.fn((_t: string) => ({ select }));
   return { from, select, single, eq, eqInner, order, limit };
@@ -68,7 +79,20 @@ describe("RelationshipContextBuilder.buildRelationshipContext", () => {
   });
 
   it("loads full contact relationship context including interactions and open threads", async () => {
-    const q = makeQueryMock();
+    const openThreads: RelationshipContextOpenThreadLink[] = [
+      {
+        open_threads: {
+          id: "ot-1",
+          description: "send the book",
+          direction: "me_owes_them",
+          origin: null,
+          communication_status: "not_communicated",
+          created_at: "2026-05-10T00:00:00Z",
+          closed_at: null,
+        },
+      },
+    ];
+    const q = makeQueryMock({ eqData: openThreads });
     const relationship = {
       id: "r-1",
       owner_id: "u-1",
@@ -97,21 +121,10 @@ describe("RelationshipContextBuilder.buildRelationshipContext", () => {
         ],
       },
     ];
-    const openThreads: RelationshipContextOpenThreadLink[] = [
-      {
-        open_threads: {
-          id: "ot-1",
-          description: "send the book",
-          direction: "me_owes_them",
-          origin: null,
-          communication_status: "not_communicated",
-          created_at: "2026-05-10T00:00:00Z",
-          closed_at: null,
-        },
-      },
-    ];
 
-    q.single.mockResolvedValueOnce({ data: relationship, error: null });
+    q.single
+      .mockResolvedValueOnce({ data: relationship, error: null })
+      .mockResolvedValueOnce({ data: relationship.contact, error: null });
     q.order
       .mockResolvedValueOnce({ data: interactions, error: null })
       .mockResolvedValueOnce({ data: openThreads, error: null });
@@ -125,6 +138,7 @@ describe("RelationshipContextBuilder.buildRelationshipContext", () => {
       contact: relationship.contact,
       group: null,
     });
+    expect(q.from).toHaveBeenCalledWith("contacts");
     expect(snapshot.interactions).toEqual(interactions);
     expect(snapshot.openThreads).toEqual(openThreads);
     expect(snapshot.contact).toEqual(relationship.contact);
@@ -135,7 +149,7 @@ describe("RelationshipContextBuilder.buildRelationshipContext", () => {
   });
 
   it("loads group members for group-targeted relationships", async () => {
-    const q = makeQueryMock();
+    const q = makeQueryMock({ eqData: [] });
     const relationship = {
       id: "r-grp",
       owner_id: "u-1",
@@ -166,6 +180,7 @@ describe("RelationshipContextBuilder.buildRelationshipContext", () => {
 
     q.single
       .mockResolvedValueOnce({ data: relationship, error: null })
+      .mockResolvedValueOnce({ data: relationship.group, error: null })
       .mockResolvedValueOnce({
         data: { contact_groups: groupMembers },
         error: null,

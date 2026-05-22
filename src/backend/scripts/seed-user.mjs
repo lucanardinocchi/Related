@@ -688,6 +688,17 @@ async function seed(ownerId, userClient) {
     { onConflict: "owner_id" },
   );
 
+  await admin.from("user_provider_tokens").upsert(
+    {
+      owner_id: ownerId,
+      provider: "pocket",
+      access_token: "seed-pocket-token",
+      refresh_token: null,
+      expires_at: null,
+    },
+    { onConflict: "owner_id,provider" },
+  );
+
   await admin.from("pocket_speaker_ambiguities").insert({
     owner_id: ownerId,
     recording_id: "seed-pocket-ambiguous-1",

@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  loadUserContextCore,
-  type AmbientUserContextSnapshot,
-  type OperatorStrengthEntry,
+import type {
+  AmbientUserContextSnapshot,
+  GoalEntry,
+  OperatorStrengthEntry,
+  SituationalStateSnapshot,
 } from "./userContextCore.ts";
-import { projectForAmbientPass } from "./userContextProjections.ts";
+import { mapGoalRows, mapSituationalRow } from "./userContextCore.ts";
 
 export type {
   AmbientUserContextSnapshot,
@@ -41,30 +42,51 @@ export class UserContextBuilder {
     asOf: Date,
   ): Promise<AmbientUserContextSnapshot> {
     if (!this.supabase) {
-      return projectForAmbientPass(
-        {
-          asOf: asOf.toISOString(),
-          goalsAndValues: [],
-          situationalState: null,
-          transientIntent: [],
-          groups: [],
-          relationships: [],
-          relationshipsTotal: 0,
-        },
-        { userId, operatorStrengths: [] },
-      );
+      return {
+        userId,
+        asOf: asOf.toISOString(),
+        goalsAndValues: [],
+        situationalState: null,
+        operatorStrengths: [],
+      };
     }
 
-    const [core, operatorStrengths] = await Promise.all([
-      loadUserContextCore(this.supabase, {
-        asOf,
-        transientIntent: { kind: "none" },
-        groupsOrder: "created_at_desc",
-      }),
-      this.loadOperatorStrengths(),
-    ]);
+    const [goalsAndValues, situationalState, operatorStrengths] =
+      await Promise.all([
+        this.loadGoalsAndValues(),
+        this.loadSituationalState(),
+        this.loadOperatorStrengths(),
+      ]);
 
-    return projectForAmbientPass(core, { userId, operatorStrengths });
+    return {
+      userId,
+      asOf: asOf.toISOString(),
+      goalsAndValues,
+      situationalState,
+      operatorStrengths,
+    };
+  }
+
+  private async loadGoalsAndValues(): Promise<GoalEntry[]> {
+    if (!this.supabase) return [];
+    const { data, error } = await this.supabase
+      .from("goals_and_values")
+      .select("id, content, created_at, updated_at")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return mapGoalRows((data ?? []) as Parameters<typeof mapGoalRows>[0]);
+  }
+
+  private async loadSituationalState(): Promise<SituationalStateSnapshot | null> {
+    if (!this.supabase) return null;
+    const { data, error } = await this.supabase
+      .from("situational_state")
+      .select("id, content, created_at, updated_at")
+      .maybeSingle();
+    if (error) throw error;
+    return mapSituationalRow(
+      (data ?? null) as Parameters<typeof mapSituationalRow>[0],
+    );
   }
 
   private async loadOperatorStrengths(): Promise<OperatorStrengthEntry[]> {

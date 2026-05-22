@@ -49,7 +49,7 @@ const WHY_FIELD = {
   why: {
     type: "string",
     description:
-      "One-line rationale visible on the card. Required when this candidate replaces a previous one with a different stance; otherwise optional.",
+      "One or two sentences shown on the card. Cite specific evidence from the provided context (names, dates, last message snippet, open-thread title, calendar event, prior candidate outcome) — not generic advice. Required when replacing a previous candidate; strongly recommended for every concrete action and DoNothing.",
   },
 };
 
@@ -57,17 +57,26 @@ export const AMBIENT_TOOLS: AmbientToolDefinition[] = [
   {
     name: "schedule_interaction",
     description:
-      "Propose a future Interaction. Creates an Interaction with status='planned'.",
+      "Propose a future Interaction (status='planned'). Pick a realistic time from calendar gaps, cadence, and relationshipContext — not a vague 'soon'. Use notes for how to run it when non-obvious (venue, agenda, what to follow up on).",
     input_schema: {
       type: "object",
-      required: ["time", "kind", "contactIds"],
+      required: ["time", "kind", "contactIds", "notes"],
       properties: {
-        time: { type: "string", description: "ISO-8601 timestamp." },
+        time: {
+          type: "string",
+          description:
+            "ISO-8601 timestamp with timezone. Concrete slot (e.g. next Tuesday 6pm), not midnight placeholders unless context supports it.",
+        },
         kind: {
           type: "string",
-          description: "e.g. coffee, call, dinner, catch-up, birthday.",
+          description:
+            "Specific format: e.g. '30-min video call', 'birthday dinner', 'walk-and-coffee' — not just 'catch-up'.",
         },
-        notes: { type: "string" },
+        notes: {
+          type: "string",
+          description:
+            "Execution detail: where/how, talking points tied to context, or prep (e.g. 'Ask about their job interview you mentioned 12 May').",
+        },
         contactIds: {
           type: "array",
           items: { type: "string" },
@@ -80,14 +89,24 @@ export const AMBIENT_TOOLS: AmbientToolDefinition[] = [
   {
     name: "log_interaction",
     description:
-      "Record a past Interaction. Creates an Interaction with status='occurred'.",
+      "Record a past Interaction (status='occurred') only when context shows something already happened (comms, user note, implied meetup). Summarise what occurred specifically.",
     input_schema: {
       type: "object",
-      required: ["time", "kind", "contactIds"],
+      required: ["time", "kind", "contactIds", "notes"],
       properties: {
-        time: { type: "string" },
-        kind: { type: "string" },
-        notes: { type: "string" },
+        time: {
+          type: "string",
+          description: "ISO-8601 when it happened; infer from comms timestamps if needed.",
+        },
+        kind: {
+          type: "string",
+          description: "Specific format grounded in what actually occurred.",
+        },
+        notes: {
+          type: "string",
+          description:
+            "What happened and outcomes worth remembering — tied to names/topics from context.",
+        },
         contactIds: {
           type: "array",
           items: { type: "string" },
@@ -99,27 +118,39 @@ export const AMBIENT_TOOLS: AmbientToolDefinition[] = [
   {
     name: "send_message",
     description:
-      "Open the system composer pre-filled with a draft. The User can edit before sending.",
+      "Draft a ready-to-send message in the User's voice. Reference specific shared context (last thread, event, promise). Avoid generic check-ins unless cadence truly demands it.",
     input_schema: {
       type: "object",
       required: ["channel", "contactIds", "body"],
       properties: {
         channel: { type: "string", enum: ["text", "email"] },
         contactIds: { type: "array", items: { type: "string" } },
-        subject: { type: "string", description: "Email only." },
-        body: { type: "string" },
+        subject: {
+          type: "string",
+          description: "Email only — specific subject line, not 'Checking in'.",
+        },
+        body: {
+          type: "string",
+          description:
+            "Full draft the User can send with light edits. Include concrete asks, dates, or callbacks from context.",
+        },
         ...WHY_FIELD,
       },
     },
   },
   {
     name: "open_thread",
-    description: "Open a new Open Thread on the focused Relationship.",
+    description:
+      "Track a specific obligation or follow-up visible in context. Description must state the exact commitment and trigger (who, what, by when).",
     input_schema: {
       type: "object",
       required: ["description", "direction"],
       properties: {
-        description: { type: "string" },
+        description: {
+          type: "string",
+          description:
+            "Precise thread title, e.g. 'You promised to intro Sam to their hiring manager after 3 May lunch' — not 'Follow up'.",
+        },
         direction: {
           type: "string",
           enum: ["me_owes_them", "they_owe_me"],
@@ -131,12 +162,15 @@ export const AMBIENT_TOOLS: AmbientToolDefinition[] = [
   {
     name: "close_thread",
     description:
-      "Close an existing Open Thread. Multi-Relationship Threads close on every linked Relationship.",
+      "Close an openThreadId from relationshipContext when evidence shows it is done. why must cite that evidence.",
     input_schema: {
       type: "object",
-      required: ["openThreadId"],
+      required: ["openThreadId", "why"],
       properties: {
-        openThreadId: { type: "string" },
+        openThreadId: {
+          type: "string",
+          description: "Exact id from relationshipContext.openThreads.",
+        },
         ...WHY_FIELD,
       },
     },
@@ -144,12 +178,20 @@ export const AMBIENT_TOOLS: AmbientToolDefinition[] = [
   {
     name: "update_role_or_cadence",
     description:
-      "Mutate Relationship fields. Use for stance changes ('close friend' → 'acquaintance') or cadence preferences.",
+      "Propose a concrete role or cadence change grounded in interaction pattern or User goals — include at least one of role or cadence with specific wording.",
     input_schema: {
       type: "object",
       properties: {
-        role: { type: "string" },
-        cadence: { type: "string" },
+        role: {
+          type: "string",
+          description:
+            "New role label reflecting evidence, e.g. 'monthly coffee friend' not 'friend'.",
+        },
+        cadence: {
+          type: "string",
+          description:
+            "Actionable cadence, e.g. 'text every 2–3 weeks; quarterly in-person' — not 'stay in touch'.",
+        },
         ...WHY_FIELD,
       },
     },
@@ -157,7 +199,7 @@ export const AMBIENT_TOOLS: AmbientToolDefinition[] = [
   {
     name: "do_nothing",
     description:
-      "Emit when leaving the Relationship alone is the single best decision for this Pass. Include a one-line 'why'.",
+      "Emit when no concrete action beats waiting. why must name what you checked (recent comms, threads, calendar) and why now is not the moment.",
     input_schema: {
       type: "object",
       properties: { ...WHY_FIELD },

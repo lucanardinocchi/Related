@@ -142,10 +142,14 @@ Deno.serve(async (req) => {
     return jsonError(400, "missing chatId");
   }
 
+  const bearerToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : "";
+  const apiKeyHeader = req.headers.get("apikey") ?? "";
   const isServiceRole =
     SERVICE_ROLE_KEY &&
-    authHeader === `Bearer ${SERVICE_ROLE_KEY}` &&
-    typeof body.ownerId === "string";
+    typeof body.ownerId === "string" &&
+    (bearerToken === SERVICE_ROLE_KEY || apiKeyHeader === SERVICE_ROLE_KEY);
 
   let supabase: SupabaseClient;
   let ownerId: string;

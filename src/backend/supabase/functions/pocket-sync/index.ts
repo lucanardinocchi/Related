@@ -250,15 +250,9 @@ Deno.serve(async (req) => {
       return jsonResponse(404, { error: "ambiguity not found" });
     }
 
-    const tokenRes = await service
-      .from("user_provider_tokens")
-      .select("access_token")
-      .eq("owner_id", ownerId)
-      .eq("provider", "pocket")
-      .maybeSingle();
-    if (!tokenRes.data?.access_token) {
-      return jsonResponse(400, { error: "Pocket is not connected" });
-    }
+    const storedTranscript = ambiguityRes.data.transcript_segments;
+    const hasStoredTranscript = Array.isArray(storedTranscript) &&
+      storedTranscript.length > 0;
 
     const integrationRes = await service
       .from("pocket_integration")
@@ -267,6 +261,28 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!integrationRes.data) {
       return jsonResponse(400, { error: "Pocket integration metadata missing" });
+    }
+
+    let pocketApiKey = "";
+    if (!hasStoredTranscript) {
+      const tokenRes = await service
+        .from("user_provider_tokens")
+        .select("access_token")
+        .eq("owner_id", ownerId)
+        .eq("provider", "pocket")
+        .maybeSingle();
+      if (!tokenRes.data?.access_token) {
+        return jsonResponse(400, { error: "Pocket is not connected" });
+      }
+      pocketApiKey = tokenRes.data.access_token as string;
+    } else {
+      const tokenRes = await service
+        .from("user_provider_tokens")
+        .select("access_token")
+        .eq("owner_id", ownerId)
+        .eq("provider", "pocket")
+        .maybeSingle();
+      pocketApiKey = (tokenRes.data?.access_token as string) ?? "";
     }
 
     const contactIds = Object.values(assignments)
@@ -297,12 +313,12 @@ Deno.serve(async (req) => {
         SERVICE_ROLE_KEY,
         ownerId,
         recording,
-        tokenRes.data.access_token as string,
+        pocketApiKey,
         integrationRes.data.account_display_name as string,
         {
           speakerAssignments: assignments,
           contactNamesById,
-          transcript: ambiguityRes.data.transcript_segments ?? undefined,
+          transcript: hasStoredTranscript ? storedTranscript : undefined,
         },
       );
 

@@ -15,15 +15,16 @@ import {
 const CONTACT_COLUMNS =
   "id, name, phone, email, birthday, area, latitude, longitude, occupation, education, instagram_username, instagram_scoped_id, x_username, x_user_id, tiktok_username, tiktok_open_id, whatsapp_wa_id, created_at, updated_at";
 
-const RELATIONSHIP_SELECT = `
+const RELATIONSHIP_BASE_SELECT = `
   id, owner_id, target_type, target_contact_id, target_group_id,
-  role, cadence, created_at, updated_at,
-  contact:contacts!target_contact_id(${CONTACT_COLUMNS}),
-  group:groups!target_group_id(id, name, created_at, updated_at)
+  role, cadence, created_at, updated_at
 `;
 
 const INTERACTION_SELECT =
   "id, time, kind, category, notes, status, group_id, created_at, updated_at, interaction_contacts(contact_id, contacts(id, name))";
+
+const CONTACT_INTERACTION_SELECT =
+  "id, time, kind, category, notes, status, group_id, created_at, updated_at, interaction_contacts!inner(contact_id, contacts(id, name))";
 
 const OPEN_THREAD_SELECT =
   "open_threads(id, description, direction, origin, communication_status, created_at, closed_at)";
@@ -300,7 +301,7 @@ export class RelationshipContextBuilder {
 
     const { data: relationship, error: relErr } = await this.supabase
       .from("relationships")
-      .select(RELATIONSHIP_SELECT)
+      .select(RELATIONSHIP_BASE_SELECT)
       .eq("id", relationshipId)
       .single();
     if (relErr || !relationship) {
@@ -308,24 +309,31 @@ export class RelationshipContextBuilder {
     }
 
     const row = relationship as unknown as RelationshipRow;
-    const mappedRelationship = mapRelationship(row);
+    const [contact, group, interactions, openThreads, groupMembers] =
+      await Promise.all([
+        row.target_type === "contact" && row.target_contact_id
+          ? this.loadContact(row.target_contact_id)
+          : Promise.resolve(null),
+        row.target_type === "group" && row.target_group_id
+          ? this.loadGroup(row.target_group_id)
+          : Promise.resolve(null),
+        this.loadInteractions(row),
+        this.loadOpenThreads(relationshipId),
+        row.target_type === "group" && row.target_group_id
+          ? this.loadGroupMembers(row.target_group_id)
+          : Promise.resolve([]),
+      ]);
 
-    const [interactions, openThreads, groupMembers] = await Promise.all([
-      this.loadInteractions(row),
-      this.loadOpenThreads(relationshipId),
-      row.target_type === "group" && row.target_group_id
-        ? this.loadGroupMembers(row.target_group_id)
-        : Promise.resolve([]),
-    ]);
+    if (contact) row.contact = contact;
+    if (group) row.group = group;
+
+    const mappedRelationship = mapRelationship(row);
 
     const base: RelationshipContextSnapshot = {
       relationship: mappedRelationship,
       interactions,
       openThreads,
-      contact:
-        row.target_type === "contact" && row.contact
-          ? mapContact(row.contact)
-          : null,
+      contact: contact ? mapContact(contact) : null,
       groupMembers,
       platformComms: [],
       calendarEvents: [],
@@ -338,6 +346,32 @@ export class RelationshipContextBuilder {
       relationshipId,
     );
     return { ...base, ...extras };
+  }
+
+  private async loadContact(contactId: string): Promise<ContactRow> {
+    if (!this.supabase) throw new Error("supabase client required");
+    const { data, error } = await this.supabase
+      .from("contacts")
+      .select(CONTACT_COLUMNS)
+      .eq("id", contactId)
+      .single();
+    if (error || !data) {
+      throw error ?? new Error(`contact ${contactId} not found`);
+    }
+    return data as ContactRow;
+  }
+
+  private async loadGroup(groupId: string): Promise<GroupRow> {
+    if (!this.supabase) throw new Error("supabase client required");
+    const { data, error } = await this.supabase
+      .from("groups")
+      .select("id, name, created_at, updated_at")
+      .eq("id", groupId)
+      .single();
+    if (error || !data) {
+      throw error ?? new Error(`group ${groupId} not found`);
+    }
+    return data as GroupRow;
   }
 
   private async loadInteractions(
@@ -358,9 +392,7 @@ export class RelationshipContextBuilder {
     if (row.target_type === "contact" && row.target_contact_id) {
       const { data, error } = await this.supabase
         .from("interactions")
-        .select(
-          `${INTERACTION_SELECT}, interaction_contacts!inner(contact_id, contacts(id, name))`,
-        )
+        .select(CONTACT_INTERACTION_SELECT)
         .eq("interaction_contacts.contact_id", row.target_contact_id)
         .order("time", { ascending: false });
       if (error) throw error;
@@ -378,12 +410,13 @@ export class RelationshipContextBuilder {
     const { data, error } = await this.supabase
       .from("open_thread_relationships")
       .select(OPEN_THREAD_SELECT)
-      .eq("relationship_id", relationshipId)
-      .order("open_threads(created_at)", { ascending: true });
+      .eq("relationship_id", relationshipId);
     if (error) throw error;
-    return ((data ?? []) as unknown as OpenThreadLinkRow[]).map(
-      mapOpenThreadLink,
-    );
+    return ((data ?? []) as unknown as OpenThreadLinkRow[])
+      .map(mapOpenThreadLink)
+      .sort((a, b) =>
+        a.open_threads.created_at.localeCompare(b.open_threads.created_at),
+      );
   }
 
   private async loadGroupMembers(

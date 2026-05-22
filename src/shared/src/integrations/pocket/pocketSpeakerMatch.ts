@@ -133,6 +133,7 @@ export function transcriptToChatMessagesWithAssignments(
   contactNamesById: Record<string, string>,
 ): Array<{ role: "user" | "assistant"; content: string }> {
   const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+  let lastSpeakerKey: string | null = null;
 
   for (const seg of segments) {
     const text = seg.text?.trim();
@@ -158,11 +159,12 @@ export function transcriptToChatMessagesWithAssignments(
     }
 
     const last = messages[messages.length - 1];
-    if (last && last.role === role) {
+    if (last && last.role === role && lastSpeakerKey === key) {
       last.content += `\n${content}`;
     } else {
       messages.push({ role, content });
     }
+    lastSpeakerKey = key;
   }
 
   return messages;

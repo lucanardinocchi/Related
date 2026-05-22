@@ -383,6 +383,14 @@ verify_jwt = false
 [functions.relay-outbound-ack]
 verify_jwt = false
 
+# Cron (pg_net) and service-role dispatch call without a user JWT at the gateway.
+[functions.ambient-dispatch]
+verify_jwt = false
+
+# Invoked server-to-server from ambient-dispatch with the service role key.
+[functions.ambient-pass]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

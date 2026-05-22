@@ -65,6 +65,23 @@ interface IntegrationRow {
   webhook_secret: string | null;
 }
 
+async function pocketInvokeErrorMessage(
+  error: { message?: string; context?: Response },
+  fallback: string,
+): Promise<string> {
+  const ctx = error.context;
+  if (ctx && typeof ctx.json === "function") {
+    try {
+      const body = (await ctx.json()) as { error?: string; message?: string };
+      if (body.error) return body.error;
+      if (body.message) return body.message;
+    } catch {
+      /* ignore parse errors */
+    }
+  }
+  return error.message ?? fallback;
+}
+
 /**
  * Client for Pocket AI voice recorder integration — connect, sync transcripts,
  * resolve speaker ambiguities. Imported recordings feed the Extraction Pass
@@ -141,9 +158,12 @@ export class PocketClient {
       },
     });
     if (error) {
-      const errMsg =
-        (error as { message?: string }).message ?? "pocket-resolve failed";
-      throw new Error(errMsg);
+      throw new Error(
+        await pocketInvokeErrorMessage(
+          error as { message?: string; context?: Response },
+          "Could not reach the Pocket import service. Try again in a moment.",
+        ),
+      );
     }
     const result = (data ?? {}) as { status?: string; chatId?: string; error?: string };
     if (result.status !== "ok" || !result.chatId) {

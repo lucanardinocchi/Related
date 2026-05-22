@@ -89,7 +89,12 @@ export async function dispatchNextAmbientPass(
       candidateSetId,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === "object" && err !== null && "message" in err
+          ? String((err as { message: unknown }).message)
+          : JSON.stringify(err);
     return {
       status: "failed",
       passId: next.id,
