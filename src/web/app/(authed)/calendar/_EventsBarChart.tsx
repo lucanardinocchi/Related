@@ -52,7 +52,7 @@ function tabKey(t: Tab): string {
  * narrow further.
  */
 export function EventsBarChart({ events, now }: Props) {
-  const [scope, setScope] = useState<Scope>("past");
+  const [scope, setScope] = useState<Scope>("future");
   const [activeTab, setActiveTab] = useState<Tab>(ALL_TAB);
 
   const scopeStatusTabs = useMemo(
