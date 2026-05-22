@@ -5,7 +5,7 @@ import {
   fetchSituationalState,
   GOALS_SELECT,
 } from "../../../../../shared/src/agent/userContextCore.ts";
-import { SNAPSHOT_CAPS } from "../../_shared/conversational/snapshot.ts";
+import { SNAPSHOT_CAPS } from "../../../../../shared/src/conversational/snapshot.ts";
 import {
   GROUP_SELECT_DETAIL,
   GROUP_SELECT_LIST,

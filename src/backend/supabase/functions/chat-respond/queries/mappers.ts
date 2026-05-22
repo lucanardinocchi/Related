@@ -7,7 +7,7 @@ import type {
   RelationshipSummary,
   TransientIntentSummary,
 } from "../types.ts";
-import { MS_PER_DAY } from "../../_shared/conversational/snapshot.ts";
+import { MS_PER_DAY } from "../../../../../shared/src/conversational/snapshot.ts";
 
 export interface RawRelationshipRow {
   id: string;

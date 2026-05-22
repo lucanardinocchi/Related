@@ -2,7 +2,7 @@
 // User Context tables are loaded via @related/shared loadUserContextCore.
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@^2.45.0";
-import { SNAPSHOT_CAPS } from "../../_shared/conversational/snapshot.ts";
+import { SNAPSHOT_CAPS } from "../../../../../shared/src/conversational/snapshot.ts";
 import {
   INTERACTION_SELECT_SNAPSHOT,
   OPEN_THREAD_SELECT_SNAPSHOT,
