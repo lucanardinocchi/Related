@@ -146,13 +146,13 @@ function PocketDeviceShowcase({
   return (
     <div className="relative mx-auto w-full max-w-[340px]">
       <div
-        className="pointer-events-none absolute inset-x-6 top-8 h-48 rounded-full bg-[radial-gradient(circle,var(--color-accent-subtle),transparent_72%)]"
+        className="pointer-events-none absolute inset-x-6 top-6 h-36 rounded-full bg-[radial-gradient(circle,var(--color-accent-subtle),transparent_72%)]"
         aria-hidden
       />
 
       <div
         className={cn(
-          "relative overflow-hidden rounded-[1.75rem] border bg-bg p-5 shadow-[0_24px_60px_-28px_rgba(55,53,47,0.28)] transition-transform duration-500",
+          "relative overflow-hidden rounded-[1.75rem] border bg-bg px-5 pb-5 pt-4 shadow-[0_24px_60px_-28px_rgba(55,53,47,0.28)] transition-transform duration-500",
           motionEnabled && recording && "scale-[1.01]",
         )}
       >
@@ -163,11 +163,11 @@ function PocketDeviceShowcase({
           />
         ) : null}
 
-        <div className="relative flex aspect-[3/5] items-center justify-center px-6 py-2">
+        <div className="relative flex items-center justify-center px-4 py-1">
           <PocketDeviceIllustration recording={recording} />
         </div>
 
-        <div className="mt-4 rounded-lg border border-border bg-surface px-4 py-3">
+        <div className="mt-3 rounded-lg border border-border bg-surface px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span

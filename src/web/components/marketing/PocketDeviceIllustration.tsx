@@ -12,7 +12,7 @@ export function PocketDeviceIllustration({
       viewBox="0 0 120 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn("h-full w-full max-h-[220px]", className)}
+      className={cn("h-[168px] w-auto", className)}
       aria-hidden
       role="img"
       aria-label="Voice recorder"
