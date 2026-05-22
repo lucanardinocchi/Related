@@ -9,9 +9,10 @@ const PUBLIC_PATHS = [
   "/auth",
 ];
 
-/** OAuth callbacks and onboarding must stay reachable while setup is incomplete. */
-function isOnboardingExempt(path: string): boolean {
+/** OAuth callbacks, onboarding, and context must stay reachable while setup is incomplete. */
+export function isOnboardingExempt(path: string): boolean {
   if (path === "/onboarding" || path.startsWith("/onboarding/")) return true;
+  if (path === "/context" || path.startsWith("/context/")) return true;
   if (path.startsWith("/settings/") && path.endsWith("/callback")) return true;
   return false;
 }
