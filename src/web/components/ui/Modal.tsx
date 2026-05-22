@@ -14,8 +14,8 @@ interface ModalProps {
   children: ReactNode;
   /** Footer slot — typically Cancel + primary Button. */
   footer?: ReactNode;
-  /** Width tier. Defaults to md (480px). */
-  size?: "sm" | "md" | "lg";
+  /** Width tier. Defaults to md (520px). */
+  size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }
 
@@ -23,6 +23,7 @@ const sizeClasses: Record<NonNullable<ModalProps["size"]>, string> = {
   sm: "max-w-[400px]",
   md: "max-w-[520px]",
   lg: "max-w-[720px]",
+  xl: "max-w-[960px]",
 };
 
 /**
