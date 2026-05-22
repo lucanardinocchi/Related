@@ -7,7 +7,10 @@ import type {
   DecisionState,
   SessionHandle,
 } from "@related/shared";
-import { resolveSendMessageRecipients } from "@related/shared";
+import {
+  filterUserVisibleCandidateActions,
+  resolveSendMessageRecipients,
+} from "@related/shared";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
@@ -164,15 +167,16 @@ export function TalkSession({ relationships }: TalkSessionProps) {
         // agent block and leave the user bubble as a placeholder
         // indicating the turn happened. A future slice can expose the
         // STT transcript on `AgentTurnResult` for proper user echo.
-        const adaptedActions: CandidateAction[] = result.candidateSet.actions.map(
-          (a, i) => ({
-            id: `${result.candidateSet.id}-${i}`,
-            type: a.type,
-            payload: a.payload ?? null,
-            why: a.why ?? null,
-            decisionState: "pending",
-          }),
-        );
+        const adaptedActions: CandidateAction[] =
+          filterUserVisibleCandidateActions(result.candidateSet.actions).map(
+            (a, i) => ({
+              id: `${result.candidateSet.id}-${i}`,
+              type: a.type,
+              payload: a.payload ?? null,
+              why: a.why ?? null,
+              decisionState: "pending",
+            }),
+          );
         setTranscript((prev) => [
           ...prev,
           { role: "user", id: `u-${Date.now()}`, text: "" },
