@@ -143,39 +143,11 @@ export type {
   AgentServiceOptions,
   CandidateDecisionInput,
 } from "./agent/AgentService";
-export { UserContextBuilder } from "./agent/UserContextBuilder";
-export {
-  loadUserContextCore,
-  USER_CONTEXT_CAPS,
-  MS_PER_DAY as USER_CONTEXT_MS_PER_DAY,
-} from "./agent/userContextCore";
-export type {
-  UserContextCoreSnapshot,
-  LoadUserContextCoreOptions,
-  TransientIntentLoadMode,
-} from "./agent/userContextCore";
-export {
-  projectForAmbientPass,
-  projectForConversationalTurn,
-} from "./agent/userContextProjections";
-export type {
-  ConversationalUserContextSlice,
-  ConversationalUserContextBundle,
-} from "./agent/userContextProjections";
-export type {
-  UserContextSnapshot,
-  AmbientUserContextSnapshot,
-  GoalEntry,
-  SituationalStateSnapshot,
-  OperatorStrengthEntry,
-} from "./agent/UserContextBuilder";
-export type {
-  CalendarDensitySignal,
-  SleepSignal,
-  UserContextGroupSummary,
-  UserContextRelationshipSummary,
-  CharacterValuesAlignmentEntry,
-} from "./agent/userContextCore";
+export { loadUserContextCore, loadAmbientPassExtras, USER_CONTEXT_CAPS, MS_PER_DAY as USER_CONTEXT_MS_PER_DAY } from "./agent/userContextCore";
+export type { UserContextCoreSnapshot, LoadUserContextCoreOptions, TransientIntentLoadMode, AmbientPassExtrasSnapshot } from "./agent/userContextCore";
+export { projectForAmbientPass, projectForConversationalTurn, projectForEngagedPass, assembleUserContextForAmbientPass, AMBIENT_PASS_USER_CONTEXT_FLAVOURS, CONVERSATIONAL_USER_CONTEXT_FLAVOURS } from "./agent/userContextProjections";
+export type { ConversationalUserContextSlice, ConversationalUserContextBundle, AssembleAmbientUserContextOptions } from "./agent/userContextProjections";
+export type { UserContextSnapshot, AmbientUserContextSnapshot, GoalEntry, SituationalStateSnapshot, OperatorStrengthEntry, InferredSignalsSnapshot, CalendarDensitySignal, SleepSignal, UserContextGroupSummary, UserContextRelationshipSummary, CharacterValuesAlignmentEntry } from "./agent/userContextCore";
 export { resolveSendMessageRecipients } from "./agent/executor/sendMessageRecipients";
 export type { ContactAddresses } from "./agent/executor/sendMessageRecipients";
 export { Executor } from "./agent/Executor";

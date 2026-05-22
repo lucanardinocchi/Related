@@ -1,10 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureDoNothingPeer } from "./ambientTools";
 import { initialDecisionStateForCandidateAction } from "../candidates/candidateSet";
-import {
-  UserContextBuilder,
-  type UserContextSnapshot,
-} from "./UserContextBuilder";
+import type { UserContextSnapshot } from "./userContextCore";
+import { assembleUserContextForAmbientPass } from "./userContextProjections";
 import {
   RelationshipContextBuilder,
   type RelationshipContextSnapshot,
@@ -47,7 +45,7 @@ export interface AgentCaller {
 export interface PassEngineOptions {
   supabase: SupabaseClient;
   agent: AgentCaller;
-  userContextBuilder?: UserContextBuilder;
+  buildUserContext?: (userId: string, asOf: Date, relationshipId: string) => Promise<UserContextSnapshot>;
   relationshipContextBuilder?: RelationshipContextBuilder;
   /**
    * Slice 15 trigger. When set, the engine calls dispatcher.maybeDispatch
@@ -74,15 +72,15 @@ export interface RunPassInput {
 export class PassEngine {
   private readonly supabase: SupabaseClient;
   private readonly agent: AgentCaller;
-  private readonly userContextBuilder: UserContextBuilder;
+  private readonly buildUserContext: (userId: string, asOf: Date, relationshipId: string) => Promise<UserContextSnapshot>;
   private readonly relationshipContextBuilder: RelationshipContextBuilder;
   private readonly dispatcher: NotificationDispatcher | null;
 
   constructor(opts: PassEngineOptions) {
     this.supabase = opts.supabase;
     this.agent = opts.agent;
-    this.userContextBuilder =
-      opts.userContextBuilder ?? new UserContextBuilder({ supabase: opts.supabase });
+    this.buildUserContext = opts.buildUserContext ?? ((userId, asOf, relationshipId) =>
+      assembleUserContextForAmbientPass(this.supabase, { userId, asOf, excludeRelationshipId: relationshipId }));
     this.relationshipContextBuilder =
       opts.relationshipContextBuilder ??
       new RelationshipContextBuilder({ supabase: opts.supabase });
@@ -140,10 +138,7 @@ export class PassEngine {
       };
     }
 
-    const userContext = await this.userContextBuilder.buildUserContext(
-      ownerId,
-      new Date(),
-    );
+    const userContext = await this.buildUserContext(ownerId, new Date(), relationshipId);
 
     const prompt: AgentPrompt = {
       mode,

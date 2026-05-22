@@ -9,7 +9,6 @@ import { AmbientIntelligencePreferencesClient } from "../billing/AmbientIntellig
 import type { SubscriptionStatus } from "../billing/SubscriptionsClient";
 import { EdgeFunctionAgentCaller } from "./EdgeFunctionAgentCaller";
 import { PassEngine, type PassCandidateSet, type PassMode } from "./PassEngine";
-import { UserContextBuilder } from "./UserContextBuilder";
 import { RelationshipContextBuilder } from "./RelationshipContextBuilder";
 
 export interface ScheduledAmbientPass {
@@ -57,8 +56,7 @@ export class AmbientPassDispatcher {
           supabase: opts.supabase,
           functionName: opts.agentFunctionName,
         }),
-        userContextBuilder: new UserContextBuilder({ supabase: opts.supabase }),
-        relationshipContextBuilder: new RelationshipContextBuilder({
+relationshipContextBuilder: new RelationshipContextBuilder({
           supabase: opts.supabase,
         }),
       });

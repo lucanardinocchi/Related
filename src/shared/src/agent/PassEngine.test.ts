@@ -6,9 +6,8 @@ import {
   type RelationshipContextSnapshot,
 } from "./PassEngine";
 import type { NotificationDispatcher } from "../notifications/NotificationDispatcher";
-import type { UserContextSnapshot } from "./UserContextBuilder";
+import type { UserContextSnapshot } from "./userContextCore";
 import type { RelationshipContextBuilder } from "./RelationshipContextBuilder";
-import type { UserContextBuilder } from "./UserContextBuilder";
 import {
   testContact,
   testRelationshipContextSnapshot,
@@ -22,6 +21,8 @@ const emptyUserContext = (userId = "u-1"): UserContextSnapshot => ({
   goalsAndValues: [],
   situationalState: null,
   operatorStrengths: [],
+  inferredSignals: { calendarDensity: null, sleep: null, calendarEvents: [], sleepRecords: [] },
+  transientIntent: [], groups: [], otherRelationships: [], characterValuesAlignment: [],
 });
 
 function makeQueryMock() {
@@ -67,18 +68,16 @@ function withEngine(
         over.relationshipContext ?? fixedRelationshipContext(),
       ),
   } as unknown as RelationshipContextBuilder;
-  const userContextBuilder = {
-    buildUserContext: jest
-      .fn()
-      .mockResolvedValue(over.userContext ?? emptyUserContext()),
-  } as unknown as UserContextBuilder;
+  const buildUserContext = jest
+    .fn()
+    .mockResolvedValue(over.userContext ?? emptyUserContext());
   const engine = new PassEngine({
     supabase: supa,
     agent,
     relationshipContextBuilder,
-    userContextBuilder,
+    buildUserContext,
   });
-  return { q, propose, engine, relationshipContextBuilder, userContextBuilder };
+  return { q, propose, engine, relationshipContextBuilder, buildUserContext };
 }
 
 describe("PassEngine.runPass", () => {
@@ -178,9 +177,7 @@ describe("PassEngine.runPass", () => {
           .fn()
           .mockResolvedValue(fixedRelationshipContext()),
       } as unknown as RelationshipContextBuilder,
-      userContextBuilder: {
-        buildUserContext: jest.fn().mockResolvedValue(emptyUserContext()),
-      } as unknown as UserContextBuilder,
+      buildUserContext: jest.fn().mockResolvedValue(emptyUserContext()),
     });
     primeWrites(q);
 
@@ -213,9 +210,7 @@ describe("PassEngine.runPass", () => {
           .fn()
           .mockResolvedValue(fixedRelationshipContext()),
       } as unknown as RelationshipContextBuilder,
-      userContextBuilder: {
-        buildUserContext: jest.fn().mockResolvedValue(emptyUserContext()),
-      } as unknown as UserContextBuilder,
+      buildUserContext: jest.fn().mockResolvedValue(emptyUserContext()),
     });
     primeWrites(q);
 
@@ -268,9 +263,7 @@ describe("PassEngine.runPass", () => {
           .fn()
           .mockResolvedValue(fixedRelationshipContext()),
       } as unknown as RelationshipContextBuilder,
-      userContextBuilder: {
-        buildUserContext: jest.fn().mockResolvedValue(emptyUserContext()),
-      } as unknown as UserContextBuilder,
+      buildUserContext: jest.fn().mockResolvedValue(emptyUserContext()),
     });
 
     q.single.mockResolvedValueOnce({
@@ -357,15 +350,12 @@ describe("PassEngine.runPass", () => {
     );
   });
 
-  it("loads ambient user context (goals, situational, strengths only)", async () => {
-    const { q, engine, userContextBuilder } = withEngine([{ type: "DoNothing" }]);
+  it("loads ambient user context via assembleUserContextForAmbientPass seam", async () => {
+    const { q, engine, buildUserContext } = withEngine([{ type: "DoNothing" }]);
     primeWrites(q);
 
     await engine.runPass({ relationshipId: "r-1", mode: "baseline" });
 
-    expect(userContextBuilder.buildUserContext).toHaveBeenCalledWith(
-      "u-1",
-      expect.any(Date),
-    );
+    expect(buildUserContext).toHaveBeenCalledWith("u-1", expect.any(Date), "r-1");
   });
 });
