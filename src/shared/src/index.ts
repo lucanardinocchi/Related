@@ -21,6 +21,17 @@ export {
   contactHasLocation,
 } from "./location/filterByRadius";
 
+export {
+  parsePersonName,
+  firstNamesWithDuplicates,
+  contactDisplayLabel,
+  contactInitials,
+  resolveContactNameFromPocketLabel,
+  parsePocketAttributedLine,
+  segmentPocketAssistantContent,
+} from "./contacts/contactDisplay";
+export type { PocketAssistantSegment } from "./contacts/contactDisplay";
+
 export { RelationshipsClient } from "./relationships/RelationshipsClient";
 export type {
   Contact,

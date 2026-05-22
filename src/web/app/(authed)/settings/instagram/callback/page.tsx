@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { getBrowserDeps } from "@/lib/deps/client";
-import { OAuthReturnLink } from "@/components/integrations/OAuthReturnLink";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { redirectToSettings } from "@/lib/integrations/oauthReturn";
 
 export default function InstagramCallbackPage() {
-  const [status, setStatus] = useState<"working" | "ok" | "error">("working");
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     async function run() {
@@ -16,13 +15,11 @@ export default function InstagramCallbackPage() {
       const oauthError = params.get("error");
 
       if (oauthError) {
-        setStatus("error");
-        setError(oauthError);
+        redirectToSettings(router, oauthError);
         return;
       }
       if (!code) {
-        setStatus("error");
-        setError("Missing authorization code");
+        redirectToSettings(router, "Missing authorization code");
         return;
       }
 
@@ -32,46 +29,21 @@ export default function InstagramCallbackPage() {
           window.location.origin + "/settings/instagram/callback";
         const result = await instagram.exchangeOAuthCode({ code, redirectUri });
         if (result.status !== "ok") {
-          setStatus("error");
-          setError(result.error ?? "Could not connect Instagram");
+          redirectToSettings(router, result.error ?? "Could not connect Instagram");
           return;
         }
         sessionStorage.removeItem("related.instagram-oauth-state");
-        setStatus("ok");
+        redirectToSettings(router);
       } catch (e) {
-        setStatus("error");
-        setError(e instanceof Error ? e.message : "Could not connect Instagram");
+        redirectToSettings(
+          router,
+          e instanceof Error ? e.message : "Could not connect Instagram",
+        );
       }
     }
 
     void run();
-  }, []);
+  }, [router]);
 
-  return (
-    <>
-      <PageHeader title="Instagram" subtitle="Connecting your account…" />
-      <div className="py-6">
-        {status === "working" ? (
-          <p className="text-[13px] text-fg-muted">Finishing Instagram connect…</p>
-        ) : null}
-        {status === "ok" ? (
-          <div className="space-y-3">
-            <p className="text-[13px] text-fg">
-              Instagram connected. You can now view and send DMs from relationship
-              pages.
-            </p>
-            <OAuthReturnLink />
-          </div>
-        ) : null}
-        {status === "error" ? (
-          <div className="space-y-3">
-            <p className="text-[13px] text-danger" role="alert">
-              {error ?? "Could not connect Instagram"}
-            </p>
-            <OAuthReturnLink />
-          </div>
-        ) : null}
-      </div>
-    </>
-  );
+  return null;
 }

@@ -20,7 +20,12 @@ import type {
   ChatSummary,
   ToolCallSummary,
 } from "@related/shared";
-import { filterChatSummaries, formatExtractionResult } from "@related/shared";
+import {
+  filterChatSummaries,
+  firstNamesWithDuplicates,
+  formatExtractionResult,
+  segmentPocketAssistantContent,
+} from "@related/shared";
 import { useConversationalChat } from "@related/shared/chats/useConversationalChat";
 import { getBrowserDeps } from "@/lib/deps/client";
 import { Badge, Button, EmptyState, Input } from "@/components/ui";
@@ -30,6 +35,7 @@ import {
   SpeakerResolutionPromptModal,
   useSpeakerResolutionPrompt,
 } from "./_SpeakerResolutionFlow";
+import { ContactAssigneeBadge } from "./_ContactAssigneeBadge";
 import { cn } from "@/lib/cn";
 import { usePersistedBoolean } from "@/lib/usePersistedBoolean";
 import { startMicCapture, type MicCaptureHandle } from "../talk/_recorder";
@@ -86,6 +92,7 @@ export function AgentView({ initialChats }: AgentViewProps) {
   const [chatListExpanded, setChatListExpanded] = useState(false);
   const chatListRef = useRef<HTMLDivElement>(null);
   const [chatListOverflows, setChatListOverflows] = useState(false);
+  const [contactNames, setContactNames] = useState<string[]>([]);
 
   const showErrorToast = useCallback(
     (text: string) => setToast({ kind: "error", text }),
@@ -130,6 +137,28 @@ export function AgentView({ initialChats }: AgentViewProps) {
   useEffect(() => {
     void refreshAmbiguities();
   }, [refreshAmbiguities]);
+
+  useEffect(() => {
+    if (selectedChat?.source !== "pocket") {
+      setContactNames([]);
+      return;
+    }
+    let cancelled = false;
+    void relationships.listRelationships().then((rows) => {
+      if (cancelled) return;
+      setContactNames(
+        rows.map((r) => r.contact.name).filter((n) => n.trim().length > 0),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [relationships, selectedChat?.source, selectedChat?.id]);
+
+  const ambiguousFirstNames = useMemo(
+    () => firstNamesWithDuplicates(contactNames),
+    [contactNames],
+  );
 
   const filteredChats = useMemo(
     () => filterChatSummaries(chats, chatSearch),
@@ -480,7 +509,13 @@ export function AgentView({ initialChats }: AgentViewProps) {
                   <ul className="mx-auto flex w-full max-w-[760px] flex-col gap-5">
                     {messages.map((m) => (
                       <li key={m.id}>
-                        <MessageBubble message={m} />
+                        <MessageBubble
+                          message={m}
+                          isPocketTranscript={
+                            selectedChat.source === "pocket"
+                          }
+                          ambiguousFirstNames={ambiguousFirstNames}
+                        />
                       </li>
                     ))}
                     {agentResponding ? (
@@ -578,10 +613,24 @@ export function AgentView({ initialChats }: AgentViewProps) {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({
+  message,
+  isPocketTranscript,
+  ambiguousFirstNames,
+}: {
+  message: ChatMessage;
+  isPocketTranscript?: boolean;
+  ambiguousFirstNames?: Set<string>;
+}) {
   const isUser = message.role === "user";
   const toolCalls = (message.toolCalls ?? []) as ToolCallSummary[];
   const hasContent = message.content.trim().length > 0;
+  const pocketSegments =
+    isPocketTranscript && !isUser && hasContent
+      ? segmentPocketAssistantContent(message.content)
+      : null;
+  const showPocketAttribution =
+    pocketSegments?.some((s) => s.kind === "attributed") ?? false;
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
@@ -603,13 +652,37 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       {hasContent ? (
         <div
           className={cn(
-            "max-w-[85%] rounded-2xl px-3.5 py-2 text-[14px] leading-[22px] whitespace-pre-wrap break-words",
+            "max-w-[85%] rounded-2xl px-3.5 py-2 text-[14px] leading-[22px] break-words",
+            showPocketAttribution ? "space-y-2.5" : "whitespace-pre-wrap",
             isUser
               ? "bg-accent text-fg-on-accent shadow-1"
               : "bg-surface-2 text-fg",
           )}
         >
-          {message.content}
+          {showPocketAttribution && ambiguousFirstNames ? (
+            pocketSegments!.map((seg, i) =>
+              seg.kind === "attributed" ? (
+                <div key={i} className="flex flex-col gap-0.5">
+                  <ContactAssigneeBadge
+                    name={seg.contactName}
+                    ambiguousFirstNames={ambiguousFirstNames}
+                  />
+                  <p className="whitespace-pre-wrap text-[14px] leading-[22px] text-fg">
+                    {seg.text}
+                  </p>
+                </div>
+              ) : (
+                <p
+                  key={i}
+                  className="whitespace-pre-wrap text-[14px] leading-[22px] text-fg"
+                >
+                  {seg.text}
+                </p>
+              ),
+            )
+          ) : (
+            message.content
+          )}
         </div>
       ) : null}
       <div className="px-1 text-[11px] text-fg-subtle opacity-0 transition-opacity group-hover:opacity-100">

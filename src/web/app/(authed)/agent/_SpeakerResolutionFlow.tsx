@@ -11,10 +11,12 @@ import type {
   RelationshipsClient,
 } from "@related/shared";
 import {
+  firstNamesWithDuplicates,
   normalizeSpeakerKey,
   POCKET_UNLABELED_SPEAKER,
   speakerKeysFromTranscript,
 } from "@related/shared";
+import { ContactAssigneeBadge } from "./_ContactAssigneeBadge";
 import { AddContactModal } from "@/components/AddContactModal";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui";
@@ -164,6 +166,11 @@ export function SpeakerResolutionFlow({
   const segments: PocketTranscriptSegment[] = useMemo(
     () => selected?.transcriptSegments ?? [],
     [selected],
+  );
+
+  const ambiguousFirstNames = useMemo(
+    () => firstNamesWithDuplicates(contacts.map((r) => r.contact.name)),
+    [contacts],
   );
 
   const allAssigned = useMemo(() => {
@@ -423,17 +430,27 @@ export function SpeakerResolutionFlow({
                 segments.map((seg, i) => {
                   const key = normalizeSpeakerKey(seg.speaker);
                   const assigned = assignments[key];
-                  const who =
-                    assigned?.kind === "self"
-                      ? "You"
-                      : assigned?.kind === "contact"
-                        ? contacts.find(
-                            (r) => r.contact.id === assigned.contactId,
-                          )?.contact.name ?? "Contact"
-                        : speakerDisplayLabel(key);
+                  const contactName =
+                    assigned?.kind === "contact"
+                      ? contacts.find(
+                          (r) => r.contact.id === assigned.contactId,
+                        )?.contact.name
+                      : null;
                   return (
                     <div key={i} className="text-[13px] leading-[20px]">
-                      <span className="font-medium text-fg-muted">{who}: </span>
+                      {assigned?.kind === "self" ? (
+                        <span className="font-medium text-fg-muted">You: </span>
+                      ) : contactName ? (
+                        <ContactAssigneeBadge
+                          name={contactName}
+                          ambiguousFirstNames={ambiguousFirstNames}
+                          className="mr-1.5 inline-flex items-center gap-1.5 align-middle"
+                        />
+                      ) : (
+                        <span className="font-medium text-fg-muted">
+                          {speakerDisplayLabel(key)}:{" "}
+                        </span>
+                      )}
                       <span className="text-fg">{seg.text?.trim()}</span>
                     </div>
                   );

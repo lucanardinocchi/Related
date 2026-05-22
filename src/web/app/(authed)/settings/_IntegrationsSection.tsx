@@ -1,11 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Calendar, Mail, AtSign, MessageCircle } from "lucide-react";
 import {
-  GOOGLE_CALENDAR_SCOPES,
-  GOOGLE_INTEGRATION_SCOPES,
   googleScopesWithoutCalendar,
   googleScopesWithoutGmail,
   tokenHasCalendarAccess,
@@ -27,9 +24,15 @@ import {
   probeIntegrationHealth,
   type IntegrationHealthFlags,
 } from "@/lib/integrations/integrationHealth";
-import { setOAuthReturnPath } from "@/lib/integrations/oauthReturn";
-
-const OAUTH_INTENT_KEY = "related.google-oauth-intent";
+import {
+  buildGoogleIntegrationRedirectUri,
+  captureGoogleProviderTokens,
+  OAUTH_INTENT_KEY,
+} from "@/lib/integrations/integrationConnect";
+import {
+  consumeIntegrationOAuthError,
+  setOAuthReturnPath,
+} from "@/lib/integrations/oauthReturn";
 const INSTAGRAM_OAUTH_STATE_KEY = "related.instagram-oauth-state";
 const X_OAUTH_STATE_KEY = "related.x-oauth-state";
 const X_CODE_VERIFIER_KEY = "related.x-oauth-code-verifier";
@@ -122,52 +125,20 @@ export function IntegrationsSection({
     if (captureRunning.current) return;
     captureRunning.current = true;
     try {
-      const { auth, userProviderTokens, onboarding } = getBrowserDeps();
-      const session = await auth.getSessionWithProviderTokens();
-      if (!session?.providerToken) return;
-
-      const intent =
-        typeof window !== "undefined"
-          ? sessionStorage.getItem(OAUTH_INTENT_KEY)
-          : null;
-      const scopes =
-        intent === "gmail"
-          ? GOOGLE_INTEGRATION_SCOPES
-          : GOOGLE_CALENDAR_SCOPES;
-
-      await userProviderTokens.upsert({
-        provider: "google",
-        accessToken: session.providerToken,
-        refreshToken: session.providerRefreshToken,
-        scopes,
-        expiresAt:
-          session.expiresAt !== null
-            ? new Date(session.expiresAt * 1000).toISOString()
-            : null,
-      });
-
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem(OAUTH_INTENT_KEY);
-        const cleanUrl = window.location.origin + window.location.pathname;
-        window.history.replaceState({}, "", cleanUrl);
+      const result = await captureGoogleProviderTokens("/settings");
+      if (result) {
+        setCalendarConnected(result.calendar);
+        setGmailConnected(result.gmail);
       }
-
-      const token = await userProviderTokens.getForProvider("google");
-      const hasCalendar = tokenHasCalendarAccess(token?.scopes);
-      const hasGmail = tokenHasGmailAccess(token?.scopes);
-      setCalendarConnected(hasCalendar);
-      setGmailConnected(hasGmail);
-
-      if (hasCalendar) {
-        await onboarding.completeStep("calendar");
-      }
-
       setWorking(null);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Failed to save Google connection",
       );
       setWorking(null);
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
     } finally {
       captureRunning.current = false;
     }
@@ -227,6 +198,8 @@ export function IntegrationsSection({
 
   useEffect(() => {
     setOAuthReturnPath("/settings");
+    const stashedError = consumeIntegrationOAuthError();
+    if (stashedError) setError(stashedError);
     captureProviderTokens();
     void refreshInstagramConnection();
     void refreshXConnection();
@@ -370,7 +343,7 @@ export function IntegrationsSection({
     try {
       const { auth } = getBrowserDeps();
       const { url } = await auth.linkGoogleCalendar(
-        window.location.origin + "/settings",
+        buildGoogleIntegrationRedirectUri(),
       );
       window.location.href = url;
     } catch (e) {
@@ -416,7 +389,7 @@ export function IntegrationsSection({
     try {
       const { auth } = getBrowserDeps();
       const { url } = await auth.linkGoogleGmail(
-        window.location.origin + "/settings",
+        buildGoogleIntegrationRedirectUri(),
       );
       window.location.href = url;
     } catch (e) {

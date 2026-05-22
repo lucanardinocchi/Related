@@ -299,9 +299,9 @@ describe("AuthClient.onAuthStateChange", () => {
 });
 
 describe("AuthClient.linkGoogleCalendar", () => {
-  it("calls Supabase linkIdentity with the calendar.readonly scope, offline access_type, and forced consent prompt", async () => {
+  it("calls Supabase signInWithOAuth with the calendar.readonly scope, offline access_type, and forced consent prompt", async () => {
     const { mock, authClient } = withMock();
-    mock.auth.linkIdentity.mockResolvedValue({
+    mock.auth.signInWithOAuth.mockResolvedValue({
       data: { url: "https://accounts.google.com/o/oauth2/auth?...&provider=google" },
       error: null,
     });
@@ -310,7 +310,7 @@ describe("AuthClient.linkGoogleCalendar", () => {
       "https://app.example/onboarding-return",
     );
 
-    expect(mock.auth.linkIdentity).toHaveBeenCalledWith({
+    expect(mock.auth.signInWithOAuth).toHaveBeenCalledWith({
       provider: "google",
       options: expect.objectContaining({
         scopes: "https://www.googleapis.com/auth/calendar.readonly",

@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { getBrowserDeps } from "@/lib/deps/client";
-import { OAuthReturnLink } from "@/components/integrations/OAuthReturnLink";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { redirectToSettings } from "@/lib/integrations/oauthReturn";
 
 const TIKTOK_OAUTH_STATE_KEY = "related.tiktok-oauth-state";
 
 export default function TikTokCallbackPage() {
-  const [status, setStatus] = useState<"working" | "ok" | "error">("working");
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     async function run() {
@@ -19,20 +18,20 @@ export default function TikTokCallbackPage() {
       const state = params.get("state");
 
       if (oauthError) {
-        setStatus("error");
-        setError(oauthError);
+        redirectToSettings(router, oauthError);
         return;
       }
       if (!code) {
-        setStatus("error");
-        setError("Missing authorization code");
+        redirectToSettings(router, "Missing authorization code");
         return;
       }
 
       const expectedState = sessionStorage.getItem(TIKTOK_OAUTH_STATE_KEY);
       if (expectedState && state && state !== expectedState) {
-        setStatus("error");
-        setError("OAuth state mismatch — try connecting again from Settings.");
+        redirectToSettings(
+          router,
+          "OAuth state mismatch — try connecting again from Settings.",
+        );
         return;
       }
 
@@ -42,46 +41,21 @@ export default function TikTokCallbackPage() {
           window.location.origin + "/settings/tiktok/callback";
         const result = await tiktok.exchangeOAuthCode({ code, redirectUri });
         if (result.status !== "ok") {
-          setStatus("error");
-          setError(result.error ?? "Could not connect TikTok");
+          redirectToSettings(router, result.error ?? "Could not connect TikTok");
           return;
         }
         sessionStorage.removeItem(TIKTOK_OAUTH_STATE_KEY);
-        setStatus("ok");
+        redirectToSettings(router);
       } catch (e) {
-        setStatus("error");
-        setError(e instanceof Error ? e.message : "Could not connect TikTok");
+        redirectToSettings(
+          router,
+          e instanceof Error ? e.message : "Could not connect TikTok",
+        );
       }
     }
 
     void run();
-  }, []);
+  }, [router]);
 
-  return (
-    <>
-      <PageHeader title="TikTok" subtitle="Connecting your account…" />
-      <div className="py-6">
-        {status === "working" ? (
-          <p className="text-[13px] text-fg-muted">Finishing TikTok connect…</p>
-        ) : null}
-        {status === "ok" ? (
-          <div className="space-y-3">
-            <p className="text-[13px] text-fg">
-              TikTok connected. You can now view and send DMs from relationship
-              and group pages.
-            </p>
-            <OAuthReturnLink />
-          </div>
-        ) : null}
-        {status === "error" ? (
-          <div className="space-y-3">
-            <p className="text-[13px] text-danger" role="alert">
-              {error ?? "Could not connect TikTok"}
-            </p>
-            <OAuthReturnLink />
-          </div>
-        ) : null}
-      </div>
-    </>
-  );
+  return null;
 }

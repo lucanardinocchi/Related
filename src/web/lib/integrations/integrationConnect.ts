@@ -16,6 +16,12 @@ import { getBrowserDeps } from "@/lib/deps/client";
 import { setOAuthReturnPath } from "./oauthReturn";
 
 export const OAUTH_INTENT_KEY = "related.google-oauth-intent";
+
+/** Supabase Google OAuth redirect — must be allow-listed in Supabase Auth. */
+export function buildGoogleIntegrationRedirectUri(returnPath = "/settings"): string {
+  const path = returnPath.startsWith("/") ? returnPath : `/${returnPath}`;
+  return window.location.origin + path;
+}
 const INSTAGRAM_OAUTH_STATE_KEY = "related.instagram-oauth-state";
 const X_OAUTH_STATE_KEY = "related.x-oauth-state";
 const X_CODE_VERIFIER_KEY = "related.x-oauth-code-verifier";
@@ -93,6 +99,22 @@ export async function refreshTikTokConnection(): Promise<boolean> {
 export async function captureGoogleProviderTokens(
   returnPath: string,
 ): Promise<{ calendar: boolean; gmail: boolean } | null> {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const oauthError = params.get("error");
+    if (oauthError) {
+      throw new Error(params.get("error_description") ?? oauthError);
+    }
+
+    const code = params.get("code");
+    if (code) {
+      const { supabase } = getBrowserDeps();
+      const { error: exchangeError } =
+        await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) throw exchangeError;
+    }
+  }
+
   const { auth, userProviderTokens, onboarding } = getBrowserDeps();
   const session = await auth.getSessionWithProviderTokens();
   if (!session?.providerToken) return null;
@@ -133,7 +155,7 @@ export async function connectGoogleCalendar(returnPath: string): Promise<void> {
   sessionStorage.setItem(OAUTH_INTENT_KEY, "calendar");
   const { auth } = getBrowserDeps();
   const { url } = await auth.linkGoogleCalendar(
-    window.location.origin + returnPath,
+    buildGoogleIntegrationRedirectUri(returnPath),
   );
   window.location.href = url;
 }
@@ -143,7 +165,7 @@ export async function connectGoogleGmail(returnPath: string): Promise<void> {
   sessionStorage.setItem(OAUTH_INTENT_KEY, "gmail");
   const { auth } = getBrowserDeps();
   const { url } = await auth.linkGoogleGmail(
-    window.location.origin + returnPath,
+    buildGoogleIntegrationRedirectUri(returnPath),
   );
   window.location.href = url;
 }

@@ -167,11 +167,10 @@ export class AuthClient {
   }
 
   /**
-   * Per ADR-0006: links a Google identity to the currently signed-in User
-   * with the Calendar read-only scope, forcing offline access + consent
-   * prompt so Supabase Auth gets a refresh token back. Returns the
-   * Google OAuth URL — the caller is responsible for navigating to it
-   * (web: `window.location.href = url`; native: in-app browser).
+   * Per ADR-0006: authorizes Google with integration scopes via
+   * signInWithOAuth (offline access + consent prompt) so Supabase Auth
+   * returns a refresh token. Returns the Google OAuth URL — the caller
+   * navigates to it (web: `window.location.href = url`; native: in-app browser).
    *
    * After the callback returns, `getSessionWithProviderTokens()` will
    * return the new access_token + refresh_token, which OnboardingScreen
@@ -295,7 +294,10 @@ export class AuthClient {
     redirectTo: string,
     scopes: string,
   ): Promise<{ url: string }> {
-    const { data, error } = await this.client.auth.linkIdentity({
+    // signInWithOAuth works for both email and Google sign-in users when
+    // requesting integration scopes. linkIdentity requires manual linking to
+    // be enabled on the Supabase project and fails silently otherwise.
+    const { data, error } = await this.client.auth.signInWithOAuth({
       provider: "google",
       options: {
         scopes,
@@ -308,7 +310,7 @@ export class AuthClient {
     });
     if (error) throw error;
     if (!data?.url) {
-      throw new Error("linkIdentity returned no OAuth URL");
+      throw new Error("signInWithOAuth returned no OAuth URL");
     }
     return { url: data.url };
   }

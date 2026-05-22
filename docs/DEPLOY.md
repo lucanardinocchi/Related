@@ -106,6 +106,7 @@ Dashboard → Authentication → URL Configuration → Redirect URLs → add:
 
 - Your Vercel URL (production + preview), e.g. `https://your-app.vercel.app/auth/callback`
 - Same with query params used by the app: `.../auth/callback?next=/onboarding`, `.../auth/callback?next=/reset-password`
+- Google Calendar / Gmail connect returns directly to `/settings` (and `/onboarding` during setup)
 - Mobile deep link: `related://auth-callback` (after `scheme: related` in `src/mobile/app.json`)
 
 Local Supabase (`src/backend/supabase/config.toml`) already allow-lists `http://127.0.0.1:3000/auth/callback` and `related://auth-callback`. Set provider secrets via env when running locally:
